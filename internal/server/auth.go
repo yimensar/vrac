@@ -22,17 +22,21 @@ import (
 const sessionCookie = "vrac_session"
 
 type authOptions struct {
-	Token         string
-	Dev           bool
-	OAuthIssuer   string
-	OAuthAudience string
-	OAuthScope    string
+	Token               string
+	Dev                 bool
+	OAuthIssuer         string
+	OAuthAudience       string
+	OAuthScope          string
+	WebOIDCClientID     string
+	WebOIDCProviderName string
 }
 
 type auth struct {
 	options  authOptions
 	token    [32]byte
 	verifier *oidc.IDTokenVerifier
+	browser  *browserAuth
+	flows    map[[32]byte]browserFlow
 	mu       sync.Mutex
 	sessions map[[32]byte]time.Time
 	failures int
@@ -45,6 +49,9 @@ func newAuth(ctx context.Context, opts authOptions) (*auth, error) {
 	}
 	if (opts.OAuthIssuer == "") != (opts.OAuthAudience == "") {
 		return nil, errors.New("OAuth issuer and audience must be configured together")
+	}
+	if opts.WebOIDCClientID != "" && opts.OAuthIssuer == "" {
+		return nil, errors.New("web OIDC requires an OAuth issuer and audience")
 	}
 	a := &auth{options: opts, token: sha256.Sum256([]byte(opts.Token)), sessions: make(map[[32]byte]time.Time)}
 	if opts.OAuthIssuer != "" {
@@ -68,6 +75,9 @@ func newAuth(ctx context.Context, opts authOptions) (*auth, error) {
 			return nil, fmt.Errorf("discover OAuth provider: %w", err)
 		}
 		a.verifier = provider.VerifierContext(ctx, &oidc.Config{ClientID: opts.OAuthAudience})
+		if opts.WebOIDCClientID != "" {
+			a.configureBrowser(provider, &bounded)
+		}
 	}
 	return a, nil
 }
@@ -187,10 +197,16 @@ func (a *auth) login(w http.ResponseWriter, r *http.Request) {
 		a.challenge(w, r)
 		return
 	}
+	if a.startSession(w, http.SameSiteStrictMode) {
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	}
+}
+
+func (a *auth) startSession(w http.ResponseWriter, sameSite http.SameSite) bool {
 	var random [32]byte
 	if _, err := rand.Read(random[:]); err != nil {
 		writeError(w, http.StatusInternalServerError, "storage", "Could not create a session")
-		return
+		return false
 	}
 	value := base64.RawURLEncoding.EncodeToString(random[:])
 	key := sha256.Sum256([]byte(value))
@@ -204,13 +220,13 @@ func (a *auth) login(w http.ResponseWriter, r *http.Request) {
 	if len(a.sessions) >= 100 {
 		a.mu.Unlock()
 		writeError(w, http.StatusTooManyRequests, "session_limit", "Too many active sessions")
-		return
+		return false
 	}
 	a.sessions[key] = expires
 	a.mu.Unlock()
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: value, Path: "/", HttpOnly: true,
-		Secure: !a.options.Dev, SameSite: http.SameSiteStrictMode, MaxAge: 12 * 3600, Expires: expires})
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		Secure: !a.options.Dev, SameSite: sameSite, MaxAge: 12 * 3600, Expires: expires})
+	return true
 }
 
 func (a *auth) logout(w http.ResponseWriter, r *http.Request) {

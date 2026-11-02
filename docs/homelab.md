@@ -22,14 +22,20 @@ services.vrac = {
   oauthIssuer = "https://auth.netbird.bomal.cloud";
   oauthAudience = "https://vrac.netbird.bomal.cloud/mcp";
   oauthScope = "vrac";
+  webOIDCClientID = "<your registered public PKCE client ID>";
+  webOIDCProviderName = "Pocket ID";
 };
 ```
 
 The module keeps canonical data in `/var/lib/vrac`, loads the token with a
 systemd credential and selects the complete UI package by default. Set
 `enableWeb = false` to select the headless package. The UI uses the runtime
-token for its own session; V0 does not treat NetBird identity headers as an
-application login.
+token for recovery or the configured Pocket ID sign-in for its own session.
+Vrac does not treat NetBird identity headers as an application login. Add
+`https://vrac.netbird.bomal.cloud/auth/callback` to the public client's allowed
+callbacks, retaining ChatGPT's callback. Both browser and MCP access require
+the Vrac API permission. The existing public client can serve both callbacks;
+a separate public client with the same owner/API restrictions also works.
 
 ## Pocket ID for the ChatGPT MCP client
 

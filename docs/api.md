@@ -17,6 +17,22 @@ for a 12-hour Secure, HttpOnly, SameSite=Strict cookie. `DELETE /api/session`
 revokes that session. Sessions expire on server restart. Only `--dev` on
 loopback permits unauthenticated requests and development HTTP cookies.
 
+Optional browser OIDC uses `GET /auth/config` for provider availability,
+`GET /auth/login` to begin sign-in and `GET /auth/callback` for the provider's
+authorization-code response. Set `VRAC_WEB_OIDC_CLIENT_ID` (public PKCE client)
+and optionally `VRAC_WEB_OIDC_PROVIDER_NAME` alongside the existing OAuth
+issuer/audience/scope. The callback is the public MCP origin plus
+`/auth/callback`. Allow it on the client and grant user-delegated access to the
+configured API resource/permission, restricted to the knowledge-base owner.
+No client secret is used. Both a verified ID token and a matching authorized
+API access token are required. State is bound to the browser, nonce and S256
+PKCE are checked, and callbacks are single-use and expire after ten minutes.
+Provider tokens remain server-side only for validation and are discarded;
+the browser receives the same twelve-hour local session. Logout revokes this
+local session; it does not sign out of the provider or revoke other clients.
+OIDC session cookies use SameSite=Lax to support the cross-site return;
+instance-token sessions use SameSite=Strict. Browser mutations validate Origin.
+
 OAuth protected-resource metadata is at
 `/.well-known/oauth-protected-resource` (also the `/mcp` suffix variant).
 The service delegates authorization/login to an established external identity

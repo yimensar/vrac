@@ -54,6 +54,8 @@ func run(args []string) error {
 		issuer := flags.String("oauth-issuer", os.Getenv("VRAC_OAUTH_ISSUER"), "External OIDC issuer for ChatGPT OAuth")
 		audience := flags.String("oauth-audience", os.Getenv("VRAC_OAUTH_AUDIENCE"), "Canonical public HTTPS MCP URL expected as token audience")
 		scope := flags.String("oauth-scope", env("VRAC_OAUTH_SCOPE", "vrac"), "Required scope in external OAuth tokens")
+		webClient := flags.String("web-oidc-client-id", os.Getenv("VRAC_WEB_OIDC_CLIENT_ID"), "Public PKCE client ID for browser sign-in with the configured OIDC provider")
+		webProvider := flags.String("web-oidc-provider-name", env("VRAC_WEB_OIDC_PROVIDER_NAME", "Single sign-on"), "Provider name displayed on the browser sign-in button")
 		noWebDefault, err := strconv.ParseBool(env("VRAC_NO_WEB", "false"))
 		if err != nil {
 			return errors.New("VRAC_NO_WEB must be true or false")
@@ -86,7 +88,7 @@ func run(args []string) error {
 		}
 		defer e.Close()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		handler, err := server.New(ctx, e, server.Options{Token: token, Dev: *dev, NoWeb: *noWeb, Timezone: *timezone, Version: version, Assets: web.Assets(), TempDir: filepath.Dir(*dbPath), OAuthIssuer: *issuer, OAuthAudience: *audience, OAuthScope: *scope})
+		handler, err := server.New(ctx, e, server.Options{Token: token, Dev: *dev, NoWeb: *noWeb, Timezone: *timezone, Version: version, Assets: web.Assets(), TempDir: filepath.Dir(*dbPath), OAuthIssuer: *issuer, OAuthAudience: *audience, OAuthScope: *scope, WebOIDCClientID: *webClient, WebOIDCProviderName: *webProvider})
 		cancel()
 		if err != nil {
 			return err

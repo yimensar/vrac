@@ -54,7 +54,8 @@ See [model and format](docs/model.md) and [HTTP/MCP API](docs/api.md).
 ## Production and ChatGPT
 
 Production requires a random access token in a runtime file and HTTPS at the
-reverse proxy. The browser exchanges it for an HttpOnly session; generic MCP
+reverse proxy. The browser can use OIDC/PKCE sign-in or exchange the instance
+token for an HttpOnly session; generic MCP
 clients can use bearer authentication. ChatGPT uses an external OAuth/OIDC
 provider, with issuer, dedicated audience and scope validation in Vrac.
 

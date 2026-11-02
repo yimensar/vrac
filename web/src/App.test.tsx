@@ -101,6 +101,20 @@ beforeEach(() => {
   window.history.replaceState(null, "", "/");
 });
 describe("journal application", () => {
+  it("offers Pocket ID before the token fallback and shows a failed sign-in", async () => {
+    window.history.replaceState(null, "", "/?auth_error=signin_failed");
+    backend((url) => {
+      if (url === "/auth/config") return response({ enabled: true, label: "Pocket ID" });
+      if (url.startsWith("/api/bootstrap")) return response({ error: { message: "Sign in required" } }, 401);
+    });
+    render(<App />);
+    const link = await screen.findByRole("link", { name: "Continue with Pocket ID" });
+    expect(link).toHaveAttribute("href", "/auth/login");
+    expect(screen.getByRole("alert")).toHaveTextContent("Sign-in failed or expired");
+    expect(screen.getByLabelText("Access token").closest("details")).not.toHaveAttribute("open");
+    await userEvent.click(screen.getByText("Use an access token"));
+    expect(screen.getByLabelText("Access token")).toBeVisible();
+  });
   it("opens the real journal, lazily expands a branch, and exposes the next root page", async () => {
     const fetcher = backend();
     render(<App />);

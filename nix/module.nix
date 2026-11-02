@@ -32,10 +32,26 @@ let
   ++ [
     "--oauth-scope"
     cfg.oauthScope
+  ]
+  ++ lib.optionals (cfg.webOIDCClientID != null) [
+    "--web-oidc-client-id"
+    cfg.webOIDCClientID
+    "--web-oidc-provider-name"
+    cfg.webOIDCProviderName
   ];
 in
 {
   options.services.vrac = {
+    webOIDCClientID = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Public PKCE client ID for web sign-in. Requires the configured OAuth issuer/audience and the public origin's /auth/callback in its redirect allowlist.";
+    };
+    webOIDCProviderName = lib.mkOption {
+      type = lib.types.str;
+      default = "Single sign-on";
+      description = "Provider label displayed on the browser sign-in button.";
+    };
     enable = lib.mkEnableOption "the Vrac knowledge service";
     package = lib.mkOption {
       type = lib.types.package;
@@ -88,6 +104,12 @@ in
 
   config = lib.mkIf cfg.enable {
     assertions = [
+      {
+        assertion =
+          cfg.webOIDCClientID == null
+          || (cfg.enableWeb && cfg.oauthIssuer != null && cfg.webOIDCClientID != "");
+        message = "Web OIDC requires enableWeb, oauthIssuer/oauthAudience and a nonempty public client ID.";
+      }
       {
         assertion =
           cfg.tokenFile != null

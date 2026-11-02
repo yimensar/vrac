@@ -80,6 +80,11 @@ streaming enabled in the proxy.
 
 For ChatGPT, also configure `oauthIssuer`, `oauthAudience`, and optionally
 `oauthScope`; see [ChatGPT connection](chatgpt.md).
+For browser OIDC sign-in, additionally set `webOIDCClientID` and optionally
+`webOIDCProviderName`. Register a public PKCE client with the public MCP
+origin's `/auth/callback` as a redirect, and grant user-delegated access to
+the configured resource and scope. The CLI equivalents are
+`--web-oidc-client-id` and `--web-oidc-provider-name`; see [authentication](api.md).
 
 ## Container image from the same flake
 

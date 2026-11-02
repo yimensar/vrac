@@ -77,8 +77,37 @@ const emptySearch: SearchPage = { items: [] };
 
 function Login({ onConnected }: { onConnected: () => Promise<void> }) {
   const [token, setToken] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() =>
+    new URLSearchParams(window.location.search).has("auth_error")
+      ? "Sign-in failed or expired. Please try again."
+      : "",
+  );
   const [busy, setBusy] = useState(false);
+  const [provider, setProvider] = useState<{
+    enabled: boolean;
+    label: string;
+  } | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/auth/config", {
+      credentials: "same-origin",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Sign-in configuration is unavailable");
+        const data = await response.json();
+        if (!controller.signal.aborted) {
+          setProvider({
+            enabled: data.enabled === true,
+            label: data.label || "Single sign-on",
+          });
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setProvider({ enabled: false, label: "" });
+      });
+    return () => controller.abort();
+  }, []);
   async function submit() {
     setBusy(true);
     setError("");
@@ -107,42 +136,54 @@ function Login({ onConnected }: { onConnected: () => Promise<void> }) {
           <br />
           Pick up where you left off.
         </p>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit();
-          }}
-        >
-          <label className="field-label" htmlFor="access-token">
-            Access token
-          </label>
-          <Input
-            id="access-token"
-            type="password"
-            autoComplete="current-password"
-            autoFocus
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-            placeholder="Enter your instance token"
-            required
-          />
-          {error && (
-            <p className="inline-error" role="alert">
-              {error}
-            </p>
-          )}
-          <Button
-            type="submit"
-            disabled={busy || !token.trim()}
-            className="w-full"
-          >
-            {busy ? <Loader2 className="animate-spin" /> : <ArrowRight />}Open
-            Vrac
+        {error && <p className="inline-error" role="alert">{error}</p>}
+        {provider?.enabled && (
+          <Button asChild className="w-full">
+            <a href="/auth/login"><ArrowRight />Continue with {provider.label}</a>
           </Button>
-        </form>
+        )}
+        {provider === null ? (
+          <Loader2 className="animate-spin" aria-label="Loading sign-in options" />
+        ) : (
+          <details open={!provider.enabled}>
+            {provider.enabled && (
+              <summary className="field-label cursor-pointer py-4">Use an access token</summary>
+            )}
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submit();
+              }}
+            >
+              <label className="field-label" htmlFor="access-token">
+                Access token
+              </label>
+              <Input
+                id="access-token"
+                type="password"
+                autoComplete="current-password"
+                autoFocus={!provider.enabled}
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+                placeholder="Enter your instance token"
+                required
+              />
+              <Button
+                type="submit"
+                disabled={busy || !token.trim()}
+                className="w-full"
+              >
+                {busy ? <Loader2 className="animate-spin" /> : <ArrowRight />}Open
+                Vrac
+              </Button>
+            </form>
+          </details>
+        )}
         <p className="login-foot">
           <ShieldCheck className="size-3.5" />
-          Your token stays out of browser storage.
+          {provider?.enabled
+            ? "Your working knowledge, privately."
+            : "Your token stays out of browser storage."}
         </p>
       </div>
       <span className="login-wordmark">vrac.</span>

@@ -23,6 +23,7 @@ const maxBody = 2 << 20
 
 type Options struct {
 	Token, OAuthIssuer, OAuthAudience, OAuthScope string
+	WebOIDCClientID, WebOIDCProviderName          string
 	Dev, NoWeb                                    bool
 	Timezone                                      string
 	Version                                       string
@@ -49,7 +50,10 @@ func New(ctx context.Context, e *engine.Engine, opts Options) (*Server, error) {
 	if opts.OAuthScope == "" {
 		opts.OAuthScope = "vrac"
 	}
-	a, err := newAuth(ctx, authOptions{Token: opts.Token, Dev: opts.Dev, OAuthIssuer: opts.OAuthIssuer, OAuthAudience: opts.OAuthAudience, OAuthScope: opts.OAuthScope})
+	if opts.NoWeb && opts.WebOIDCClientID != "" {
+		return nil, errors.New("web OIDC requires the web interface")
+	}
+	a, err := newAuth(ctx, authOptions{Token: opts.Token, Dev: opts.Dev, OAuthIssuer: opts.OAuthIssuer, OAuthAudience: opts.OAuthAudience, OAuthScope: opts.OAuthScope, WebOIDCClientID: opts.WebOIDCClientID, WebOIDCProviderName: opts.WebOIDCProviderName})
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +66,9 @@ func New(ctx context.Context, e *engine.Engine, opts Options) (*Server, error) {
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", a.metadata)
 	mux.HandleFunc("POST /api/session", a.login)
 	mux.HandleFunc("DELETE /api/session", a.logout)
+	mux.HandleFunc("GET /auth/config", a.browserConfig)
+	mux.HandleFunc("GET /auth/login", a.browserLogin)
+	mux.HandleFunc("GET /auth/callback", a.browserCallback)
 	mux.Handle("/mcp", s.protect(s.mcpHandler(), false))
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/bootstrap", s.bootstrap)
