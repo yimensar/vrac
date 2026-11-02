@@ -1,0 +1,103 @@
+{
+  "node_count": 5017310,
+  "iterations": 1000,
+  "measurements": [
+    {
+      "operation": "plain_page_100",
+      "p95_ms": 0.331,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "metadata_page_100",
+      "p95_ms": 0.463208,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "read_node",
+      "p95_ms": 0.038875,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "path_depth_104",
+      "p95_ms": 0.39025,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "create_node",
+      "p95_ms": 0.657167,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "edit_content",
+      "p95_ms": 1.282833,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "replace_tags",
+      "p95_ms": 0.972542,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "rename_reference_target",
+      "p95_ms": 0.765542,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "move_sibling",
+      "p95_ms": 0.764417,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "search_text",
+      "p95_ms": 0.111417,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "project_decisions",
+      "p95_ms": 0.236542,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "large_project_rare_tag",
+      "p95_ms": 1.89325,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "journal_decisions",
+      "p95_ms": 0.201,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "large_project_common_tag",
+      "p95_ms": 1.604584,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "project_browse",
+      "p95_ms": 1.218625,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "sparse_project_browse",
+      "p95_ms": 0.173666,
+      "budget_ms": 2,
+      "passed": true
+    }
+  ],
+  "passed": true
+}

@@ -1,0 +1,29 @@
+services:
+  vrac:
+    image: vrac:0.2.0
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      VRAC_TIMEZONE: Europe/Paris
+      # Configure both for ChatGPT OAuth; see docs/chatgpt.md.
+      # VRAC_OAUTH_ISSUER: https://your-identity-provider/
+      # VRAC_OAUTH_AUDIENCE: https://your-vrac-domain/mcp
+    volumes:
+      - vrac-data:/data
+    secrets:
+      - source: vrac-token
+        target: vrac-token
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+secrets:
+  vrac-token:
+    file: ${VRAC_TOKEN_FILE:?Set VRAC_TOKEN_FILE to an existing private token file}
+volumes:
+  vrac-data:
