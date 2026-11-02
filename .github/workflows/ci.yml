@@ -49,9 +49,39 @@ jobs:
           secret_dir="$(mktemp -d)"
           openssl rand -hex 32 > "$secret_dir/token"
           chmod 0444 "$secret_dir/token"
-          trap 'docker rm -f vrac-smoke >/dev/null 2>&1 || true; rm -rf "$secret_dir"' EXIT
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              docker logs vrac-smoke || true
+              docker inspect --format 'Container status={{.State.Status}} exit={{.State.ExitCode}}' vrac-smoke || true
+            fi
+            docker rm -fv vrac-smoke >/dev/null 2>&1 || true
+            rm -rf "$secret_dir"
+            return "$status"
+          }
+          trap cleanup EXIT
           docker run -d --name vrac-smoke --read-only --cap-drop ALL \
             --publish 127.0.0.1:8080:8080 \
             --mount "type=bind,source=$secret_dir/token,target=/run/secrets/vrac-token,readonly" \
             --tmpfs /tmp:rw,noexec,nosuid,size=16m "vrac:$version"
-          curl --retry 15 --retry-connrefused --retry-delay 1 --fail http://127.0.0.1:8080/healthz
+          curl --retry 15 --retry-all-errors --retry-delay 1 --retry-max-time 30 \
+            --connect-timeout 2 --max-time 3 --fail --silent --show-error \
+            http://127.0.0.1:8080/healthz
+          python3 - "$secret_dir/token" <<'PY'
+          import importlib.util
+          import json
+          from pathlib import Path
+          import sys
+          from urllib.request import Request, urlopen
+
+          token = Path(sys.argv[1]).read_text().strip()
+          request = Request("http://127.0.0.1:8080/api/bootstrap", headers={"Authorization": "Bearer " + token})
+          with urlopen(request, timeout=10) as response:
+              assert json.load(response)["today"]["id"]
+          spec = importlib.util.spec_from_file_location("package_plugin", "scripts/package-plugin.py")
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          count = module.discover("http://127.0.0.1:8080/mcp", token)
+          assert count >= 13, "Expected the complete Vrac MCP tool set"
+          print(f"Authenticated container API and {count} MCP tool definitions verified")
+          PY
