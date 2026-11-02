@@ -94,6 +94,20 @@ Confirm that tools are discoverable before making a real capture. No private
 plugin is uploaded by this repository or the packaging script. Building the
 archive does not deploy Vrac or prove that ChatGPT can reach your server.
 
+## Connect the MCP directly
+
+A plugin archive is optional. In ChatGPT on the web, open **Plugins → + → Add
+custom MCP server**, enter the deployed `/mcp` URL and select OAuth. For an
+explicitly registered public PKCE client, enter its client ID and leave the
+secret empty. Complete provider consent and tool scanning, then install the
+resulting connection. ChatGPT may call this connection a plugin; no archive
+upload is needed. Use the exact callback shown for that connection in the
+provider's redirect allowlist. See the [official direct MCP guide](https://developers.openai.com/api/docs/guides/custom-mcp-server).
+
+The MCP initialization already supplies server-wide usage instructions and
+each tool has its own schema. The optional archive additionally bundles a
+reusable skill.
+
 ## Validate the connection
 
 Start with a read-only request to find existing tags or a known project, read
