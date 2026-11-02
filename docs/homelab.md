@@ -1,8 +1,10 @@
 # NixOS homelab, NetBird and Pocket ID
 
-This is the intended deployment profile for Yan's instance. The host and real
-public domain still need to be selected; the values below are configuration
-examples, not a deployed service.
+Yan's deployment target is `maxilasoft-vps`, managed in
+[Maxilasoft-dev/maxilasoft-vps](https://github.com/Maxilasoft-dev/maxilasoft-vps).
+The selected public domain is `vrac.netbird.bomal.cloud`; NetBird routes to
+`http://100.124.243.151:8092`. The infrastructure repository pins an immutable
+Vrac revision and owns the actual service configuration and deployment status.
 
 ## NixOS service
 
@@ -14,11 +16,11 @@ services.vrac = {
   enable = true;
   # Same-host proxy: loopback. A remote NetBird peer needs a reachable private
   # address instead, restricted to the intended proxy peer by mesh policy.
-  listenAddress = "127.0.0.1:8080";
-  tokenFile = "/run/secrets/vrac-token";
+  listenAddress = "0.0.0.0:8092";
+  tokenFile = "/var/lib/vrac-secrets/token";
   timezone = "Europe/Paris";
-  oauthIssuer = "https://id.example.test";
-  oauthAudience = "https://vrac.example.test/mcp";
+  oauthIssuer = "https://auth.netbird.bomal.cloud";
+  oauthAudience = "https://vrac.netbird.bomal.cloud/mcp";
   oauthScope = "vrac";
 };
 ```
@@ -34,6 +36,12 @@ application login.
 Use a Pocket ID release supporting API resources/permissions and the chosen
 client registration mechanism. Verify the actual instance's discovery
 metadata before enabling the connection.
+
+For the selected Pocket ID instance, discovery on 2026-11-02 advertises PKCE
+S256 and token endpoint method `none`, but neither a registration endpoint nor
+enabled CIMD. Use an explicitly registered public ChatGPT client for this
+deployment. The host's pinned Pocket ID 2.18.0 supports API resources. Exact
+setup steps are in the infrastructure repository's `docs/vrac.md`.
 
 Create an API whose resource is the exact Vrac HTTPS MCP URL, with a permission
 key `vrac`. Grant user-delegated access for the ChatGPT client and restrict
