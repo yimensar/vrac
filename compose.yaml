@@ -1,0 +1,24 @@
+services:
+  vrac:
+    build: .
+    init: true
+    restart: unless-stopped
+    command:
+      - -addr
+      - 0.0.0.0:5235
+      - -public-url
+      - ${VRAC_PUBLIC_URL:?Set VRAC_PUBLIC_URL to the canonical HTTPS URL}
+      - -db
+      - /data/vrac.db
+      - -attachments
+      - /data/attachments
+      - -web
+      - /app/web
+    environment:
+      VRAC_OWNER_PASSWORD: ${VRAC_OWNER_PASSWORD:?Set an owner password of at least 12 characters for first startup}
+    ports:
+      - 127.0.0.1:5235:5235
+    volumes:
+      - vrac-data:/data
+volumes:
+  vrac-data:

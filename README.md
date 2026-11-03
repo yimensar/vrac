@@ -1,251 +1,113 @@
 # Vrac
 
-> Capture first. Structure later—or never.
+A quiet home for small notes and useful context. Capture in Markdown, find the right fragment, and let your assistant reconstruct the bigger picture when you need it.
 
-Vrac is the local-first TUI outliner your terminal has been missing. It opens
-on today, stays out of the way, and remains stupidly fast—even across millions
-of notes.
+Go · SQLite FTS5 · React · shadcn/ui · native OAuth MCP
 
-Your thoughts do not wait for the right folder. Vrac does not ask for one.
-Write everything in the Journal, let structure emerge through bullets, add
-`[[references]]` and `#tags` when they are useful, and find the important stuff
-later without spending your life maintaining a second brain.
+## The workspace
 
-Vrac is early software and is already used for daily note-taking. Its workspace
-format starts cleanly at V1.
+- Live visual Markdown with a source mode, code blocks, tables, task lists and a recoverable local draft.
+- Timeline or collapsible outline, focused reading, keyboard shortcuts and layouts for desktop, tablet and phone.
+- Hashtag completion, hierarchical tags, pinned notes, archives, recoverable trash and revision history.
+- Ranked full-text search with accent normalization, prefixes, limited French/English query expansion and an explicitly labeled partial-match fallback.
+- Five MCP tools for search, batch reading, capture, revision-safe updates and tag discovery. OAuth uses PKCE, scoped tokens, refresh rotation and revocation.
+- Repeatable Memos migration preserving Markdown, source identifiers, dates, tags, archived state, relations, attachment bytes and original metadata.
 
-## Not another productivity system
+There is no mandatory folder hierarchy or master document. The outline is a navigation view over independent notes. AI synthesis happens in your connected assistant; Vrac supplies the source notes. Search currently indexes note Markdown, titles and tags. It does not use embeddings or index attachment bodies.
 
-- Open it and type. You are already in today's Journal.
-- Structure naturally with real, inline-editable bullets.
-- Keep tasks, decisions, meetings, and ideas where they actually happened.
-- Connect concepts with stable `[[references]]` and contextual backlinks.
-- Add indexed `#tags` without turning every sentence into metadata soup.
-- Work locally or through SSH with no graphical dependency.
-- Synchronize through an ordinary iCloud, Syncthing, Dropbox, or OneDrive
-  folder while the active SQLite database stays on local storage.
+## Run locally
 
-No account. No server. No telemetry. No cloud database. No loading spinner
-contemplating its own existence.
-
-Just one fast terminal outliner, an ordinary SQLite database, and your thoughts.
-
-## Install
-
-On macOS or x86_64 Linux, install the latest release without Rust or `sudo`:
+Requirements: Go 1.26+, Node.js 24+ and pnpm 11.
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/yan-imensar/vrac/releases/latest/download/vrac-installer.sh | sh
+make build
+./bin/vrac
 ```
 
-The installer verifies the release SHA-256 checksum and writes `vrac` to
-`~/.local/bin`. Set `VRAC_INSTALL_DIR` to choose another directory, or
-`VRAC_VERSION=v0.1.0` to install a specific release. It never edits shell
-configuration; if necessary, it prints the directory to add to `PATH`.
+Open the printed URL, normally <http://127.0.0.1:5235>, and choose an owner password on first use. Data lives in your operating system's user configuration directory under `vrac`, outside the repository. Use `-db` and `-attachments` to select another private directory:
 
-For a manual installation, download the archive for your platform from the
-[latest GitHub release](https://github.com/yan-imensar/vrac/releases/latest):
+```sh
+./bin/vrac \
+  -db /private/path/vrac.db \
+  -attachments /private/path/attachments \
+  -web web/dist
+```
 
-| Platform | Archive |
+The server listens only on loopback by default. The browser URL's host must match the printed canonical URL. Local note content and credentials are not part of the public source repository.
+
+For development, run these in separate terminals:
+
+```sh
+go run ./cmd/vrac -dev-origin http://127.0.0.1:5173
+pnpm --dir web dev
+```
+
+The Vite proxy forwards API requests to Go on port 5235. Production uses the built static frontend and does not require Node.js at runtime.
+
+## Bring your Memos notes
+
+In Memos, open **Settings → Export & Import → Export memos**. The native ZIP includes active and archived notes, comments and attachments.
+
+```sh
+./bin/vrac-import \
+  --input /private/path/memos-export.zip \
+  --db /private/path/vrac.db \
+  --attachments-dir /private/path/attachments
+```
+
+The importer validates file paths, declared sizes and attachment SHA256 before importing notes. The note write is transactional. Stable source IDs make repeated imports skip existing notes without overwriting subsequent Vrac edits. Original Memos attachment and note links remain usable in Vrac. A connector JSON export can optionally supplement relations omitted by the native format using `--metadata-json`.
+
+Export current notes and source metadata:
+
+```sh
+./bin/vrac-export --db /private/path/vrac.db --output /private/path/vrac-export.json
+python3 scripts/verify-import.py \
+  --source /private/path/memos-export.zip \
+  --export /private/path/vrac-export.json \
+  --attachments /private/path/attachments
+```
+
+JSON export contains current notes and attachment metadata, not the attachment bytes or complete revision database. For a complete backup, stop Vrac, then back up the entire private data directory, including SQLite/WAL files and attachments. Keep the original migration ZIP as well. Do not copy a live SQLite database with an ordinary file copy.
+
+## Connect your assistant
+
+For ChatGPT or another remote client, host Vrac behind HTTPS and connect to `https://your-domain/mcp`. Vrac handles OAuth itself; the reverse proxy only forwards traffic and preserves the canonical Host. Read [OAuth and deployment](docs/OAUTH.md) for bootstrap, discovery, scopes and exact resource identifiers. A local HTTP test is not a verified live ChatGPT connection.
+
+| Tool | Purpose |
 | --- | --- |
-| macOS Apple Silicon | `aarch64-apple-darwin.tar.gz` |
-| macOS Intel | `x86_64-apple-darwin.tar.gz` |
-| Linux x86_64 | `x86_64-unknown-linux-musl.tar.gz` |
-| Windows x86_64 | `x86_64-pc-windows-msvc.zip` |
+| `search_notes` | Compact ranked matches, source URLs, filters and pagination |
+| `get_notes` | Read up to 20 complete source notes |
+| `create_note` | Capture Markdown with an idempotency key for retries |
+| `update_note` | Change content or state using the current version |
+| `list_tags` | Reuse existing tags |
 
-Each archive has a matching SHA-256 checksum. Extract it, place `vrac` (or
-`vrac.exe`) somewhere on your `PATH`, and run:
+The owner interface can revoke MCP access. Reading and writing require distinct scopes. Retrieved note content is data and must not be treated as executable assistant instructions.
 
-```sh
-vrac
-```
-
-Developers with Rust 1.95 or newer can install the current main branch
-directly:
+Docker Compose is provided for an HTTPS reverse proxy setup:
 
 ```sh
-cargo install --locked --git https://github.com/yan-imensar/vrac vrac
+cp .env.example .env
+# Set your canonical HTTPS URL and a unique owner password in .env.
+docker compose up -d --build
 ```
 
-From a source checkout:
+Compose exposes the backend only on host loopback. The image recipe is supplied but was not built during the macOS verification run; the native Go/React build was verified.
+
+## Verification and measurements
 
 ```sh
-cargo install --locked --path crates/vrac
-vrac
+make test
+go run ./cmd/vrac-bench --sizes 1000,10000,100000 --iterations 20
 ```
 
-The first launch opens a terminal-native folder browser. Choose or create a
-folder for the workspace; the same flow works over SSH. Later launches reuse
-that selection. If the selected workspace can no longer be opened, Vrac shows
-the browser again and leaves its existing local and shared files untouched.
-Use `vrac --workspace <provider-folder>` to open an explicit provider folder,
-or `vrac workspace select` to reopen the browser.
+See [measured results and limitations](docs/BENCHMARKS.md). Benchmarks use file-backed SQLite, real decoding and explicit cache/workload conditions. The comparison is against a substring SQL baseline on the same corpus, not an end-to-end benchmark of a deployed Memos server.
 
-To build without installing:
+Repository fixtures and published benchmark data are synthetic. Private imports, credentials, databases and attachment files stay outside Git.
 
-```sh
-cargo run --release -p vrac
-```
+## Architecture
 
-## Terminal workflow
+`internal/store` owns persistence and search. HTTP and MCP share its validation, transactions and version checks. `internal/auth` implements browser and OAuth authentication. `web` owns the React interface; all canonical note state lives in SQLite.
 
-Vrac opens today's Journal and persists non-empty edits automatically. There is
-no save command.
+[API contract](docs/API.md) · [OAuth contract](docs/OAUTH.md) · [Benchmarks](docs/BENCHMARKS.md)
 
-### Navigation
-
-| Key | Action |
-| --- | --- |
-| `j` / `k`, arrows | Move between bullets |
-| `h` / `l` | Parent or first child inside the current zoom |
-| `H` | Return to the parent zoom |
-| `Enter` | Focus the selected bullet |
-| `Space` | Expand or collapse |
-| `gg` / `G` | First or last visible bullet |
-| `/` | Search nodes |
-| `:` | Open commands |
-| `b` | Open contextual backlinks |
-| `#` | Toggle tags in normal mode |
-| `?` | Open keyboard help |
-
-### Editing
-
-| Key | Action |
-| --- | --- |
-| `i` / `a` | Edit at the start or end |
-| `o` / `O` | Create a sibling after or before |
-| `c` | Create a child |
-| `Enter` | Persist and continue with a sibling |
-| `Tab` / `Shift-Tab` | Indent or outdent |
-| `Esc` | Persist non-empty work and return to normal mode |
-| `[[` | Complete a stable reference inline |
-| `#` | Complete a tag inline |
-| `Ctrl-Enter` | Persist and focus the edited bullet |
-
-Up and down move through wrapped visual lines before crossing into adjacent
-bullets. Home and End stay on the current visual line. Alt-arrow moves by word,
-and Alt-Backspace removes a word.
-
-### Structure and history
-
-| Key | Action |
-| --- | --- |
-| `yy` | Copy a subtree as portable indented text |
-| `dd` | Copy, then delete a subtree |
-| `p` | Paste an indented outline |
-| `u` / `Ctrl-R` | Undo or redo |
-
-Clipboard text remains useful outside Vrac. Paste accepts ordinary lines or
-indented `- ` bullets and creates the complete hierarchy atomically.
-
-## Local means local
-
-The selected folder contains only portable synchronization material:
-
-```text
-workspace-id
-checkpoint.vrac
-changes/*.vrac-sync
-```
-
-The open SQLite database and its WAL remain in the platform's local application
-data. Vrac never opens a live database directly from a synchronized or network
-folder.
-
-Synchronization runs at startup and after idle periods outside inline editing.
-Use `:sync` for an immediate round and `:workspace` to choose another folder.
-
-Terminal presentation preferences live in
-`$XDG_CONFIG_HOME/vrac/config.toml`, or `~/.config/vrac/config.toml` when
-`XDG_CONFIG_HOME` is unset. Windows uses `%APPDATA%\vrac\config.toml`.
-Vrac creates this file only after a setting changes. `:lines on` and
-`:lines off` show or hide hierarchy guides immediately and remember the choice:
-
-```toml
-lines = true
-```
-
-Independent changes merge; real conflicts stop atomically instead of silently
-using last-writer-wins.
-
-## Command line
-
-The product is terminal-first. It opens the remembered workspace by default,
-can open an explicit provider folder, or can ask for another one:
-
-```text
-vrac
-vrac --workspace <provider-folder>
-vrac workspace select
-```
-
-Bounded commands that operate directly on one local SQLite file are available
-under the explicit `db` namespace:
-
-```text
-vrac db init <file>
-vrac db add <file> [--parent <id>] [--first|--last|--before <id>|--after <id>] <text>
-vrac db node <file> <id>
-vrac db children <file> [--parent <id>] [--limit <n>|--all]
-vrac db set-text <file> <id> <text>
-vrac db move <file> <id> [--parent <id>] [--first|--last|--before <id>|--after <id>]
-vrac db check <file>
-```
-
-These are database maintenance and scripting commands, not the primary
-workspace interface. Run `vrac db --help` for the same command summary.
-
-## Repository layout
-
-```text
-crates/vrac-engine      model, business rules, SQLite, and sync protocol
-crates/vrac-workspace   local DB lifecycle, provider layout, and sync rounds
-crates/vrac-tui         library terminal frontend, transient state, and rendering
-crates/vrac             public `vrac` binary and scriptable command routing
-```
-
-The engine is synchronous and independent from every interface. Workspace
-orchestration is reusable by terminal and future frontends. The CLI and TUI
-contain no SQL, provider-format knowledge, or duplicated business rules. The
-`vrac` package provides the only product executable and supplies launch context
-to the terminal frontend.
-
-The current workspace format is documented in [FORMAT.md](FORMAT.md). See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the branch, pull-request, and release
-workflow.
-
-## Development
-
-```sh
-cargo fmt --all -- --check
-cargo check --workspace --all-targets
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-```
-
-"Fast" is not decorative copy. The engine and TUI have reproducible
-five-million-node release scenarios, intentionally separate from ordinary
-correctness tests. The engine scenario creates its own performance database;
-data generation is deliberately not part of the installed command surface:
-
-```sh
-cargo run --release -p vrac --example performance -- \
-  /local/path/vrac-5m-wide.vrac --shape wide
-
-cargo run --release -p vrac-tui --example tui_performance -- \
-  /local/path/to/workspace-or-checkpoint
-```
-
-The engine budget is 2 ms at p95 for interactive operations. The terminal
-scenario requires first-view model creation below 1.5 seconds, interactive work
-including frame serialization below 16.667 ms at p95, and total peak RSS below
-64 MiB on the reference machine.
-
-## License
-
-Vrac is free software licensed under the
-[GNU Affero General Public License v3.0](LICENSE). You may use, modify, share,
-and sell it. If you distribute a modified version or make one available over
-a network, its users must be offered the corresponding source code under the
-same license.
+Licensed under [AGPL-3.0](LICENSE).

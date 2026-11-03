@@ -1,0 +1,124 @@
+{
+  "at": "2026-11-03T01:33:43Z",
+  "go": "go1.26.5",
+  "os": "darwin",
+  "arch": "arm64",
+  "cpuCount": 10,
+  "conditions": "File-backed SQLite, WAL, synchronous FULL, one connection, warm OS/SQLite caches, serial in-process calls; includes count and first 50 complete notes. Substring baseline uses case-insensitive literal contains on same active corpus, with identical decoded response fields. No network, browser or embedding/model latency. Existing corpus mode does not mutate notes.",
+  "results": [
+    {
+      "notes": 1000,
+      "databaseBytes": 1961984,
+      "importMs": 91.606,
+      "fulltext": {
+        "p50Ms": 0.8395,
+        "p95Ms": 1.052875,
+        "maxMs": 1.349834
+      },
+      "substringBaseline": {
+        "p50Ms": 1.033292,
+        "p95Ms": 1.28575,
+        "maxMs": 1.361875
+      },
+      "timeline": {
+        "p50Ms": 0.160958,
+        "p95Ms": 0.178292,
+        "maxMs": 0.342417
+      },
+      "read": {
+        "p50Ms": 0.011375,
+        "p95Ms": 0.01575,
+        "maxMs": 0.092208
+      },
+      "create": {
+        "p50Ms": 0.226292,
+        "p95Ms": 0.412708,
+        "maxMs": 0.562292
+      },
+      "update": {
+        "p50Ms": 0.212625,
+        "p95Ms": 0.364125,
+        "maxMs": 1.28075
+      },
+      "queriesPerRun": 7,
+      "iterations": 20,
+      "singleTokenCountsEquivalent": true
+    },
+    {
+      "notes": 10000,
+      "databaseBytes": 18849792,
+      "importMs": 907.033,
+      "fulltext": {
+        "p50Ms": 4.587833,
+        "p95Ms": 5.2295,
+        "maxMs": 5.654333
+      },
+      "substringBaseline": {
+        "p50Ms": 9.010375,
+        "p95Ms": 17.166333,
+        "maxMs": 17.910041
+      },
+      "timeline": {
+        "p50Ms": 0.550709,
+        "p95Ms": 0.63725,
+        "maxMs": 0.710584
+      },
+      "read": {
+        "p50Ms": 0.012042,
+        "p95Ms": 0.017,
+        "maxMs": 0.202583
+      },
+      "create": {
+        "p50Ms": 0.336208,
+        "p95Ms": 0.499417,
+        "maxMs": 0.843875
+      },
+      "update": {
+        "p50Ms": 0.292542,
+        "p95Ms": 0.481333,
+        "maxMs": 0.682084
+      },
+      "queriesPerRun": 7,
+      "iterations": 20,
+      "singleTokenCountsEquivalent": true
+    },
+    {
+      "notes": 100000,
+      "databaseBytes": 189366272,
+      "importMs": 10819.051,
+      "fulltext": {
+        "p50Ms": 45.809292,
+        "p95Ms": 48.495291,
+        "maxMs": 322.4185
+      },
+      "substringBaseline": {
+        "p50Ms": 91.956625,
+        "p95Ms": 184.09775,
+        "maxMs": 315.382167
+      },
+      "timeline": {
+        "p50Ms": 7.313667,
+        "p95Ms": 7.842542,
+        "maxMs": 7.927125
+      },
+      "read": {
+        "p50Ms": 0.018875,
+        "p95Ms": 0.027959,
+        "maxMs": 0.238375
+      },
+      "create": {
+        "p50Ms": 0.242209,
+        "p95Ms": 0.335667,
+        "maxMs": 4.292791
+      },
+      "update": {
+        "p50Ms": 0.217208,
+        "p95Ms": 0.328542,
+        "maxMs": 0.365208
+      },
+      "queriesPerRun": 7,
+      "iterations": 20,
+      "singleTokenCountsEquivalent": true
+    }
+  ]
+}
