@@ -1,43 +1,87 @@
 name: CI
-
 on:
   pull_request:
-  workflow_dispatch:
-
+  push:
+    branches: [main]
 permissions:
   contents: read
-
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
-  check:
-    name: Check (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
-
+  application:
+    name: Go and web
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: '1'
+      GOFLAGS: -tags=sqlite_fts5
     steps:
-      - name: Check out the repository
-        uses: actions/checkout@v6
-
-      - name: Install Rust
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run check && npm test && npm run build
+        working-directory: web
+      - run: test -z "$(gofmt -l cmd internal web/*.go)"
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: go build ./cmd/vrac
+      - run: go build -tags sqlite_fts5,headless ./cmd/vrac
+      - run: python3 -m unittest discover -s scripts -p '*_test.py'
+  nix:
+    name: Nix packages and module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - run: nix flake check --print-build-logs
+      - run: nix build .#docker --print-build-logs
+      - name: Start the Nix container image
+        shell: bash
         run: |
-          rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
-          rustup default 1.95.0
+          docker load < result
+          version="$(cat VERSION)"
+          secret_dir="$(mktemp -d)"
+          openssl rand -hex 32 > "$secret_dir/token"
+          chmod 0444 "$secret_dir/token"
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              docker logs vrac-smoke || true
+              docker inspect --format 'Container status={{.State.Status}} exit={{.State.ExitCode}}' vrac-smoke || true
+            fi
+            docker rm -fv vrac-smoke >/dev/null 2>&1 || true
+            rm -rf "$secret_dir"
+            return "$status"
+          }
+          trap cleanup EXIT
+          docker run -d --name vrac-smoke --read-only --cap-drop ALL \
+            --publish 127.0.0.1:8080:8080 \
+            --mount "type=bind,source=$secret_dir/token,target=/run/secrets/vrac-token,readonly" \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m "vrac:$version"
+          curl --retry 15 --retry-all-errors --retry-delay 1 --retry-max-time 30 \
+            --connect-timeout 2 --max-time 3 --fail --silent --show-error \
+            http://127.0.0.1:8080/healthz
+          python3 - "$secret_dir/token" <<'PY'
+          import importlib.util
+          import json
+          from pathlib import Path
+          import sys
+          from urllib.request import Request, urlopen
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Run Clippy
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
-
-      - name: Run tests
-        run: cargo test --workspace --locked
-
-      - name: Test the curl installer
-        if: runner.os != 'Windows'
-        run: sh tests/install.sh
+          token = Path(sys.argv[1]).read_text().strip()
+          request = Request("http://127.0.0.1:8080/api/bootstrap", headers={"Authorization": "Bearer " + token})
+          with urlopen(request, timeout=10) as response:
+              assert json.load(response)["today"]["id"]
+          spec = importlib.util.spec_from_file_location("package_plugin", "scripts/package-plugin.py")
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          count = module.discover("http://127.0.0.1:8080/mcp", token)
+          assert count >= 14, "Expected the complete Vrac MCP tool set"
+          print(f"Authenticated container API and {count} MCP tool definitions verified")
+          PY

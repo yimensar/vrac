@@ -1,0 +1,85 @@
+{
+  "node_count": 5002807,
+  "iterations": 100,
+  "measurements": [
+    {
+      "operation": "plain_page_100",
+      "p95_ms": 0.491083,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "metadata_page_100",
+      "p95_ms": 0.722666,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "read_node",
+      "p95_ms": 0.072125,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "path_depth_104",
+      "p95_ms": 0.813792,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "create_node",
+      "p95_ms": 0.727666,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "edit_content",
+      "p95_ms": 0.905833,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "replace_tags",
+      "p95_ms": 0.891375,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "rename_reference_target",
+      "p95_ms": 0.825125,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "move_sibling",
+      "p95_ms": 0.951167,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "search_text",
+      "p95_ms": 3.150084,
+      "budget_ms": 2,
+      "passed": false
+    },
+    {
+      "operation": "project_decisions",
+      "p95_ms": 0.63125,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "large_project_rare_tag",
+      "p95_ms": 12.612416,
+      "budget_ms": 2,
+      "passed": false
+    },
+    {
+      "operation": "journal_decisions",
+      "p95_ms": 0.598666,
+      "budget_ms": 2,
+      "passed": true
+    }
+  ],
+  "passed": false
+}

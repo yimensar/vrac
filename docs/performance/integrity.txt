@@ -1,0 +1,7 @@
+Nodes: 5012310
+Integrity: OK
+Issues: 0
+Elapsed background check: 148.83 seconds
+CPU user: 23.76 seconds
+CPU system: 13.91 seconds
+This check preceded the final 5,000 ordinary benchmark mutations.

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "vrac",
+  "version": "0.2.0",
+  "description": "A journal-centered knowledge base with ordered nodes, tags, references, and revision history.",
+  "author": {
+    "name": "Yan Imensar"
+  },
+  "license": "AGPL-3.0-only",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Vrac",
+        "shortDescription": "Your connected knowledge",
+        "longDescription": "Capture meeting notes, decisions, and tasks in a dated journal. Find current knowledge by tag, subject, date, or text, and follow its revision history.",
+        "developerName": "Yan Imensar",
+        "category": "Productivity",
+        "capabilities": [],
+        "logo": "./assets/icon.svg",
+        "composerIcon": "./assets/icon.svg",
+        "defaultPrompt": "Find my project context in Vrac, then help me record the new knowledge."
+      }
+    }
+  }
+}

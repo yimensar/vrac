@@ -1,0 +1,57 @@
+SQLite 3.53.4
+
+ Untagged subject browse (subjectBrowseSQL)
+2 0 CO-ROUTINE (subquery-10)
+4 2 MERGE (UNION)
+6 4 LEFT
+8 6 MERGE (UNION)
+10 8 LEFT
+12 10 SCAN CONSTANT ROW
+18 8 RIGHT
+20 18 CO-ROUTINE direct
+29 20 SEARCH r USING COVERING INDEX references_by_target (target_id=? AND source_id>?)
+37 20 SEARCH source USING COVERING INDEX nodes_by_context (id=?)
+70 18 SCAN direct
+77 18 USE TEMP B-TREE FOR ORDER BY
+119 4 RIGHT
+121 119 CO-ROUTINE subject_scope
+125 121 SETUP
+127 125 MERGE (UNION)
+129 127 LEFT
+132 129 SEARCH branches USING COVERING INDEX sqlite_autoindex_branches_1 (node_id=?)
+142 127 RIGHT
+146 142 SEARCH r USING COVERING INDEX references_by_target (target_id=?)
+152 142 SEARCH b USING COVERING INDEX sqlite_autoindex_branches_1 (node_id=?)
+160 142 USE TEMP B-TREE FOR ORDER BY
+210 121 RECURSIVE STEP
+212 210 SCAN scope
+213 210 SEARCH b USING COVERING INDEX branches_by_parent (parent_id=?)
+229 119 SCAN scope
+232 119 SCAN child VIRTUAL TABLE INDEX 1:
+234 119 CORRELATED SCALAR SUBQUERY 6
+237 234 CO-ROUTINE (subquery-5)
+241 237 SEARCH n USING COVERING INDEX nodes_by_parent_identifier (parent_id=? AND deleted=? AND id>?)
+257 234 SCAN (subquery-5)
+276 119 USE TEMP B-TREE FOR ORDER BY
+319 0 SCAN (subquery-10)
+
+ Tagged subject search (historical-decision)
+5 0 SEARCH anchor USING COVERING INDEX tags_by_tag (tag=?)
+11 0 SEARCH n USING COVERING INDEX nodes_by_context (id=?)
+20 0 CORRELATED SCALAR SUBQUERY 4
+24 20 SEARCH direct USING COVERING INDEX references_by_target (target_id=? AND source_id=?)
+39 0 LIST SUBQUERY 5
+43 39 MATERIALIZE subject_scope
+48 43 SETUP
+50 48 MERGE (UNION)
+52 50 LEFT
+55 52 SEARCH branches USING COVERING INDEX sqlite_autoindex_branches_1 (node_id=?)
+65 50 RIGHT
+69 65 SEARCH r USING COVERING INDEX references_by_target (target_id=?)
+75 65 SEARCH b USING COVERING INDEX sqlite_autoindex_branches_1 (node_id=?)
+83 65 USE TEMP B-TREE FOR ORDER BY
+135 43 RECURSIVE STEP
+137 135 SCAN scope
+138 135 SEARCH b USING COVERING INDEX branches_by_parent (parent_id=?)
+154 39 SCAN subject_scope
+160 39 CREATE BLOOM FILTER
