@@ -82,6 +82,6 @@ jobs:
           module = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(module)
           count = module.discover("http://127.0.0.1:8080/mcp", token)
-          assert count >= 13, "Expected the complete Vrac MCP tool set"
+          assert count >= 14, "Expected the complete Vrac MCP tool set"
           print(f"Authenticated container API and {count} MCP tool definitions verified")
           PY

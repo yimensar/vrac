@@ -47,6 +47,13 @@ type CreateInput struct {
 	RequestID    string        `json:"request_id,omitempty"`
 }
 
+type OutlineInput struct {
+	ParentID  string        `json:"parent_id,omitempty"`
+	Placement Placement     `json:"placement,omitempty"`
+	Nodes     []CreateInput `json:"nodes"`
+	RequestID string        `json:"request_id"`
+}
+
 type UpdateInput struct {
 	Text             string   `json:"text"`
 	Tags             []string `json:"tags"`

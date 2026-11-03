@@ -94,7 +94,8 @@ function Login({ onConnected }: { onConnected: () => Promise<void> }) {
       signal: controller.signal,
     })
       .then(async (response) => {
-        if (!response.ok) throw new Error("Sign-in configuration is unavailable");
+        if (!response.ok)
+          throw new Error("Sign-in configuration is unavailable");
         const data = await response.json();
         if (!controller.signal.aborted) {
           setProvider({
@@ -104,7 +105,8 @@ function Login({ onConnected }: { onConnected: () => Promise<void> }) {
         }
       })
       .catch(() => {
-        if (!controller.signal.aborted) setProvider({ enabled: false, label: "" });
+        if (!controller.signal.aborted)
+          setProvider({ enabled: false, label: "" });
       });
     return () => controller.abort();
   }, []);
@@ -136,18 +138,30 @@ function Login({ onConnected }: { onConnected: () => Promise<void> }) {
           <br />
           Pick up where you left off.
         </p>
-        {error && <p className="inline-error" role="alert">{error}</p>}
+        {error && (
+          <p className="inline-error" role="alert">
+            {error}
+          </p>
+        )}
         {provider?.enabled && (
           <Button asChild className="w-full">
-            <a href="/auth/login"><ArrowRight />Continue with {provider.label}</a>
+            <a href="/auth/login">
+              <ArrowRight />
+              Continue with {provider.label}
+            </a>
           </Button>
         )}
         {provider === null ? (
-          <Loader2 className="animate-spin" aria-label="Loading sign-in options" />
+          <Loader2
+            className="animate-spin"
+            aria-label="Loading sign-in options"
+          />
         ) : (
           <details open={!provider.enabled}>
             {provider.enabled && (
-              <summary className="field-label cursor-pointer py-4">Use an access token</summary>
+              <summary className="field-label cursor-pointer py-4">
+                Use an access token
+              </summary>
             )}
             <form
               onSubmit={(event) => {
@@ -173,8 +187,8 @@ function Login({ onConnected }: { onConnected: () => Promise<void> }) {
                 disabled={busy || !token.trim()}
                 className="w-full"
               >
-                {busy ? <Loader2 className="animate-spin" /> : <ArrowRight />}Open
-                Vrac
+                {busy ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+                Open Vrac
               </Button>
             </form>
           </details>
@@ -266,6 +280,13 @@ export default function App() {
       setBranches({ [id]: next.children });
       setExpanded(new Set());
       setMode(nextMode);
+      setComposer(
+        next.children.nodes.length === 0
+          ? nextMode === "journal" && next.node.journal_date
+            ? { kind: "capture", date: next.node.journal_date }
+            : { kind: "node", parent: next.node.id, label: "New bullets" }
+          : undefined,
+      );
       if (updateURL)
         window.history.pushState(
           null,
@@ -301,6 +322,11 @@ export default function App() {
       setBranches({ [data.today.id]: next.children });
       setExpanded(new Set());
       setMode("journal");
+      setComposer(
+        next.children.nodes.length === 0
+          ? { kind: "capture", date: data.date }
+          : undefined,
+      );
       resetTags(data.tags || [], data.tags_next_cursor);
       if (updateURL)
         window.history.pushState(null, "", `#/journal/${data.date}`);
@@ -483,9 +509,10 @@ export default function App() {
       value?.node.id === node.id ? { ...value, node } : value,
     );
   }
-  async function saved(node: Node) {
+  async function saved(node: Node, keepEditing = false) {
     replaceNode(node);
-    setEditing(undefined);
+    if (!keepEditing)
+      setEditing((current) => (current === node.id ? undefined : current));
     if (view) await reloadBranch(view.node.id);
     void refreshTags();
   }
@@ -596,12 +623,15 @@ export default function App() {
     setError("");
     try {
       if (action === "focus") return await loadNode(node.id);
-      if (action === "child")
+      if (action === "child") {
+        setExpanded((value) => new Set(value).add(node.id));
+        if (!branches[node.id]) await reloadBranch(node.id);
         return setComposer({
           kind: "node",
           parent: node.id,
           label: "Add a child bullet",
         });
+      }
       if (action === "below" && node.parent_id)
         return setComposer({
           kind: "node",
@@ -708,6 +738,31 @@ export default function App() {
       report(caught);
     }
   }
+  function composerSlot(parent: string, after?: string) {
+    if (!composer) return null;
+    const targetParent =
+      composer.kind === "node"
+        ? composer.parent
+        : mode === "journal" && composer.date === date
+          ? view?.node.id
+          : undefined;
+    const targetAfter = composer.kind === "node" ? composer.after : undefined;
+    if (targetParent !== parent || targetAfter !== after) return null;
+    return (
+      <li className="outline-composer-item">
+        <Composer
+          key={JSON.stringify(composer)}
+          target={composer}
+          onClose={() =>
+            setComposer((current) =>
+              current === composer ? undefined : current,
+            )
+          }
+          onCreated={created}
+        />
+      </li>
+    );
+  }
   const rowContext: RowContext = {
     expanded,
     branches,
@@ -723,6 +778,16 @@ export default function App() {
     onSubject: openSubject,
     onMore: (id) => {
       void reloadBranch(id, true);
+    },
+    renderComposer: composerSlot,
+    onInlineCommand: (node, kind) => {
+      if (kind === "outdent" && node.parent_id === view?.node.id) {
+        setEditing(node.id);
+        return;
+      }
+      void action(kind, node).then(() => {
+        if (kind !== "below") setEditing(node.id);
+      });
     },
   };
   const rootPage = view ? branches[view.node.id] : undefined;
@@ -920,11 +985,29 @@ export default function App() {
                 }}
               >
                 <Plus />
-                Capture<span className="capture-shortcut">⌘ ↵</span>
+                Capture<span className="capture-shortcut">⌘ ⇧ ↵</span>
               </Button>
             </div>
           </header>
           <main className="main-content" id="main-content">
+            {composer?.kind === "capture" &&
+              (mode !== "journal" || composer.date !== date) && (
+                <section
+                  className="inline-today-capture"
+                  aria-label="Capture today"
+                >
+                  <Composer
+                    key={JSON.stringify(composer)}
+                    target={composer}
+                    onClose={() =>
+                      setComposer((current) =>
+                        current === composer ? undefined : current,
+                      )
+                    }
+                    onCreated={created}
+                  />
+                </section>
+              )}
             {error && (
               <div className="error-banner" role="alert">
                 <span>{error}</span>
@@ -1081,9 +1164,9 @@ export default function App() {
                         />
                       </div>
                     )}
-                    {rootPage?.nodes.length ? (
+                    {rootPage?.nodes.length || composer ? (
                       <ul className="outline-list root-outline" role="list">
-                        {rootPage.nodes.map((node, index) => (
+                        {rootPage?.nodes.map((node, index) => (
                           <OutlineRow
                             key={node.id}
                             node={node}
@@ -1092,6 +1175,7 @@ export default function App() {
                             siblingCount={rootPage.nodes.length}
                           />
                         ))}
+                        {view && composerSlot(view.node.id)}
                       </ul>
                     ) : (
                       <div className="empty-journal">
@@ -1135,7 +1219,7 @@ export default function App() {
                         Load more bullets
                       </Button>
                     )}
-                    {rootPage?.nodes.length ? (
+                    {rootPage?.nodes.length && !composer ? (
                       <button
                         className="add-bullet"
                         onClick={() =>
@@ -1407,14 +1491,6 @@ export default function App() {
           onSelect={(id, label) => setSubject({ id, label })}
         />
       )}
-      {composer && (
-        <Composer
-          key={JSON.stringify(composer)}
-          target={composer}
-          onClose={() => setComposer(undefined)}
-          onCreated={created}
-        />
-      )}
       {history && (
         <HistoryDialog
           node={history}
@@ -1466,6 +1542,15 @@ export default function App() {
             </p>
           </div>
           <div className="guide-shortcuts">
+            <span>
+              <kbd>Enter</kbd>Next bullet
+            </span>
+            <span>
+              <kbd>Tab / ⇧ Tab</kbd>Nest / outdent
+            </span>
+            <span>
+              <kbd>⇧ Enter</kbd>New line in a bullet
+            </span>
             <span>
               <kbd>⌘ / Ctrl K</kbd>Search
             </span>

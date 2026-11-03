@@ -20,6 +20,38 @@ func (e *Engine) Create(input CreateInput) (Node, error) {
 	})
 	return n, err
 }
+
+// CreateOutline inserts adjacent roots and their descendants in one transaction.
+func (e *Engine) CreateOutline(input OutlineInput) ([]Node, error) {
+	if len(input.Nodes) == 0 || len(input.Nodes) > 1000 || strings.TrimSpace(input.RequestID) == "" {
+		return nil, fmt.Errorf("%w: outline requires 1 to 1000 roots and a request_id", ErrInvalid)
+	}
+	var result []Node
+	err := e.mutate("outline", input.RequestID, input, &result, func(tx *sql.Tx) error {
+		if err := validateParent(tx, input.ParentID); err != nil {
+			return err
+		}
+		placement := input.Placement
+		for _, in := range input.Nodes {
+			if in.Placement != (Placement{}) {
+				return fmt.Errorf("%w: root placement is determined by the outline", ErrInvalid)
+			}
+			in.Placement = placement
+			n, err := e.createNode(tx, in, input.ParentID, true)
+			if err != nil {
+				return err
+			}
+			result = append(result, n)
+			placement = Placement{After: n.ID}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (e *Engine) Capture(date string, inputs []CreateInput, requestID string, fallbackDate ...string) ([]Node, error) {
 	var result []Node
 	if len(inputs) == 0 || len(inputs) > 1000 {

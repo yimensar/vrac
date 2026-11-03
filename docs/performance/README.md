@@ -39,6 +39,33 @@ and the benchmark never changes durability settings.
 
 ## Recorded results and limits
 
+### Inline editor recheck, 2026-11-03
+
+The required recheck after adding the transactional `CreateOutline` operation
+did **not** pass the 2 ms gate. Existing read/search SQL and schema were unchanged.
+All reports are retained, including failures:
+
+| Report | Source | Nodes | Maximum p95 (ms) |
+| --- | --- | ---: | ---: |
+| `after-inline-outline.json` | Working inline-editor revision, first run | 5,022,310 | 2.287 |
+| `before-inline-reference.json` | Parent revision `b50c5d4` | 5,027,310 | 2.612 |
+| `after-inline-repeat.json` | Working inline-editor revision | 5,032,310 | 4.180 |
+| `before-inline-quiescent.json` | Parent revision `b50c5d4`, optimized build | 5,037,310 | 8.484 |
+| `after-inline-quiescent.json` | Working inline-editor revision, optimized build | 5,042,310 | 5.810 |
+
+Every report uses 1,000 iterations per operation on the same mutable generated
+fixture. Each run retains the additional activity/revision history from earlier
+runs; these are sequential fixture reuses, not byte-identical database snapshots.
+The last pair ran sequentially without simultaneous builds or test suites;
+both used Go's optimized build with `-trimpath` and `CGO_CFLAGS="-O2 -g"`.
+Some earlier repeat runs overlapped frontend verification and must not be used
+as isolated performance evidence. WAL, FULL synchronization and foreign keys
+remained enabled. Both the parent and current revision exceeded the gate;
+these results do not prove the absence of a regression or establish its cause.
+The current gate remains unmet and needs investigation before a broader release.
+
+### Initial V0 measurements, 2026-11-02
+
 - `baseline-pure-go.json`: initial modernc-based implementation, 5,002,807
   nodes and 100 iterations. Text search and a selective tag in a large project
   failed the budget. This predates the final query and activity-context model;

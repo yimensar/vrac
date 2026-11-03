@@ -30,11 +30,23 @@ try {
     const meeting = `Release meeting ${name} ${runID}`;
     const decision = `Keep SSO ${name} ${runID}`;
     await page.getByRole("button", { name: /^Capture/ }).click();
+    assert.equal(await page.getByRole("dialog").count(), 0);
     await page
       .getByRole("textbox", { name: "Your notes" })
-      .fill(
-        `${meeting} [[${project}]] #meeting\n  ${decision} #decision\n  Prepare accounts #task`,
-      );
+      .fill(`${meeting} [[${project}]] #meeting`);
+    await page.getByRole("textbox", { name: "Your notes" }).press("Enter");
+    if (name === "phone")
+      await page.getByRole("button", { name: "Indent new bullet" }).click();
+    else await page.keyboard.press("Tab");
+    await page
+      .getByRole("textbox", { name: "New bullet 2", exact: true })
+      .fill(`${decision} #decision`);
+    await page
+      .getByRole("textbox", { name: "New bullet 2", exact: true })
+      .press("Enter");
+    await page
+      .getByRole("textbox", { name: "New bullet 3", exact: true })
+      .fill("Prepare accounts #task");
     const captured = page.waitForResponse(
       (response) =>
         response.url().endsWith("/api/capture") &&
@@ -45,7 +57,9 @@ try {
     assert.equal(captureResponse.status(), 201, await captureResponse.text());
     const captureBody = await captureResponse.json();
     const root = captureBody.nodes[0];
-    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    await page
+      .getByRole("group", { name: "New outline" })
+      .waitFor({ state: "hidden" });
     const row = page.locator(`[data-node-id="${root.id}"]`).first();
     await row.waitFor();
     await row
@@ -57,6 +71,71 @@ try {
       await row.locator(".tag-link").filter({ hasText: "#decision" }).count(),
       1,
     );
+    await row
+      .getByRole("button", { name: "Bullet actions", exact: true })
+      .first()
+      .click();
+    await page
+      .getByRole("menuitem", { name: "Add child", exact: true })
+      .click();
+    assert.equal(await page.getByRole("dialog").count(), 0);
+    const extraText = `Extra ${name} ${runID}`;
+    await page.getByRole("textbox", { name: "Your notes" }).fill(extraText);
+    await page.getByRole("textbox", { name: "Your notes" }).press("Enter");
+    await page
+      .getByRole("textbox", { name: "New bullet 2", exact: true })
+      .fill("Another sibling");
+    const inserted = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/outline") &&
+        response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Save bullets" }).click();
+    const insertion = await inserted;
+    assert.equal(insertion.status(), 201);
+    const extra = (await insertion.json()).nodes[0];
+    await page
+      .getByRole("group", { name: "New outline" })
+      .waitFor({ state: "hidden" });
+    const extraRow = page.locator(`[data-node-id="${extra.id}"]`).first();
+    await extraRow.getByText(extraText, { exact: true }).click();
+    const inline = extraRow.getByRole("textbox", { name: "Edit bullet" });
+    await inline.fill(extraText + " updated");
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    await page.route(`**/api/nodes/${extra.id}`, async (route) => {
+      if (route.request().method() !== "PATCH") return route.continue();
+      const response = await route.fetch();
+      await held;
+      await route.fulfill({ response });
+    });
+    const changed = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/api/nodes/${extra.id}`) &&
+        response.request().method() === "PATCH",
+    );
+    await inline.press("Enter");
+    const followup = page.getByRole("textbox", { name: "Your notes" });
+    await followup.waitFor();
+    await followup.fill("Keep typing while the previous bullet saves");
+    release();
+    assert.equal((await changed).status(), 200);
+    assert.equal(
+      await followup.inputValue(),
+      "Keep typing while the previous bullet saves",
+    );
+    const continued = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/outline") &&
+        response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Save bullets" }).click();
+    assert.equal((await continued).status(), 201);
+    await page
+      .getByRole("group", { name: "New outline" })
+      .waitFor({ state: "hidden" });
     await row.getByRole("button", { name: project, exact: true }).click();
     await page
       .locator(".search-result")
@@ -130,6 +209,8 @@ try {
     results.push({
       viewport: name,
       capture: true,
+      inlineChildren: true,
+      immediateContinuation: true,
       nestedTags: true,
       subjectFilter: true,
       permalink: true,

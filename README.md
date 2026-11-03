@@ -35,6 +35,8 @@ bin/vrac serve --dev --no-web
 The server exposes `/mcp` (Streamable HTTP), `/api/` and `/healthz`. Both
 interfaces call the same synchronous Go engine. The web UI uses React,
 TypeScript and shadcn/ui. It supports journal capture, nested outlines,
+inline bullet creation with Enter/Tab/Shift-Tab, keyboard commit with
+Ctrl/Cmd-Enter, in-place editing and recoverable browser drafts,
 tags, subject references, filtered search and revision history.
 
 ## Knowledge model

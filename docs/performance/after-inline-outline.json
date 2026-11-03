@@ -1,0 +1,103 @@
+{
+  "node_count": 5022310,
+  "iterations": 1000,
+  "measurements": [
+    {
+      "operation": "plain_page_100",
+      "p95_ms": 0.289208,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "metadata_page_100",
+      "p95_ms": 0.476708,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "read_node",
+      "p95_ms": 0.041875,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "path_depth_104",
+      "p95_ms": 0.419916,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "create_node",
+      "p95_ms": 0.867959,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "edit_content",
+      "p95_ms": 1.617208,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "replace_tags",
+      "p95_ms": 0.747625,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "rename_reference_target",
+      "p95_ms": 0.723792,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "move_sibling",
+      "p95_ms": 0.85925,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "search_text",
+      "p95_ms": 0.122458,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "project_decisions",
+      "p95_ms": 0.245208,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "large_project_rare_tag",
+      "p95_ms": 2.287042,
+      "budget_ms": 2,
+      "passed": false
+    },
+    {
+      "operation": "journal_decisions",
+      "p95_ms": 0.203917,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "large_project_common_tag",
+      "p95_ms": 2.103167,
+      "budget_ms": 2,
+      "passed": false
+    },
+    {
+      "operation": "project_browse",
+      "p95_ms": 1.676125,
+      "budget_ms": 2,
+      "passed": true
+    },
+    {
+      "operation": "sparse_project_browse",
+      "p95_ms": 0.176625,
+      "budget_ms": 2,
+      "passed": true
+    }
+  ],
+  "passed": false
+}

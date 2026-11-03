@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,10 +53,14 @@ export function NodeEditor({
   node,
   onSaved,
   onClose,
+  compact = false,
+  onNext,
 }: {
   node: Node;
-  onSaved: (node: Node) => Promise<void>;
+  onSaved: (node: Node, keepEditing?: boolean) => Promise<void>;
   onClose: () => void;
+  compact?: boolean;
+  onNext?: (node: Node, action: "below" | "indent" | "outdent") => void;
 }) {
   const [draft, setDraft] = useState(() => draftFor(node));
   const [busy, setBusy] = useState(false);
@@ -64,6 +68,23 @@ export function NodeEditor({
   const [conflict, setConflict] = useState(false);
   const [current, setCurrent] = useState<Node>();
   const [localDraft, setLocalDraft] = useState(true);
+  const latest = useRef(draft);
+  latest.current = draft;
+  const pending = useRef(false);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const field = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (compact && field.current) {
+      field.current.style.height = "auto";
+      field.current.style.height = `${Math.max(28, field.current.scrollHeight)}px`;
+    }
+  }, [compact, draft.text]);
   useEffect(() => {
     try {
       localStorage.setItem(`vrac:draft:${node.id}`, JSON.stringify(draft));
@@ -73,7 +94,28 @@ export function NodeEditor({
     }
   }, [draft, node.id]);
   async function save() {
-    if (!draft.text.trim() || busy) return;
+    if (!draft.text.trim() || pending.current) return;
+    if (
+      compact &&
+      draft.text === node.text &&
+      draft.tags === node.tags.join(" ") &&
+      draft.revision === node.revision &&
+      !draft.summary
+    ) {
+      try {
+        localStorage.removeItem(`vrac:draft:${node.id}`);
+      } catch {
+        /* The editor matches canonical state. */
+      }
+      try {
+        await onSaved(node);
+        return node;
+      } catch (caught) {
+        setError(errorMessage(caught));
+        return;
+      }
+    }
+    pending.current = true;
     setBusy(true);
     setError("");
     try {
@@ -87,6 +129,33 @@ export function NodeEditor({
           request_id: draft.request_id,
         }),
       );
+      let storedRequest: string | undefined;
+      try {
+        storedRequest = JSON.parse(
+          localStorage.getItem(`vrac:draft:${node.id}`) || "null",
+        )?.request_id;
+      } catch {
+        /* Use the current in-memory draft. */
+      }
+      const newer =
+        latest.current.request_id !== draft.request_id ||
+        Boolean(storedRequest && storedRequest !== draft.request_id);
+      if (!alive.current) {
+        if (!newer) {
+          try {
+            localStorage.removeItem(`vrac:draft:${node.id}`);
+          } catch {
+            /* The write is confirmed. */
+          }
+        }
+        await onSaved(result.node, true);
+        return;
+      }
+      if (newer) {
+        setDraft((value) => ({ ...value, revision: result.node.revision }));
+        await onSaved(result.node, true);
+        return;
+      }
       try {
         localStorage.removeItem(`vrac:draft:${node.id}`);
       } catch {
@@ -94,6 +163,7 @@ export function NodeEditor({
       }
       try {
         await onSaved(result.node);
+        return result.node;
       } catch (caught) {
         setDraft((value) => ({
           ...value,
@@ -108,6 +178,7 @@ export function NodeEditor({
       setError(errorMessage(caught));
       setConflict(caught instanceof ApiError && caught.status === 409);
     } finally {
+      pending.current = false;
       setBusy(false);
     }
   }
@@ -130,9 +201,44 @@ export function NodeEditor({
   }
   return (
     <div
-      className="node-editor"
+      className={`node-editor${compact ? " inline-node-editor" : ""}`}
       onKeyDown={(event) => {
-        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        if (event.nativeEvent.isComposing) return;
+        if (
+          compact &&
+          event.target instanceof HTMLTextAreaElement &&
+          ((event.key === "Enter" &&
+            !event.shiftKey &&
+            !event.metaKey &&
+            !event.ctrlKey) ||
+            event.key === "Tab")
+        ) {
+          event.preventDefault();
+          const action =
+            event.key === "Enter"
+              ? "below"
+              : event.shiftKey
+                ? "outdent"
+                : "indent";
+          if (action === "below") {
+            if (!draft.text.trim()) {
+              setError("A saved bullet needs text. Use Archive to remove it.");
+              return;
+            }
+            void save();
+            onNext?.(node, action);
+            return;
+          }
+          void save().then((node) => {
+            if (node) onNext?.(node, action);
+          });
+          return;
+        }
+        if (
+          (event.ctrlKey || event.metaKey) &&
+          !event.shiftKey &&
+          event.key === "Enter"
+        ) {
           event.preventDefault();
           void save();
         }
@@ -143,6 +249,7 @@ export function NodeEditor({
       }}
     >
       <Textarea
+        ref={field}
         autoFocus
         aria-label="Edit bullet"
         value={draft.text}
@@ -154,40 +261,45 @@ export function NodeEditor({
           })
         }
         className="editor-text"
-        rows={Math.min(12, Math.max(3, draft.text.split("\n").length))}
+        rows={
+          compact ? 1 : Math.min(12, Math.max(3, draft.text.split("\n").length))
+        }
       />
-      <div className="editor-properties">
-        <label className="sr-only" htmlFor={`tags-${node.id}`}>
-          Tags
-        </label>
-        <Input
-          id={`tags-${node.id}`}
-          placeholder="Tags: decision project…"
-          value={draft.tags}
-          onChange={(event) =>
-            setDraft({
-              ...draft,
-              tags: event.target.value,
-              request_id: requestID(),
-            })
-          }
-        />
-        <label className="sr-only" htmlFor={`summary-${node.id}`}>
-          Change summary
-        </label>
-        <Input
-          id={`summary-${node.id}`}
-          placeholder="What changed? (optional)"
-          value={draft.summary}
-          onChange={(event) =>
-            setDraft({
-              ...draft,
-              summary: event.target.value,
-              request_id: requestID(),
-            })
-          }
-        />
-      </div>
+      <details open={!compact} className="editor-details">
+        {compact && <summary>Tags and change summary</summary>}
+        <div className="editor-properties">
+          <label className="sr-only" htmlFor={`tags-${node.id}`}>
+            Tags
+          </label>
+          <Input
+            id={`tags-${node.id}`}
+            placeholder="Tags: decision project…"
+            value={draft.tags}
+            onChange={(event) =>
+              setDraft({
+                ...draft,
+                tags: event.target.value,
+                request_id: requestID(),
+              })
+            }
+          />
+          <label className="sr-only" htmlFor={`summary-${node.id}`}>
+            Change summary
+          </label>
+          <Input
+            id={`summary-${node.id}`}
+            placeholder="What changed? (optional)"
+            value={draft.summary}
+            onChange={(event) =>
+              setDraft({
+                ...draft,
+                summary: event.target.value,
+                request_id: requestID(),
+              })
+            }
+          />
+        </div>
+      </details>
       {current && (
         <div className="current-version">
           <strong>Current saved text · revision {current.revision}</strong>

@@ -421,6 +421,92 @@ h1 {
   padding-top: 25px;
   min-height: 300px;
 }
+.outline-composer-item {
+  list-style: none;
+  min-width: 0;
+}
+.inline-composer {
+  min-width: 0;
+  padding-block: 6px 12px;
+}
+.draft-location {
+  margin: 0 0 4px 32px;
+  font-size: 10px;
+  color: #7a8573;
+}
+.inline-today-capture {
+  margin-bottom: 22px;
+  border-bottom: 1px solid #e7eae0;
+  padding-bottom: 12px;
+}
+.draft-bullet {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+}
+.draft-dot {
+  flex: 0 0 32px;
+  color: #829576;
+  text-align: center;
+  line-height: 28px;
+}
+.draft-input {
+  min-width: 0;
+  min-height: 28px;
+  height: 28px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  resize: none;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 24px;
+}
+.draft-input:focus-visible {
+  outline: none;
+  box-shadow: 0 1px 0 #a2b596;
+}
+.inline-composer-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px 4px 0 30px;
+}
+.inline-composer-toolbar small {
+  flex: 1;
+  min-width: 120px;
+  color: #7a8573;
+  font-size: 10px;
+}
+.outline-touch-actions {
+  display: flex;
+}
+.draft-options {
+  margin: 5px 0 0 32px;
+  color: #7a8573;
+  font-size: 11px;
+}
+.draft-options summary {
+  cursor: pointer;
+}
+.draft-options input {
+  margin-top: 6px;
+}
+@media (max-width: 640px) {
+  .inline-composer-toolbar {
+    padding-left: 4px;
+  }
+  .outline-touch-actions button {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .draft-dot {
+    flex-basis: 22px;
+  }
+}
 .outline-list {
   list-style: none;
   margin: 0;
@@ -704,6 +790,31 @@ h1 {
   padding: 10px;
   margin-block: -1px 8px;
   box-shadow: 0 3px 15px #314b3610;
+}
+.inline-node-editor {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  margin: 0;
+}
+.inline-node-editor .editor-text {
+  min-height: 28px;
+  padding: 0 2px;
+  resize: none;
+  overflow: hidden;
+}
+.inline-node-editor .editor-footer {
+  margin-top: 4px;
+}
+.inline-node-editor .editor-footer small {
+  font-size: 10px;
+}
+.editor-details summary {
+  cursor: pointer;
+  color: #7a8573;
+  font-size: 10px;
+  padding-block: 4px;
 }
 .editor-text {
   min-height: 90px;

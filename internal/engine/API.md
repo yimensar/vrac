@@ -9,6 +9,10 @@ Callers use its synchronous Go API; adapters contain no SQL. Build with CGO and
 - `Get(id)`, `Children(parentID,cursor,limit)`, `Path(id)`
 - `Read(ids,includeChildren,limit)` reads up to ten views in one snapshot.
 - `Create(CreateInput)` creates one nested branch atomically.
+- `CreateOutline(OutlineInput)` inserts adjacent nested branches under one
+  parent at a `Placement`, atomically and in input order. It requires a
+  durable request ID, validates the parent, and rejects conflicting root
+  placements. A failed branch rolls the entire outline back.
 - `Capture(date,inputs,requestID,fallbackDate...)` captures several roots atomically.
 - `Update(id,UpdateInput,fallbackDate...)`, `Move(id,MoveInput,fallbackDate...)`
 - `Delete(id,expectedRevision,date,requestID,fallbackDate...)` archives a leaf.

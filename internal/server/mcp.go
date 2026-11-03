@@ -69,6 +69,9 @@ func (s *Server) outlineTool(name, description string, readOnly bool) *mcp.Tool 
 	if name == "vrac_capture" {
 		schema["properties"] = map[string]any{"date": text, "request_id": text, "nodes": map[string]any{"type": "array", "items": map[string]any{"$ref": "#/$defs/node"}}}
 		schema["required"] = []string{"nodes", "request_id"}
+	} else if name == "vrac_outline" {
+		schema["properties"] = map[string]any{"parent_id": text, "placement": placement, "request_id": text, "nodes": map[string]any{"type": "array", "items": map[string]any{"$ref": "#/$defs/node"}}}
+		schema["required"] = []string{"nodes", "request_id"}
 	} else {
 		schema["properties"] = properties
 		schema["required"] = []string{"text", "request_id"}
@@ -192,6 +195,14 @@ func (s *Server) mcpHandler() http.Handler {
 		}
 		n, err := s.engine.Create(in)
 		return nil, preview(n, 800), err
+	})
+	mcp.AddTool(srv, s.outlineTool("vrac_outline", "Atomically insert several adjacent branches under one parent. nodes contain text, tags, reference_ids and optional children. The outer placement selects the first root; remaining roots follow in order. Requires request_id for safe retries. A failed descendant leaves no partial outline. Prefer vrac_capture for journal dates.", false), func(ctx context.Context, r *mcp.CallToolRequest, in engine.OutlineInput) (*mcp.CallToolResult, map[string]any, error) {
+		nodes, err := s.engine.CreateOutline(in)
+		previews := make([]nodePreview, 0, len(nodes))
+		for _, node := range nodes {
+			previews = append(previews, preview(node, 800))
+		}
+		return nil, map[string]any{"nodes": previews}, err
 	})
 	updateTool := s.tool("vrac_update", "Update the SAME current node. change must include text, the complete tags list, expected_revision and request_id. A revision plus a linked journal activity entry are committed atomically. summary explains the change; journal_date defaults to today. A revision conflict requires reading current state before deciding a new change.", false)
 	updateSchema, err := jsonschema.For[updateInput](nil)

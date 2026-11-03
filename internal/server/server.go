@@ -75,6 +75,7 @@ func New(ctx context.Context, e *engine.Engine, opts Options) (*Server, error) {
 	api.HandleFunc("GET /api/nodes/{id}", s.node)
 	api.HandleFunc("GET /api/nodes/{id}/children", s.children)
 	api.HandleFunc("POST /api/nodes", s.create)
+	api.HandleFunc("POST /api/outline", s.createOutline)
 	api.HandleFunc("POST /api/capture", s.capture)
 	api.HandleFunc("PATCH /api/nodes/{id}", s.update)
 	api.HandleFunc("POST /api/nodes/{id}/move", s.move)
@@ -240,6 +241,23 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 201, map[string]any{"node": n})
+}
+
+func (s *Server) createOutline(w http.ResponseWriter, r *http.Request) {
+	var input engine.OutlineInput
+	if err := readJSON(w, r, &input); err != nil {
+		writeError(w, 400, "invalid_request", err.Error())
+		return
+	}
+	if input.RequestID == "" {
+		input.RequestID = r.Header.Get("Idempotency-Key")
+	}
+	nodes, err := s.engine.CreateOutline(input)
+	if err != nil {
+		engineError(w, err)
+		return
+	}
+	writeJSON(w, 201, map[string]any{"nodes": nodes})
 }
 
 type captureInput struct {

@@ -29,6 +29,106 @@ const response = (data: unknown, status = 200) =>
     headers: { "Content-Type": "application/json" },
   });
 describe("note content", () => {
+  it("does not clear a reopened editor when an old save returns", async () => {
+    let finish!: (value: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            finish = resolve;
+          }),
+      ),
+    );
+    const saved = vi.fn().mockResolvedValue(undefined);
+    const first = render(
+      <NodeEditor node={node} onSaved={saved} onClose={vi.fn()} />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Edit bullet" }), {
+      target: { value: "Old pending save" },
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    first.unmount();
+    render(<NodeEditor node={node} onSaved={saved} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Edit bullet" }), {
+      target: { value: "Reopened editor draft" },
+    });
+    finish(
+      response({ node: { ...node, text: "Old pending save", revision: 4 } }),
+    );
+    await waitFor(() =>
+      expect(saved).toHaveBeenCalledWith(
+        expect.objectContaining({ revision: 4 }),
+        true,
+      ),
+    );
+    expect(screen.getByRole("textbox", { name: "Edit bullet" })).toHaveValue(
+      "Reopened editor draft",
+    );
+    expect(
+      JSON.parse(localStorage.getItem("vrac:draft:note-a") || "{}").text,
+    ).toBe("Reopened editor draft");
+  });
+  it("opens the next inline bullet immediately while saving the current edit", async () => {
+    let finish!: (value: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            finish = resolve;
+          }),
+      ),
+    );
+    const next = vi.fn();
+    const saved = vi.fn().mockResolvedValue(undefined);
+    render(
+      <NodeEditor
+        node={node}
+        compact
+        onNext={next}
+        onSaved={saved}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Edit bullet" }), {
+      target: { value: "Updated inline" },
+    });
+    await userEvent.keyboard("{Enter}");
+    expect(next).toHaveBeenCalledWith(node, "below");
+    expect(saved).not.toHaveBeenCalled();
+    finish(
+      response({ node: { ...node, text: "Updated inline", revision: 4 } }),
+    );
+    await waitFor(() => expect(saved).toHaveBeenCalled());
+  });
+  it("retains typing made while an earlier save is in flight", async () => {
+    let finish!: (value: Response) => void;
+    const fetcher = vi.fn().mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const saved = vi.fn().mockResolvedValue(undefined);
+    render(<NodeEditor node={node} onSaved={saved} onClose={vi.fn()} />);
+    const field = screen.getByRole("textbox", { name: "Edit bullet" });
+    fireEvent.change(field, { target: { value: "First draft" } });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.change(field, { target: { value: "New typing while saving" } });
+    finish(response({ node: { ...node, text: "First draft", revision: 4 } }));
+    await waitFor(() =>
+      expect(saved).toHaveBeenCalledWith(
+        expect.objectContaining({ revision: 4 }),
+        true,
+      ),
+    );
+    expect(field).toHaveValue("New typing while saving");
+    expect(
+      JSON.parse(localStorage.getItem("vrac:draft:note-a") || "{}"),
+    ).toMatchObject({ text: "New typing while saving", revision: 4 });
+  });
   it("renders the current label of a stable reference and safely displays plain text", async () => {
     const onSubject = vi.fn();
     render(
@@ -144,6 +244,145 @@ describe("note content", () => {
   });
 });
 describe("capture", () => {
+  it("preserves a reopened draft when an older creation is acknowledged", async () => {
+    let acknowledge!: (value: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            acknowledge = resolve;
+          }),
+      ),
+    );
+    const props = {
+      target: { kind: "capture" as const, date: "2026-11-03" },
+      onClose: vi.fn(),
+      onCreated: vi.fn().mockResolvedValue(undefined),
+    };
+    const first = render(<Composer {...props} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Your notes" }), {
+      target: { value: "First thought" },
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save to journal" }),
+    );
+    first.unmount();
+    render(<Composer {...props} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Your notes" }), {
+      target: { value: "Newer thought" },
+    });
+    acknowledge(response({ nodes: [node] }));
+    await waitFor(() => expect(props.onCreated).toHaveBeenCalled());
+    const saved = JSON.parse(
+      localStorage.getItem("vrac:capture:2026-11-03") || "{}",
+    );
+    expect(saved.bullets[0].text).toBe("Newer thought");
+    expect(saved.text).toBe("Newer thought");
+  });
+  it("retries a legacy pending child creation with its original transport and payload", async () => {
+    localStorage.setItem(
+      "vrac:capture:dayanchor",
+      JSON.stringify({
+        text: "First line\nSecond line",
+        tags: "work",
+        request_id: "legacy-request",
+      }),
+    );
+    const fetcher = vi.fn().mockResolvedValue(response({ node }));
+    vi.stubGlobal("fetch", fetcher);
+    const created = vi.fn().mockResolvedValue(undefined);
+    render(
+      <Composer
+        target={{
+          kind: "node",
+          parent: "day",
+          after: "anchor",
+          label: "New bullets",
+        }}
+        onClose={vi.fn()}
+        onCreated={created}
+      />,
+    );
+    expect(screen.getByRole("textbox", { name: "Your notes" })).toHaveValue(
+      "First line\nSecond line",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save bullets" }));
+    await waitFor(() => expect(created).toHaveBeenCalled());
+    expect(fetcher.mock.calls[0][0]).toBe("/api/nodes");
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({
+      parent_id: "day",
+      text: "First line\nSecond line",
+      tags: ["work"],
+      placement: { after: "anchor" },
+      request_id: "legacy-request",
+    });
+  });
+  it("refreshes a confirmed outline without submitting it twice", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({ nodes: [node] }));
+    vi.stubGlobal("fetch", fetcher);
+    const created = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Refresh offline"))
+      .mockResolvedValueOnce(undefined);
+    render(
+      <Composer
+        target={{ kind: "node", parent: "day", label: "New bullets" }}
+        onClose={vi.fn()}
+        onCreated={created}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Your notes" }), {
+      target: { value: "Confirmed thought" },
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Save bullets" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Saved, but refreshing failed",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Show saved bullets" }),
+    );
+    await waitFor(() => expect(created).toHaveBeenCalledTimes(2));
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher.mock.calls[0][0]).toBe("/api/outline");
+  });
+  it("writes an outline with Enter and Tab directly in the page", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({ nodes: [node] }));
+    vi.stubGlobal("fetch", fetcher);
+    const created = vi.fn().mockResolvedValue(undefined);
+    render(
+      <Composer
+        target={{ kind: "capture", date: "2026-11-03" }}
+        onClose={vi.fn()}
+        onCreated={created}
+      />,
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Your notes" }),
+      "Meeting #meeting",
+    );
+    await userEvent.keyboard("{Enter}{Tab}");
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "New bullet 2" }),
+      "A decision #decision",
+    );
+    await userEvent.keyboard("{Enter}{Shift>}{Tab}{/Shift}");
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "New bullet 3" }),
+      "Next task #task",
+    );
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    await waitFor(() => expect(created).toHaveBeenCalledOnce());
+    expect(JSON.parse(fetcher.mock.calls[0][1].body).nodes).toEqual([
+      {
+        text: "Meeting #meeting",
+        tags: [],
+        children: [{ text: "A decision #decision" }],
+      },
+      { text: "Next task #task", tags: [] },
+    ]);
+  });
   it("sends a pasted tree as one atomic request and keeps tags explicit", async () => {
     const fetcher = vi.fn().mockResolvedValue(response({ nodes: [node] }));
     vi.stubGlobal("fetch", fetcher);
@@ -155,9 +394,9 @@ describe("capture", () => {
         onCreated={created}
       />,
     );
-    fireEvent.change(screen.getByRole("textbox", { name: "Your notes" }), {
-      target: {
-        value:
+    fireEvent.paste(screen.getByRole("textbox", { name: "Your notes" }), {
+      clipboardData: {
+        getData: () =>
           "Meeting [[Atlas]] #meeting\n  Decision #decision\nNext action #task",
       },
     });
@@ -226,8 +465,8 @@ describe("capture", () => {
         onCreated={vi.fn()}
       />,
     );
-    fireEvent.change(screen.getByRole("textbox", { name: "Your notes" }), {
-      target: { value: "Parent\n    Child\n  Broken" },
+    fireEvent.paste(screen.getByRole("textbox", { name: "Your notes" }), {
+      clipboardData: { getData: () => "Parent\n    Child\n  Broken" },
     });
     await userEvent.click(
       screen.getByRole("button", { name: "Save to journal" }),

@@ -281,7 +281,7 @@ func TestMCPRealClientDiscoveryAndMutation(t *testing.T) {
 			t.Fatalf("missing input schema: %s", tool.Name)
 		}
 	}
-	for _, name := range []string{"vrac_journal", "vrac_search", "vrac_read", "vrac_capture", "vrac_update", "vrac_restore", "vrac_revisions", "vrac_move", "vrac_backlinks", "vrac_tags", "vrac_children", "vrac_create"} {
+	for _, name := range []string{"vrac_journal", "vrac_search", "vrac_read", "vrac_capture", "vrac_update", "vrac_restore", "vrac_revisions", "vrac_move", "vrac_backlinks", "vrac_tags", "vrac_children", "vrac_create", "vrac_archive", "vrac_outline"} {
 		if !names[name] {
 			t.Fatalf("missing MCP tool %s", name)
 		}
@@ -307,6 +307,20 @@ func TestMCPRealClientDiscoveryAndMutation(t *testing.T) {
 	}
 	if err := json.Unmarshal(data, &found); err != nil || len(found.Items) != 1 {
 		t.Fatalf("expected exactly one decision, got %s", data)
+	}
+	outlineArgs := map[string]any{"parent_id": found.Items[0].Node.ParentID, "request_id": "mcp-outline", "nodes": []map[string]any{{"text": "A", "children": []map[string]string{{"text": "Nested"}}}, {"text": "B"}}}
+	outline, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "vrac_outline", Arguments: outlineArgs})
+	if err != nil || outline.IsError {
+		t.Fatalf("outline failed: %v %#v", err, outline)
+	}
+	retryOutline, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "vrac_outline", Arguments: outlineArgs})
+	if err != nil || retryOutline.IsError {
+		t.Fatalf("outline retry failed: %v %#v", err, retryOutline)
+	}
+	firstJSON, _ := json.Marshal(outline.StructuredContent)
+	retryJSON, _ := json.Marshal(retryOutline.StructuredContent)
+	if !bytes.Equal(firstJSON, retryJSON) {
+		t.Fatal("outline retry returned different identities")
 	}
 	result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "vrac_capture", Arguments: map[string]any{"nodes": []map[string]string{{"text": "missing retry key"}}}})
 	if err != nil {
@@ -394,6 +408,41 @@ func TestMCPPreviewsAndHistoricalRead(t *testing.T) {
 				t.Fatal("retry key is optional in advertised schema")
 			}
 		}
+	}
+}
+
+func TestHTTPOutlineAtomicInsertion(t *testing.T) {
+	e, ts := fixture(t)
+	parent, err := e.Create(engine.CreateInput{Text: "Meeting"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := map[string]any{"parent_id": parent.ID, "request_id": "http-outline", "nodes": []map[string]any{{"text": "A", "children": []map[string]string{{"text": "Child"}}}, {"text": "B"}}}
+	first := request(t, ts, "POST", "/api/outline", input, true)
+	status(t, first, 201)
+	roots := decode[struct {
+		Nodes []engine.Node `json:"nodes"`
+	}](t, first).Nodes
+	if len(roots) != 2 {
+		t.Fatal(roots)
+	}
+	retry := request(t, ts, "POST", "/api/outline", input, true)
+	status(t, retry, 201)
+	if decode[struct {
+		Nodes []engine.Node `json:"nodes"`
+	}](t, retry).Nodes[0].ID != roots[0].ID {
+		t.Fatal("retry duplicated roots")
+	}
+	report, err := e.Check()
+	if err != nil {
+		t.Fatal(err)
+	}
+	input["request_id"] = "invalid-outline"
+	input["nodes"] = []map[string]string{{"text": "Partial"}, {"text": ""}}
+	status(t, request(t, ts, "POST", "/api/outline", input, true), 400)
+	after, err := e.Check()
+	if err != nil || after.NodeCount != report.NodeCount || len(after.Issues) > 0 {
+		t.Fatal(after, err)
 	}
 }
 

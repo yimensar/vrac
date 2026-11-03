@@ -53,6 +53,7 @@ to 2 MiB and reject unknown fields.
 | GET `/api/nodes/{id}` | Node, ancestor path and first children page |
 | GET `/api/nodes/{id}/children?cursor=&limit=` | Ordered children page |
 | POST `/api/nodes` | Atomically create a node and nested children |
+| POST `/api/outline` | Atomically insert adjacent roots/subtrees under one parent with a required request ID |
 | POST `/api/capture` | Atomically capture multiple outline branches in a journal day |
 | PATCH `/api/nodes/{id}` | Update current content/tags/references with expected revision |
 | POST `/api/nodes/{id}/move` | Move with destination, placement and expected revision |
@@ -63,6 +64,14 @@ to 2 MiB and reject unknown fields.
 | GET `/api/nodes/{id}/backlinks` | Subject mentions and contextual branches |
 | GET `/api/nodes/{id}/revisions` | Historical snapshots with cursor pagination |
 | GET `/api/export` | Consistent downloadable versioned JSON export |
+
+`POST /api/outline` accepts `parent_id`, `placement`, `nodes` (the same nested
+outline shape as capture), and `request_id`. The roots are inserted together
+in input order at the requested placement. Root-level parent/placement values
+inside `nodes` must not conflict with the outline's location. An invalid
+descendant rolls back every root, reference, tag and revision. Identical retries
+return the original IDs; a changed request payload is rejected. The
+`Idempotency-Key` header can supply the request ID as well.
 
 Capture example:
 
@@ -121,6 +130,7 @@ Tools include JSON input/output schemas and read-only/idempotency hints.
 | `vrac_tags` | Discover existing tags |
 | `vrac_capture` | Atomic journal capture of nested branches |
 | `vrac_create` | Atomic node/subtree creation at an explicit location |
+| `vrac_outline` | Atomic insertion of adjacent subtrees under one parent, with placement and a durable request ID |
 | `vrac_update` | Update one stable current node, preserving history |
 | `vrac_move` | Move a subtree safely |
 | `vrac_revisions` | Read history separately from current search |
