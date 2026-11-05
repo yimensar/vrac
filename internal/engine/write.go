@@ -77,6 +77,25 @@ func (e *Engine) mutate(ctx context.Context, actor Actor, requestID string, payl
 		if err != nil {
 			return err
 		}
+		// Results also name their parents, so callers know where nodes live.
+		var parents []string
+		for _, n := range nodes {
+			if n.ParentID != "" {
+				parents = append(parents, n.ParentID)
+			}
+		}
+		more, err := e.refMap(ctx, tx, parents)
+		if err != nil {
+			return err
+		}
+		for id, r := range more {
+			if _, ok := refs[id]; !ok {
+				refs[id] = r
+			}
+		}
+		if s.briefs == nil {
+			s.briefs = []Brief{}
+		}
 		res = Result{Nodes: nodes, Refs: refs, Created: s.briefs}
 		body, err := json.Marshal(res)
 		if err != nil {
@@ -916,6 +935,17 @@ func (e *Engine) Update(ctx context.Context, actor Actor, req UpdateRequest) (Re
 				return nil, err
 			}
 			text, types, typeIDs = r.text, r.types, r.typeIDs
+			if req.KeepTypes && len(r.types) == 0 && len(n.Types) > 0 {
+				types, typeIDs = n.Types, nil
+				for _, t := range types {
+					id, _, err := s.typeID(t, false)
+					if err != nil {
+						return nil, err
+					}
+					typeIDs = append(typeIDs, id)
+					text = strings.TrimSpace(text + " #" + t)
+				}
+			}
 		} else {
 			for _, t := range types {
 				id, _, err := s.typeID(t, false)

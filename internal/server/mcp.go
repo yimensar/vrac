@@ -277,8 +277,10 @@ func (s *Server) tools(srv *mcp.Server) {
 		}
 		return nil, map[string]any{"nodes": aiNodes(res.Nodes, res.Refs), "created": res.Created}, nil
 	})
-	mcp.AddTool(srv, tool("vrac_update", "Change a node at expected_revision. input replaces its text and types (Vrac syntax); status, due, start, end and aliases change only those fields (empty string clears).", false),
+	mcp.AddTool(srv, tool("vrac_update", "Change a node at expected_revision. input replaces its text (Vrac syntax); if it writes no #type the node keeps its types, otherwise the written types replace them. status, due, start, end and aliases change only those fields (empty string clears).", false),
 		func(ctx context.Context, req *mcp.CallToolRequest, in updateInput) (*mcp.CallToolResult, any, error) {
+			// Rewriting a sentence must not drop its types by omission.
+			in.KeepTypes = true
 			res, err := e.Update(ctx, actorOf(req, in.Source), in.UpdateRequest)
 			if err != nil {
 				return toolError(err)

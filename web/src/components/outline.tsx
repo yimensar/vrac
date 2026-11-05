@@ -194,7 +194,8 @@ function Ghost({ store, placeholder }: { store: OutlineStore; placeholder?: stri
           onKey={keys(store, GHOST)}
           autoFocus={Boolean(editing)}
           initialCaret={editing?.caret}
-          placeholder={placeholder ?? "Write… #task #meeting [[reference]]"}
+          placeholder={placeholder}
+          label="New line"
           className={LINE}
         />
       </div>

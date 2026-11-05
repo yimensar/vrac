@@ -26,6 +26,8 @@ type Props = {
   onKey?: (e: KeyboardEvent<HTMLTextAreaElement>, el: HTMLTextAreaElement) => boolean
   onBlur?: () => void
   placeholder?: string
+  /** Accessible name; the placeholder or "Edit" by default. */
+  label?: string
   autoFocus?: boolean
   /** Caret position when focused on mount; the end by default. */
   initialCaret?: number
@@ -33,7 +35,7 @@ type Props = {
 }
 
 /** A single-paragraph text area with #type and [[reference]] completion. */
-export function Editor({ value, onChange, intent, onKey, onBlur, placeholder, autoFocus, initialCaret, className }: Props) {
+export function Editor({ value, onChange, intent, onKey, onBlur, placeholder, label, autoFocus, initialCaret, className }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null)
   const [caret, setCaret] = useState(0)
   const [active, setActive] = useState(0)
@@ -161,7 +163,7 @@ export function Editor({ value, onChange, intent, onKey, onBlur, placeholder, au
         rows={1}
         value={value}
         placeholder={placeholder}
-        aria-label={placeholder ?? "Edit"}
+        aria-label={label ?? placeholder ?? "Edit"}
         className={cn("m-0 block w-full resize-none overflow-hidden border-0 bg-transparent p-0 outline-none placeholder:text-muted-foreground", className)}
         onChange={(e) => {
           setCaret(e.target.selectionStart)

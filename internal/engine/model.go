@@ -158,6 +158,10 @@ type UpdateRequest struct {
 	Create           []Creation `json:"create,omitempty"`
 	CreateTypes      []string   `json:"create_types,omitempty"`
 	ParseDates       bool       `json:"parse_dates,omitempty"`
+	// KeepTypes keeps the node's types when Input writes none, appending
+	// their tokens. AI clients rewriting a sentence then cannot drop a type,
+	// and its fields, by omission.
+	KeepTypes bool `json:"keep_types,omitempty"`
 }
 
 // MoveRequest moves a node and its subtree.

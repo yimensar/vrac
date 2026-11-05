@@ -35,7 +35,9 @@ makes sense once the type is removed.
 3. Before adding a task or decision, search for an existing one on the same
    subject (`vrac_search` with `concerns` and `types`). If it exists, update it
    (`vrac_update` with `expected_revision`) instead of writing a duplicate:
-   mark tasks done, change due dates, replace a decision's text.
+   mark tasks done, change due dates, replace a decision's text. A rewritten
+   `input` without any `#type` keeps the node's types; write types only to
+   change them.
 4. Write with `vrac_write`, by default into today's journal. Group a meeting:
    one `#meeting` node, its notes, decisions and tasks as `children`. Children
    inherit the meeting's references, so do not repeat `[[Project]]` on them.

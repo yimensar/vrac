@@ -150,7 +150,7 @@ export function NodePage() {
           <NodeFields node={n} />
         </div>
       )}
-      <OutlineView key={n.id} source={{ node: n.id }} composer placeholder="Add a note…" />
+      <OutlineView key={n.id} source={{ node: n.id }} composer />
       {sections && (
         <div className="mt-10 grid gap-x-10 md:grid-cols-2">
           {sections.open_tasks.length > 0 && (

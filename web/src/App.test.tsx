@@ -12,7 +12,7 @@ const focused = () => document.activeElement as HTMLTextAreaElement
 async function start() {
   const server = fakeServer()
   render(<App client={makeClient()} />)
-  const ghost = await screen.findByPlaceholderText(/Write…/)
+  const ghost = await screen.findByLabelText("New line")
   return { server, ghost }
 }
 
@@ -32,7 +32,7 @@ describe("writing", () => {
     await userEvent.click(ghost)
     await userEvent.keyboard("first{Enter}second{Enter}")
     await waitFor(() => expect(server.tree()).toEqual(["first", "second"]))
-    expect(focused()).toBe(screen.getByPlaceholderText(/Write…/))
+    expect(focused()).toBe(screen.getByLabelText("New line"))
     await userEvent.keyboard("third")
     expect(focused().value).toBe("third")
   })
@@ -125,6 +125,6 @@ describe("outline keys", () => {
     expect(focused().value).toBe("one")
     await waitFor(() => expect(server.tree()).toEqual(["one", "two!"]))
     await userEvent.keyboard("{ArrowDown}{ArrowDown}")
-    expect(focused()).toBe(screen.getByPlaceholderText(/Write…/))
+    expect(focused()).toBe(screen.getByLabelText("New line"))
   })
 })

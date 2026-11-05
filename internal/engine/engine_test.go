@@ -294,6 +294,34 @@ func TestCompletionFindsAnyNode(t *testing.T) {
 	}
 }
 
+// Regression: an AI rewriting a task's sentence without "#task" turned it
+// into a plain note and lost its status and due date.
+func TestKeepTypesOnRewrite(t *testing.T) {
+	e := newEngine(t)
+	n := create(t, e, CreateRequest{ParseDates: true, Nodes: []Draft{{Input: "Send the estimate Friday #task"}}}).Nodes[0]
+	in := "Send the revised estimate"
+	up, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: n.ID, ExpectedRevision: 1, Input: &in, KeepTypes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := up.Nodes[0]
+	if got.Text != "Send the revised estimate #task" || got.Due != "2026-11-06" || got.Status != StatusOpen {
+		t.Fatalf("rewritten task = %+v", got)
+	}
+	// Written types replace the old ones.
+	in = "Send the revised estimate #decision"
+	up, _ = e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: n.ID, ExpectedRevision: 2, Input: &in, KeepTypes: true})
+	if !slices.Equal(up.Nodes[0].Types, []string{"decision"}) {
+		t.Fatalf("types = %v", up.Nodes[0].Types)
+	}
+	// Without KeepTypes, the interface's rule: the text is the truth.
+	in = "plain"
+	up, _ = e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: n.ID, ExpectedRevision: 3, Input: &in})
+	if len(up.Nodes[0].Types) != 0 {
+		t.Fatalf("types = %v", up.Nodes[0].Types)
+	}
+}
+
 func TestSubProjectsAndRenames(t *testing.T) {
 	e := newEngine(t)
 	northwind := write(t, e, "Northwind #project")[0]
