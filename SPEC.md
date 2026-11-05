@@ -258,8 +258,20 @@ non-goal; it would require synchronization and a different model.
   jump to any node.
 - **Activity**: what changed, by whom and from which source, with undo.
 
-Editor: outline editing (indent, move, collapse, zoom), `#` and `[[`
-autocomplete with explicit creation, date chips.
+**A row is the node itself.** Wherever a node appears with its bullet (a
+journal day, a page, today's lists, the agenda, tasks, a subject's sections,
+search results, a page title) it is edited in place, with its children, and
+reads exactly as it is written: references and types are atoms, rendered
+the same while reading and while editing (ProseMirror), and a click places
+the caret where it lands. Outline keys: Enter splits, Tab and Shift+Tab
+indent and outdent, Backspace deletes an empty row or merges into the row
+above, arrows move between rows, Alt+Shift+arrows reorder, Cmd+Enter
+toggles a task. In lists of unrelated nodes the listed rows stay in place
+and new rows go inside them.
+
+The agenda and upcoming sections show only meetings and events with an
+explicit date; a meeting noted in the journal without a time is not
+scheduled.
 
 ## 6. MCP
 

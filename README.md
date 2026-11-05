@@ -78,6 +78,12 @@ The [`vrac` skill](skills/vrac/SKILL.md) tells the AI when and how to write.
 | `-url` | `VRAC_PUBLIC_URL` | `http://localhost:<port>` |
 | `-timezone` | `VRAC_TIMEZONE` | system time zone |
 
+Development tools: `go run ./scripts/seed` fills an empty database with a
+few weeks of sample work, `go run ./scripts/load plan.json` fills one from
+a prepared JSON plan (for migrations from other tools), and
+`go run ./scripts/bench` measures the engine (see
+[docs/performance.md](docs/performance.md)).
+
 Maintenance: `vrac backup PATH`, `vrac export [PATH]`, `vrac import PATH`
 (into an empty instance), `vrac check`, `vrac password` (set the owner
 password if it is lost; it signs out every browser).
