@@ -310,10 +310,14 @@ actor comes from the authenticated client.
 ### Skill
 
 The repository ships a `vrac` skill for Claude (and equivalents where
-supported). It tells the AI when to write (after triaging mail or messages, a
-meeting, a decision, an analysis) and how: search and resolve first, reuse
-existing nodes, reference subjects, type what is typed, confirm creations with
-the user, always set the source. It replaces the user's current Memos skill.
+supported). The AI uses Vrac on its own initiative: it records without asking
+(after triaging mail or messages, a meeting, a decision, an analysis, or
+work the user describes) and says in one line what it recorded, and it reads
+the context of any project, client or person the user mentions before
+answering. It writes by searching and resolving first, reusing existing
+nodes, referencing subjects, typing what is typed, confirming only creations
+with the user, and always setting the source. It replaces the user's current
+Memos skill.
 
 ## 7. Hosting and authentication
 
