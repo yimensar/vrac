@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -28,6 +30,10 @@ type harness struct {
 }
 
 func newHarness(t *testing.T) *harness {
+	return newHarnessWith(t, nil)
+}
+
+func newHarnessWith(t *testing.T, web fs.FS) *harness {
 	t.Helper()
 	paris, _ := time.LoadLocation("Europe/Paris")
 	e, err := engine.Open(filepath.Join(t.TempDir(), "vrac.sqlite"), engine.Options{Location: paris})
@@ -39,7 +45,7 @@ func newHarness(t *testing.T) *harness {
 	var handler http.Handler
 	h.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
 	t.Cleanup(h.srv.Close)
-	s, err := New(e, Options{PublicURL: h.srv.URL, Version: "test", Timezone: "Europe/Paris"})
+	s, err := New(e, Options{PublicURL: h.srv.URL, Version: "test", Timezone: "Europe/Paris", Web: web})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,4 +241,28 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 	r = r.Clone(r.Context())
 	r.Header.Set("Authorization", "Bearer "+b.token)
 	return http.DefaultTransport.RoundTrip(r)
+}
+
+func TestServesTheSinglePageApp(t *testing.T) {
+	web := fstest.MapFS{
+		"index.html":           {Data: []byte("<html>vrac</html>")},
+		"assets/app.js":        {Data: []byte("console.log(1)")},
+		"manifest.webmanifest": {Data: []byte("{}")},
+	}
+	h := newHarnessWith(t, web)
+	for path, want := range map[string]string{"/": "text/html", "/node/abc": "text/html", "/assets/app.js": "javascript", "/manifest.webmanifest": "application/manifest+json"} {
+		res, err := http.Get(h.srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.StatusCode != 200 || !strings.Contains(res.Header.Get("Content-Type"), want) {
+			t.Errorf("%s = %d %s", path, res.StatusCode, res.Header.Get("Content-Type"))
+		}
+	}
+	if res, _ := http.Get(h.srv.URL + "/api/v1/nope"); res.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown API path = %d", res.StatusCode)
+	}
+	if res, _ := http.Post(h.srv.URL+"/somewhere", "text/plain", nil); res.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("POST to the app = %d", res.StatusCode)
+	}
 }

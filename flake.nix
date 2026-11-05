@@ -14,8 +14,78 @@
         "x86_64-linux"
       ];
       forAllSystems = lib.genAttrs systems;
+      version = lib.removeSuffix "\n" (builtins.readFile ./VERSION);
+      ignored = [
+        "node_modules"
+        "dist"
+        ".vite"
+        "bin"
+        "data"
+      ];
+      clean =
+        src:
+        lib.cleanSourceWith {
+          inherit src;
+          filter = path: type: lib.cleanSourceFilter path type && !(lib.elem (baseNameOf path) ignored);
+        };
+      mkWeb =
+        pkgs:
+        pkgs.buildNpmPackage {
+          pname = "vrac-web";
+          inherit version;
+          src = clean ./web;
+          npmDepsHash = "sha256-kAk2+kFiMWonu+dETvANOAAhcd1S8fWtpIPbs6u3nME=";
+          installPhase = ''
+            runHook preInstall
+            cp -r dist $out
+            runHook postInstall
+          '';
+        };
+      mkVrac =
+        pkgs:
+        pkgs.buildGoModule {
+          pname = "vrac";
+          inherit version;
+          src = clean ./.;
+          vendorHash = "sha256-Qh0jvutqBGYKKVmcByhk9PsQPd1PHkXJC8L4qx07Vq8=";
+          subPackages = [ "cmd/vrac" ];
+          env.CGO_ENABLED = "1";
+          tags = [ "sqlite_fts5" ];
+          ldflags = [
+            "-s"
+            "-w"
+            "-X main.version=${version}"
+          ];
+          preBuild = ''
+            cp -r ${mkWeb pkgs}/. web/dist/
+          '';
+          meta = {
+            description = "The memory your AI and you share";
+            license = lib.licenses.agpl3Only;
+            mainProgram = "vrac";
+            platforms = lib.platforms.unix;
+          };
+        };
     in
     {
+      packages = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        {
+          default = mkVrac pkgs;
+          web = mkWeb pkgs;
+        }
+      );
+
+      apps = forAllSystems (system: {
+        default = {
+          type = "app";
+          program = lib.getExe self.packages.${system}.default;
+        };
+      });
+
       devShells = forAllSystems (
         system:
         let

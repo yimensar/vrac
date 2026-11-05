@@ -1,6 +1,6 @@
 # Vrac — V1 specification
 
-Status: draft for review, 2026-11-05.
+Status: V1 implemented on 2026-11-05; open questions in section 10.
 
 ## 1. Vision
 
@@ -97,6 +97,10 @@ one is always explicit (see 2.7).
 current name, so renaming never breaks references. The old name may remain as
 an alias.
 
+`[[Name|ID]]` is the readable form of a canonical reference: AI clients and
+the editor send it so that names never have to be guessed. Plain `[[Name]]`
+resolves only when exactly one node has that name or alias.
+
 **References are inherited.** See 2.5.
 
 ### 2.5 Context: what a node concerns
@@ -112,8 +116,10 @@ Examples:
 - a task under the node Northwind concerns Northwind;
 - a task referencing `[[Lot 2]]`, a child of Northwind, concerns Lot 2 and Northwind.
 
-Context is maintained at write time in a derived, rebuildable index, so reads
-stay fast. Moving a subtree updates the index of that subtree only.
+Context is computed at query time from the tree and the reference index: the
+subject's subtree, the nodes referencing it, and their subtrees. Nothing is
+copied into descendants, so moves and renames never rewrite other nodes. A
+materialized index may be added if measurements show the need.
 
 ### 2.6 Hierarchy
 
@@ -125,8 +131,9 @@ There are two hierarchies, both built automatically:
   under another `#project` is a sub-project. `[[Northwind/Lot 2]]` is a shortcut
   that creates (or finds) Lot 2 as a child of Northwind.
 
-Input shortcut kept from Memos habits: typing `#project/Northwind` is converted on
-input to a reference to Northwind typed `#project`. The stored model stays clean.
+Input shortcut kept from Memos habits: `#project/Northwind` is a reference to
+Northwind; when Northwind is created through it, it carries the type `#project`. An
+existing Northwind is referenced as is. The stored model stays clean.
 
 ### 2.7 Creation rules
 
@@ -158,7 +165,8 @@ from which it can be restored.
 
 1. **Create a project on the fly.** In today's journal: `Northwind #project`. The
    node is born in the day, typed project, and appears in the `#project`
-   view. In the journal, typed nodes are shown collapsed.
+   view. In outlines, projects and people are shown collapsed; their content
+   is on their own page.
 2. **Create from a reference.** `Call with Marc about [[Northwind]]` with no Northwind
    yet: autocomplete offers "Create Northwind as: project · person · no type". The
    node is created at the root and the journal line references it.
@@ -248,16 +256,20 @@ Tools (V1):
 
 | Tool | Purpose |
 |---|---|
-| `search` | the query of section 4 |
-| `resolve` | names to candidate nodes, aliases included |
-| `get_node` | a node, its bounded children and its generated sections |
-| `get_day` | a journal day |
-| `list_types` | built-in and free types |
-| `write` | create nodes, by default in today's journal, with types, fields and references |
-| `update` | text, types, fields or aliases, with the expected revision |
-| `move` | change parent or order |
-| `delete` | move to trash |
-| `create_type` | create a free type explicitly |
+| `vrac_today` | date, time zone, today's journal, agenda, due tasks, types |
+| `vrac_search` | the query of section 4 |
+| `vrac_resolve` | names to candidate nodes, aliases included |
+| `vrac_get` | a node, its bounded children and its generated sections |
+| `vrac_day` | a journal day |
+| `vrac_types` | built-in and free types |
+| `vrac_write` | create node trees, by default in today's journal |
+| `vrac_update` | text, types, fields or aliases, with the expected revision |
+| `vrac_move` | change parent or order |
+| `vrac_trash` | move to the trash, or restore |
+| `vrac_create_type` | create a free type explicitly |
+| `vrac_activity` | recent changes with actor and source |
+
+Results show text with `[[Name|ID]]` references.
 
 Every mutation takes a request ID and a source (for example `outlook`); the
 actor comes from the authenticated client.
@@ -274,7 +286,8 @@ the user, always set the source. It replaces the user's current Memos skill.
 
 - One user per instance. One instance is one database; nothing assumes global
   state, so a future hosted offer can run one database per subscriber.
-- First start creates the owner account (password, then passkeys).
+- First start creates the owner account with a password (argon2id). Passkeys
+  come later.
 - Built-in OAuth 2.1 authorization server with dynamic client registration and
   PKCE, so connecting Claude or ChatGPT only needs the instance URL.
 - Personal access tokens for CLIs and scripts.
@@ -282,8 +295,10 @@ the user, always set the source. It replaces the user's current Memos skill.
 
 ## 8. Storage and durability
 
-- Go, one binary that serves the API, MCP and the compiled web UI; a Docker
-  image; configuration limited to the public URL and the data directory.
+- Go, one binary that serves the API, MCP and the compiled web UI, packaged
+  by the Nix flake (`nix run`); configuration limited to the public URL, the
+  data directory and the time zone. A Docker image comes with the first
+  deployment.
 - SQLite is the source of truth: WAL, FULL synchronization, foreign keys,
   explicit transactions for every mutation. Full-text and context indexes are
   derived and rebuildable.
@@ -295,7 +310,7 @@ the user, always set the source. It replaces the user's current Memos skill.
 
 ## 9. Scope
 
-V1: everything above.
+V1: everything above, except passkeys and the Docker image.
 
 Later: quick capture desktop app (global shortcut), audio capture and
 transcription, inbox of unfiled captures, attention queue (overdue, stale

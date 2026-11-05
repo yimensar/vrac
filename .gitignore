@@ -12,3 +12,4 @@
 *.sqlite-wal
 *.sqlite-shm
 /web/.vite/
+/.sf/

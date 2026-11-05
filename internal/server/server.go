@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/fs"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -35,6 +36,11 @@ type Server struct {
 	mux    *http.ServeMux
 	log    *slog.Logger
 	limit  limiter
+}
+
+func init() {
+	// The PWA manifest needs its media type; Go does not know it.
+	mime.AddExtensionType(".webmanifest", "application/manifest+json")
 }
 
 // New returns the HTTP handler of a Vrac instance.
@@ -106,7 +112,7 @@ func (s *Server) routes() {
 	m.Handle("/mcp", s.mcp())
 	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
 	if s.opts.Web != nil {
-		m.Handle("GET /", s.web())
+		m.Handle("/", s.web())
 	}
 }
 
@@ -114,6 +120,10 @@ func (s *Server) routes() {
 func (s *Server) web() http.Handler {
 	files := http.FileServerFS(s.opts.Web)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		path := strings.TrimPrefix(r.URL.Path, "/")
 		if path == "" || path == "index.html" {
 			s.index(w, r)
