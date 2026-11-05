@@ -2,6 +2,8 @@
 package server
 
 import (
+	"fmt"
+
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -12,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-webauthn/webauthn/webauthn"
 
 	"github.com/yan-imensar/vrac/internal/engine"
 )
@@ -26,16 +30,21 @@ type Options struct {
 	// Web holds the compiled interface; nil serves the API only.
 	Web    fs.FS
 	Logger *slog.Logger
+	// OIDC enables sign-in through an identity provider; nil disables it.
+	OIDC *OIDC
 }
 
 // Server serves the API, MCP, OAuth and the web interface.
 type Server struct {
-	engine *engine.Engine
-	opts   Options
-	base   *url.URL
-	mux    *http.ServeMux
-	log    *slog.Logger
-	limit  limiter
+	engine   *engine.Engine
+	opts     Options
+	base     *url.URL
+	mux      *http.ServeMux
+	log      *slog.Logger
+	limit    limiter
+	webauthn *webauthn.WebAuthn
+	flows    flows
+	oidc     *oidcClient
 }
 
 func init() {
@@ -53,6 +62,19 @@ func New(e *engine.Engine, opts Options) (*Server, error) {
 		opts.Logger = slog.Default()
 	}
 	s := &Server{engine: e, opts: opts, base: base, mux: http.NewServeMux(), log: opts.Logger}
+	if s.webauthn, err = newWebAuthn(base.String(), base.Host); err != nil {
+		return nil, fmt.Errorf("passkeys: %w", err)
+	}
+	if opts.OIDC != nil {
+		if opts.OIDC.Issuer == "" || opts.OIDC.ClientID == "" || len(opts.OIDC.Allowed) == 0 {
+			return nil, errors.New("OIDC needs an issuer, a client ID and at least one allowed identity")
+		}
+		if opts.OIDC.Name == "" {
+			opts.OIDC.Name = "identity provider"
+		}
+		s.oidc = &oidcClient{cfg: *opts.OIDC}
+		s.opts = opts
+	}
 	s.routes()
 	return s, nil
 }
@@ -69,8 +91,15 @@ func (s *Server) routes() {
 	m := s.mux
 	// Authentication.
 	m.HandleFunc("GET /api/v1/session", s.session)
-	m.HandleFunc("POST /api/v1/setup", s.setup)
-	m.HandleFunc("POST /api/v1/login", s.login)
+	m.HandleFunc("POST /api/v1/setup/start", s.setupStart)
+	m.HandleFunc("POST /api/v1/login/start", s.loginStart)
+	m.HandleFunc("POST /api/v1/signin/finish", s.finish)
+	m.HandleFunc("GET /auth/oidc/start", s.oidcStart)
+	m.HandleFunc("GET /auth/oidc/callback", s.oidcCallback)
+	m.HandleFunc("GET /api/v1/passkeys", s.api(s.passkeys))
+	m.HandleFunc("POST /api/v1/passkeys/start", s.api(s.addPasskeyStart))
+	m.HandleFunc("POST /api/v1/passkeys/finish", s.api(s.addPasskeyFinish))
+	m.HandleFunc("DELETE /api/v1/passkeys/{id}", s.api(s.deletePasskey))
 	m.HandleFunc("POST /api/v1/logout", s.logout)
 	m.HandleFunc("POST /api/v1/password", s.api(s.changePassword))
 	m.HandleFunc("GET /api/v1/connections", s.api(s.connections))

@@ -12,54 +12,6 @@ import (
 // Authentication storage. The server owns the protocols and hashing; the
 // engine only persists their state.
 
-// HasOwner reports whether the owner account exists.
-func (e *Engine) HasOwner(ctx context.Context) (bool, error) {
-	var n int
-	err := e.db.QueryRowContext(ctx, `SELECT count(*) FROM owner`).Scan(&n)
-	return n > 0, err
-}
-
-// CreateOwner stores the owner's password hash. It fails if an owner exists.
-func (e *Engine) CreateOwner(ctx context.Context, passwordHash string) error {
-	return e.write(ctx, func(tx *sql.Tx) error {
-		var n int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM owner`).Scan(&n); err != nil {
-			return err
-		}
-		if n > 0 {
-			return fmt.Errorf("%w: the owner account already exists", ErrConflict)
-		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO owner(singleton, password_hash, created_at) VALUES (1, ?, ?)`, passwordHash, e.stamp())
-		return err
-	})
-}
-
-// SetOwnerPassword replaces the owner's password hash and ends every
-// browser session.
-func (e *Engine) SetOwnerPassword(ctx context.Context, passwordHash string) error {
-	return e.write(ctx, func(tx *sql.Tx) error {
-		r, err := tx.ExecContext(ctx, `UPDATE owner SET password_hash = ?`, passwordHash)
-		if err != nil {
-			return err
-		}
-		if n, _ := r.RowsAffected(); n == 0 {
-			return fmt.Errorf("%w: no owner account", ErrNotFound)
-		}
-		_, err = tx.ExecContext(ctx, `DELETE FROM sessions`)
-		return err
-	})
-}
-
-// OwnerPasswordHash returns the stored password hash.
-func (e *Engine) OwnerPasswordHash(ctx context.Context) (string, error) {
-	var h string
-	err := e.db.QueryRowContext(ctx, `SELECT password_hash FROM owner`).Scan(&h)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", ErrNotFound
-	}
-	return h, err
-}
-
 // CreateSession stores a browser session.
 func (e *Engine) CreateSession(ctx context.Context, tokenHash string, expires time.Time) error {
 	return e.write(ctx, func(tx *sql.Tx) error {

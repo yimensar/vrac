@@ -33,7 +33,9 @@ Commands:
   export [PATH]    write a JSON export (stdout by default)
   import PATH      load a JSON export into an empty workspace
   check            run integrity checks
-  password         set the owner password (signs out every browser)
+  password         set the owner password, and username with -user; creates
+                   the owner if none (signs out every browser)
+  passkeys reset   remove every passkey: the next sign-in enrolls a new one
   token NAME       create a personal access token for an MCP or API client
   version          print the version
 
@@ -42,6 +44,13 @@ Configuration (flags override environment):
   -listen ADDR     VRAC_LISTEN      listen address (default 127.0.0.1:8080)
   -url URL         VRAC_PUBLIC_URL  public base URL (default http://localhost:PORT)
   -timezone ZONE   VRAC_TIMEZONE    IANA time zone of journal days (default local)
+
+Sign-in with an identity provider (OIDC, such as Pocket ID), optional:
+  -oidc-issuer URL         VRAC_OIDC_ISSUER
+  -oidc-client-id ID       VRAC_OIDC_CLIENT_ID
+  -oidc-secret-file PATH   VRAC_OIDC_SECRET_FILE  (omit for a public PKCE client)
+  -oidc-name NAME          VRAC_OIDC_NAME         (default "identity provider")
+  -oidc-allow LIST         VRAC_OIDC_ALLOW        subjects or verified emails, comma separated
 `
 
 func main() {
@@ -52,7 +61,9 @@ func main() {
 }
 
 type config struct {
-	data, listen, publicURL, timezone string
+	data, listen, publicURL, timezone                       string
+	user                                                    string
+	oidcIssuer, oidcClient, oidcSecret, oidcName, oidcAllow string
 }
 
 func env(name, def string) string {
@@ -74,6 +85,12 @@ func run(args []string) error {
 	fs.StringVar(&c.listen, "listen", env("VRAC_LISTEN", "127.0.0.1:8080"), "")
 	fs.StringVar(&c.publicURL, "url", env("VRAC_PUBLIC_URL", ""), "")
 	fs.StringVar(&c.timezone, "timezone", env("VRAC_TIMEZONE", ""), "")
+	fs.StringVar(&c.user, "user", "", "")
+	fs.StringVar(&c.oidcIssuer, "oidc-issuer", env("VRAC_OIDC_ISSUER", ""), "")
+	fs.StringVar(&c.oidcClient, "oidc-client-id", env("VRAC_OIDC_CLIENT_ID", ""), "")
+	fs.StringVar(&c.oidcSecret, "oidc-secret-file", env("VRAC_OIDC_SECRET_FILE", ""), "")
+	fs.StringVar(&c.oidcName, "oidc-name", env("VRAC_OIDC_NAME", ""), "")
+	fs.StringVar(&c.oidcAllow, "oidc-allow", env("VRAC_OIDC_ALLOW", ""), "")
 	// Flags may come before or after positional arguments.
 	var rest []string
 	for {
@@ -141,10 +158,20 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		if err := server.ResetPassword(context.Background(), e, password); err != nil {
+		if err := server.ResetPassword(context.Background(), e, c.user, password); err != nil {
 			return err
 		}
 		fmt.Println("password changed; sign in again")
+		return nil
+	case "passkeys":
+		if len(rest) != 1 || rest[0] != "reset" {
+			return errors.New("usage: vrac passkeys reset")
+		}
+		n, err := e.ResetPasskeys(context.Background())
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%d passkeys removed; the next sign-in enrolls a new one\n", n)
 		return nil
 	case "token":
 		if len(rest) != 1 {
@@ -201,7 +228,24 @@ func serve(e *engine.Engine, c config, loc *time.Location) error {
 		port := c.listen[strings.LastIndex(c.listen, ":")+1:]
 		c.publicURL = "http://localhost:" + port
 	}
-	srv, err := server.New(e, server.Options{PublicURL: c.publicURL, Version: version, Timezone: loc.String(), Web: web.Files(), Logger: log})
+	opts := server.Options{PublicURL: c.publicURL, Version: version, Timezone: loc.String(), Web: web.Files(), Logger: log}
+	if c.oidcIssuer != "" {
+		o := &server.OIDC{Issuer: c.oidcIssuer, ClientID: c.oidcClient, Name: c.oidcName}
+		for _, a := range strings.Split(c.oidcAllow, ",") {
+			if a = strings.TrimSpace(a); a != "" {
+				o.Allowed = append(o.Allowed, a)
+			}
+		}
+		if c.oidcSecret != "" {
+			b, err := os.ReadFile(c.oidcSecret)
+			if err != nil {
+				return fmt.Errorf("OIDC secret: %w", err)
+			}
+			o.ClientSecret = strings.TrimSpace(string(b))
+		}
+		opts.OIDC = o
+	}
+	srv, err := server.New(e, opts)
 	if err != nil {
 		return err
 	}

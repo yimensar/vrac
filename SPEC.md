@@ -319,8 +319,17 @@ the user, always set the source. It replaces the user's current Memos skill.
 
 - One user per instance. One instance is one database; nothing assumes global
   state, so a future hosted offer can run one database per subscriber.
-- First start creates the owner account with a password (argon2id). Passkeys
-  come later.
+- The owner signs in with a username and a password (argon2id), then a
+  passkey (WebAuthn): a password alone opens nothing. First start offers
+  `/setup`, which creates the account with its first passkey; Settings adds
+  or removes passkeys, keeping at least one.
+- Optionally, sign-in through an identity provider (OIDC, such as Pocket ID)
+  replaces both: authorization code with PKCE, a browser-bound state, a
+  nonce, and only the subjects or verified emails listed in the
+  configuration.
+- Recovery happens on the server: `vrac password [-user NAME]` sets the
+  password (creating the owner if none) and `vrac passkeys reset` removes
+  passkeys; the next sign-in then enrolls a new one.
 - Built-in OAuth 2.1 authorization server with dynamic client registration and
   PKCE, so connecting Claude or ChatGPT only needs the instance URL.
 - Personal access tokens for CLIs and scripts.
@@ -343,7 +352,7 @@ the user, always set the source. It replaces the user's current Memos skill.
 
 ## 9. Scope
 
-V1: everything above, except passkeys and the Docker image.
+V1: everything above, except the Docker image.
 
 Later: quick capture desktop app (global shortcut), audio capture and
 transcription, inbox of unfiled captures, attention queue (overdue, stale

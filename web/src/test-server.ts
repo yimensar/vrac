@@ -51,7 +51,8 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string } = {
     const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } })
     let m: RegExpMatchArray | null
     if (url === "/api/v1/session") return json({ owner: true, authenticated: opts.authenticated ?? true, today, timezone: "Europe/Paris", version: "test", mcp_url: "" })
-    if (url === "/api/v1/login") return json({ authenticated: true })
+    if (url === "/api/v1/login/start") return json({ flow: "f1", mode: "get", options: { publicKey: { challenge: "AA" } } })
+    if (url.startsWith("/api/v1/signin/finish")) return json({ authenticated: true })
     if (url === "/api/v1/today") return json({ today, day: { day: today, exists: true, children: page(dayId) }, agenda: { nodes: [], refs: {} }, due: { nodes: [], refs: {} } })
     if (url === "/api/v1/types") return json({ types })
     if (url.startsWith("/api/v1/resolve")) return json({ candidates: [northwind] })

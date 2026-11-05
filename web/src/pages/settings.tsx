@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PageTitle, Section } from "@/components/page"
 import { usePreferences, useSetPreferences } from "@/lib/preferences"
+import { ceremony, deviceName } from "@/lib/webauthn"
 
 export function SettingsPage() {
   const refresh = useRefresh()
@@ -94,6 +95,9 @@ export function SettingsPage() {
             </div>
           </div>
         )}
+      </Section>
+      <Section title="Passkeys">
+        <Passkeys />
       </Section>
       <Section title="Data">
         <Button variant="outline" asChild>
@@ -201,6 +205,54 @@ function PreferencesForm() {
         ]}
         onChange={(v) => set({ parse_dates: v === "on" })}
       />
+    </div>
+  )
+}
+
+function Passkeys() {
+  const refresh = useRefresh()
+  const { data } = useQuery({ queryKey: ["passkeys"], queryFn: api.passkeys })
+  const add = async () => {
+    try {
+      const c = await api.addPasskeyStart()
+      const credential = await ceremony(c.mode, c.options)
+      await api.addPasskeyFinish(c.flow, credential, deviceName())
+      toast.success("Passkey added")
+      refresh()
+    } catch (err) {
+      if (err instanceof DOMException) toast.error("The passkey was cancelled or refused.")
+      else reportError(err)
+    }
+  }
+  return (
+    <div className="max-w-xl">
+      <p className="mb-2 text-sm text-muted-foreground">Signing in takes your password and one of these passkeys. Keep at least two, on different devices.</p>
+      <div className="divide-y">
+        {data?.passkeys.map((k) => (
+          <div key={k.id} className="flex items-center gap-3 py-2 text-sm">
+            <span className="flex-1">{k.name}</span>
+            <span className="text-muted-foreground">{k.last_used_at ? "used " + formatStamp(k.last_used_at) : "added " + formatStamp(k.created_at)}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={data.passkeys.length <= 1}
+              onClick={async () => {
+                try {
+                  await api.deletePasskey(k.id)
+                  refresh()
+                } catch (err) {
+                  reportError(err)
+                }
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+      </div>
+      <Button variant="outline" className="mt-3" onClick={add}>
+        Add a passkey
+      </Button>
     </div>
   )
 }

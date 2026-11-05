@@ -25,6 +25,7 @@ import (
 
 type harness struct {
 	t      *testing.T
+	url    string
 	srv    *httptest.Server
 	web    *http.Client
 	engine *engine.Engine
@@ -35,6 +36,10 @@ func newHarness(t *testing.T) *harness {
 }
 
 func newHarnessWith(t *testing.T, web fs.FS) *harness {
+	return newHarnessOpts(t, func(o *Options) { o.Web = web })
+}
+
+func newHarnessOpts(t *testing.T, configure func(*Options)) *harness {
 	t.Helper()
 	paris, _ := time.LoadLocation("Europe/Paris")
 	e, err := engine.Open(filepath.Join(t.TempDir(), "vrac.sqlite"), engine.Options{Location: paris})
@@ -46,7 +51,11 @@ func newHarnessWith(t *testing.T, web fs.FS) *harness {
 	var handler http.Handler
 	h.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
 	t.Cleanup(h.srv.Close)
-	s, err := New(e, Options{PublicURL: h.srv.URL, Version: "test", Timezone: "Europe/Paris", Web: web})
+	// Passkeys need a domain: the instance is reached as localhost.
+	h.url = strings.Replace(h.srv.URL, "127.0.0.1", "localhost", 1)
+	opts := Options{PublicURL: h.url, Version: "test", Timezone: "Europe/Paris"}
+	configure(&opts)
+	s, err := New(e, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +73,7 @@ func (h *harness) call(method, path string, body any, want int) map[string]any {
 		b, _ := json.Marshal(body)
 		r = bytes.NewReader(b)
 	}
-	req, _ := http.NewRequest(method, h.srv.URL+path, r)
+	req, _ := http.NewRequest(method, h.url+path, r)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(clientHeader, "web")
 	res, err := h.web.Do(req)
@@ -86,13 +95,14 @@ func TestOwnerSetupSessionsAndCSRF(t *testing.T) {
 	if s := h.call("GET", "/api/v1/session", nil, 200); s["owner"] != false {
 		t.Fatalf("session = %v", s)
 	}
-	h.call("POST", "/api/v1/setup", map[string]string{"password": "short"}, http.StatusBadRequest)
-	h.call("POST", "/api/v1/setup", map[string]string{"password": "correct horse battery"}, 200)
-	h.call("POST", "/api/v1/setup", map[string]string{"password": "another long one"}, http.StatusConflict)
+	h.ceremony("/api/v1/setup/start", map[string]string{"username": "yan", "password": "short"}, http.StatusBadRequest)
+	h.ceremony("/api/v1/setup/start", map[string]string{"username": "with space", "password": password}, http.StatusBadRequest)
+	a := h.setup()
+	h.ceremony("/api/v1/setup/start", map[string]string{"username": "eve", "password": "another long one"}, http.StatusConflict)
 	h.call("GET", "/api/v1/today", nil, 200)
 
 	// A cross-site form cannot add the client header.
-	req, _ := http.NewRequest("POST", h.srv.URL+"/api/v1/nodes", strings.NewReader(`{}`))
+	req, _ := http.NewRequest("POST", h.url+"/api/v1/nodes", strings.NewReader(`{}`))
 	res, _ := h.web.Do(req)
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("mutation without client header = %d", res.StatusCode)
@@ -100,13 +110,59 @@ func TestOwnerSetupSessionsAndCSRF(t *testing.T) {
 
 	h.call("POST", "/api/v1/logout", nil, 200)
 	h.call("GET", "/api/v1/today", nil, http.StatusUnauthorized)
-	h.call("POST", "/api/v1/login", map[string]string{"password": "wrong password"}, http.StatusUnauthorized)
-	h.call("POST", "/api/v1/login", map[string]string{"password": "correct horse battery"}, 200)
+	// The password alone opens nothing: it starts a passkey ceremony.
+	h.ceremony("/api/v1/login/start", map[string]string{"username": "yan", "password": "wrong password"}, http.StatusUnauthorized)
+	h.ceremony("/api/v1/login/start", map[string]string{"username": "nobody", "password": password}, http.StatusUnauthorized)
+	c := h.ceremony("/api/v1/login/start", map[string]string{"username": "yan", "password": password}, 200)
+	if c.Mode != "get" {
+		t.Fatalf("mode = %q", c.Mode)
+	}
+	h.call("GET", "/api/v1/today", nil, http.StatusUnauthorized)
+	// Another key cannot answer for the owner's passkey.
+	h.answer(newAuthenticator(t), c, "/api/v1/signin/finish", http.StatusUnauthorized)
+	c = h.ceremony("/api/v1/login/start", map[string]string{"username": "yan", "password": password}, 200)
+	h.answer(a, c, "/api/v1/signin/finish", 200)
+	h.call("GET", "/api/v1/today", nil, 200)
+	// A flow is used once.
+	h.answer(a, c, "/api/v1/signin/finish", http.StatusBadRequest)
+}
+
+func TestPasskeyEnrollmentAndManagement(t *testing.T) {
+	h := newHarness(t)
+	a := h.setup()
+	second := newAuthenticator(t)
+	c := h.ceremony("/api/v1/passkeys/start", nil, 200)
+	h.answer(second, c, "/api/v1/passkeys/finish", 200)
+	keys := h.call("GET", "/api/v1/passkeys", nil, 200)["passkeys"].([]any)
+	if len(keys) != 2 {
+		t.Fatalf("passkeys = %v", keys)
+	}
+	// Either passkey signs in.
+	h.call("POST", "/api/v1/logout", nil, 200)
+	h.signIn(second)
+	first := keys[0].(map[string]any)["id"].(string)
+	h.call("DELETE", "/api/v1/passkeys/"+first, nil, 200)
+	h.call("DELETE", "/api/v1/passkeys/"+keys[1].(map[string]any)["id"].(string), nil, http.StatusConflict)
+	_ = a
+
+	// Recovery: without passkeys, the password leads to enrolling one.
+	if _, err := h.engine.ResetPasskeys(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	h.call("GET", "/api/v1/today", nil, http.StatusUnauthorized)
+	fresh := newAuthenticator(t)
+	c = h.ceremony("/api/v1/login/start", map[string]string{"username": "yan", "password": password}, 200)
+	if c.Mode != "create" {
+		t.Fatalf("mode after reset = %q", c.Mode)
+	}
+	h.answer(fresh, c, "/api/v1/signin/finish", 200)
+	h.call("POST", "/api/v1/logout", nil, 200)
+	h.signIn(fresh)
 }
 
 func TestAPIWritesAndUnresolvedNames(t *testing.T) {
 	h := newHarness(t)
-	h.call("POST", "/api/v1/setup", map[string]string{"password": "correct horse battery"}, 200)
+	h.setup()
 	out := h.call("POST", "/api/v1/nodes", map[string]any{"request_id": "1", "nodes": []any{map[string]string{"input": "Call [[Northwind]] #task"}}}, http.StatusUnprocessableEntity)
 	if out["error"] != "unresolved" {
 		t.Fatalf("out = %v", out)
@@ -128,27 +184,27 @@ func TestAPIWritesAndUnresolvedNames(t *testing.T) {
 // discovery, registration, owner approval, PKCE token exchange, then tools.
 func TestOAuthAndMCP(t *testing.T) {
 	h := newHarness(t)
-	h.call("POST", "/api/v1/setup", map[string]string{"password": "correct horse battery"}, 200)
+	h.setup()
 
-	res, _ := http.Post(h.srv.URL+"/mcp", "application/json", strings.NewReader(`{}`))
+	res, _ := http.Post(h.url+"/mcp", "application/json", strings.NewReader(`{}`))
 	if res.StatusCode != http.StatusUnauthorized || !strings.Contains(res.Header.Get("WWW-Authenticate"), "oauth-protected-resource") {
 		t.Fatalf("unauthenticated MCP = %d %q", res.StatusCode, res.Header.Get("WWW-Authenticate"))
 	}
 	var meta map[string]any
-	r, _ := http.Get(h.srv.URL + "/.well-known/oauth-authorization-server")
+	r, _ := http.Get(h.url + "/.well-known/oauth-authorization-server")
 	json.NewDecoder(r.Body).Decode(&meta)
-	if meta["issuer"] != h.srv.URL {
+	if meta["issuer"] != h.url {
 		t.Fatalf("metadata = %v", meta)
 	}
 
-	reg, _ := http.Post(h.srv.URL+"/oauth/register", "application/json", strings.NewReader(`{"client_name":"Claude","redirect_uris":["https://claude.ai/api/mcp/auth_callback"]}`))
+	reg, _ := http.Post(h.url+"/oauth/register", "application/json", strings.NewReader(`{"client_name":"Claude","redirect_uris":["https://claude.ai/api/mcp/auth_callback"]}`))
 	var client map[string]any
 	json.NewDecoder(reg.Body).Decode(&client)
 	id, _ := client["client_id"].(string)
 	if reg.StatusCode != http.StatusCreated || id == "" {
 		t.Fatalf("registration = %d %v", reg.StatusCode, client)
 	}
-	bad, _ := http.Post(h.srv.URL+"/oauth/register", "application/json", strings.NewReader(`{"redirect_uris":["http://evil.example/cb"]}`))
+	bad, _ := http.Post(h.url+"/oauth/register", "application/json", strings.NewReader(`{"redirect_uris":["http://evil.example/cb"]}`))
 	if bad.StatusCode != http.StatusBadRequest {
 		t.Fatalf("non-loopback http redirect accepted: %d", bad.StatusCode)
 	}
@@ -157,7 +213,7 @@ func TestOAuthAndMCP(t *testing.T) {
 	sum := sha256.Sum256([]byte(verifier))
 	q := url.Values{"response_type": {"code"}, "client_id": {id}, "redirect_uri": {"https://claude.ai/api/mcp/auth_callback"},
 		"code_challenge": {base64.RawURLEncoding.EncodeToString(sum[:])}, "code_challenge_method": {"S256"}, "state": {"xyz"}, "scope": {"vrac"}}
-	auth, _ := h.web.Get(h.srv.URL + "/oauth/authorize?" + q.Encode())
+	auth, _ := h.web.Get(h.url + "/oauth/authorize?" + q.Encode())
 	if auth.StatusCode != http.StatusFound || !strings.HasPrefix(auth.Header.Get("Location"), "/authorize?") {
 		t.Fatalf("authorize = %d %s", auth.StatusCode, auth.Header.Get("Location"))
 	}
@@ -170,7 +226,7 @@ func TestOAuthAndMCP(t *testing.T) {
 		t.Fatalf("redirect = %s", back)
 	}
 	exchange := func(form url.Values) (int, map[string]any) {
-		res, _ := http.PostForm(h.srv.URL+"/oauth/token", form)
+		res, _ := http.PostForm(h.url+"/oauth/token", form)
 		var out map[string]any
 		json.NewDecoder(res.Body).Decode(&out)
 		return res.StatusCode, out
@@ -198,7 +254,7 @@ func TestOAuthAndMCP(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	transport := &mcp.StreamableClientTransport{Endpoint: h.srv.URL + "/mcp", HTTPClient: &http.Client{Transport: bearer{refreshed["access_token"].(string)}}}
+	transport := &mcp.StreamableClientTransport{Endpoint: h.url + "/mcp", HTTPClient: &http.Client{Transport: bearer{refreshed["access_token"].(string)}}}
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "test"}, nil).Connect(ctx, transport, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -252,7 +308,7 @@ func TestServesTheSinglePageApp(t *testing.T) {
 	}
 	h := newHarnessWith(t, web)
 	for path, want := range map[string]string{"/": "text/html", "/node/abc": "text/html", "/assets/app.js": "javascript", "/manifest.webmanifest": "application/manifest+json"} {
-		res, err := http.Get(h.srv.URL + path)
+		res, err := http.Get(h.url + path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -260,32 +316,51 @@ func TestServesTheSinglePageApp(t *testing.T) {
 			t.Errorf("%s = %d %s", path, res.StatusCode, res.Header.Get("Content-Type"))
 		}
 	}
-	if res, _ := http.Get(h.srv.URL + "/api/v1/nope"); res.StatusCode != http.StatusNotFound {
+	if res, _ := http.Get(h.url + "/api/v1/nope"); res.StatusCode != http.StatusNotFound {
 		t.Errorf("unknown API path = %d", res.StatusCode)
 	}
-	if res, _ := http.Post(h.srv.URL+"/somewhere", "text/plain", nil); res.StatusCode != http.StatusMethodNotAllowed {
+	if res, _ := http.Post(h.url+"/somewhere", "text/plain", nil); res.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("POST to the app = %d", res.StatusCode)
 	}
 }
 
 func TestResetPassword(t *testing.T) {
 	h := newHarness(t)
-	h.call("POST", "/api/v1/setup", map[string]string{"password": "correct horse battery"}, 200)
+	auth := h.setup()
 	e := h.engine
-	if err := ResetPassword(context.Background(), e, "short"); err == nil {
+	if err := ResetPassword(context.Background(), e, "", "short"); err == nil {
 		t.Fatal("short password accepted")
 	}
-	if err := ResetPassword(context.Background(), e, "a brand new password"); err != nil {
+	if err := ResetPassword(context.Background(), e, "", "a brand new password"); err != nil {
 		t.Fatal(err)
 	}
 	h.call("GET", "/api/v1/today", nil, http.StatusUnauthorized)
-	h.call("POST", "/api/v1/login", map[string]string{"password": "correct horse battery"}, http.StatusUnauthorized)
-	h.call("POST", "/api/v1/login", map[string]string{"password": "a brand new password"}, 200)
+	h.ceremony("/api/v1/login/start", map[string]string{"username": "yan", "password": password}, http.StatusUnauthorized)
+	c := h.ceremony("/api/v1/login/start", map[string]string{"username": "yan", "password": "a brand new password"}, 200)
+	h.answer(auth, c, "/api/v1/signin/finish", 200)
+	h.call("GET", "/api/v1/today", nil, 200)
+}
+
+// Without an owner, the command line creates one, who enrolls a passkey.
+func TestResetPasswordCreatesOwner(t *testing.T) {
+	h := newHarness(t)
+	if err := ResetPassword(context.Background(), h.engine, "", password); err == nil {
+		t.Fatal("an owner without a username was created")
+	}
+	if err := ResetPassword(context.Background(), h.engine, "yan", password); err != nil {
+		t.Fatal(err)
+	}
+	c := h.ceremony("/api/v1/login/start", map[string]string{"username": "yan", "password": password}, 200)
+	if c.Mode != "create" {
+		t.Fatalf("mode = %q", c.Mode)
+	}
+	h.answer(newAuthenticator(t), c, "/api/v1/signin/finish", 200)
+	h.call("GET", "/api/v1/today", nil, 200)
 }
 
 func TestPreferencesAPI(t *testing.T) {
 	h := newHarness(t)
-	h.call("POST", "/api/v1/setup", map[string]string{"password": "correct horse battery"}, 200)
+	h.setup()
 	if p := h.call("GET", "/api/v1/preferences", nil, 200); p["fold"] != "default" || p["parse_dates"] != true {
 		t.Fatalf("defaults = %v", p)
 	}

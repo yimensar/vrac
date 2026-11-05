@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -624,5 +625,73 @@ func TestPreferences(t *testing.T) {
 	e = open(t, path)
 	if p, _ := e.Preferences(ctx); p != want {
 		t.Fatalf("reopened preferences = %+v", p)
+	}
+}
+
+func TestOwnerAndPasskeys(t *testing.T) {
+	e := newEngine(t)
+	o := Owner{Username: "yan", PasswordHash: "h1", UserHandle: NewUserHandle()}
+	first := &Passkey{ID: "cred-1", Name: "MacBook", Credential: json.RawMessage(`{"id":"1"}`)}
+	if err := e.CreateOwner(ctx, o, first); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.CreateOwner(ctx, o, nil); !errors.Is(err, ErrConflict) {
+		t.Fatalf("second owner: %v", err)
+	}
+	got, _ := e.Owner(ctx)
+	if got.Username != "yan" || len(got.UserHandle) != 32 {
+		t.Fatalf("owner = %+v", got)
+	}
+	if err := e.DeletePasskey(ctx, "cred-1"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("deleted the last passkey: %v", err)
+	}
+	if err := e.AddPasskey(ctx, Passkey{ID: "cred-2", Credential: json.RawMessage(`{"id":"2"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.UsePasskey(ctx, "cred-2", json.RawMessage(`{"id":"2","count":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.DeletePasskey(ctx, "cred-1"); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := e.Passkeys(ctx)
+	if len(list) != 1 || list[0].Name != "Passkey" || string(list[0].Credential) != `{"id":"2","count":1}` || list[0].LastUsedAt == "" {
+		t.Fatalf("passkeys = %+v", list)
+	}
+	if n, err := e.ResetPasskeys(ctx); err != nil || n != 1 {
+		t.Fatalf("reset = %d, %v", n, err)
+	}
+	if err := e.SetOwnerPassword(ctx, "", "h2"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.Owner(ctx); got.Username != "yan" || got.PasswordHash != "h2" {
+		t.Fatalf("after password change: %+v", got)
+	}
+}
+
+// Migration 6 keeps an existing password-only owner, named "owner".
+func TestMigrationKeepsOwner(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "vrac.sqlite")
+	e := open(t, path)
+	for _, stmt := range []string{
+		`DROP TABLE passkeys`,
+		`CREATE TABLE owner_v5 (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), password_hash TEXT NOT NULL, created_at TEXT NOT NULL)`,
+		`INSERT INTO owner_v5 VALUES (1, 'old-hash', '2026-11-01')`,
+		`DROP TABLE owner`,
+		`ALTER TABLE owner_v5 RENAME TO owner`,
+		`PRAGMA user_version = 5`,
+	} {
+		if _, err := e.db.Exec(stmt); err != nil {
+			t.Fatal(stmt, err)
+		}
+	}
+	e.Close()
+	e = open(t, path)
+	o, err := e.Owner(ctx)
+	if err != nil || o.Username != "owner" || o.PasswordHash != "old-hash" || len(o.UserHandle) != 32 {
+		t.Fatalf("migrated owner = %+v, %v", o, err)
+	}
+	if p, _ := e.Passkeys(ctx); len(p) != 0 {
+		t.Fatalf("passkeys = %v", p)
 	}
 }

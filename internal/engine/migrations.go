@@ -33,3 +33,34 @@ func migrateTypeTokens(e *Engine, tx *sql.Tx) error {
 	}
 	return nil
 }
+
+// migrateOwner is migration 6: a username and a WebAuthn handle for the
+// owner, and the passkeys table.
+func migrateOwner(e *Engine, tx *sql.Tx) error {
+	columns := map[string]bool{}
+	rows, err := tx.Query(`SELECT name FROM pragma_table_info('owner')`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		columns[name] = true
+	}
+	rows.Close()
+	for name, ddl := range map[string]string{
+		"username":    `ALTER TABLE owner ADD COLUMN username TEXT NOT NULL DEFAULT 'owner'`,
+		"user_handle": `ALTER TABLE owner ADD COLUMN user_handle BLOB`,
+	} {
+		if !columns[name] {
+			if _, err := tx.Exec(ddl); err != nil {
+				return err
+			}
+		}
+	}
+	_, err = tx.Exec(schemaV6)
+	return err
+}

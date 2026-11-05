@@ -47,7 +47,7 @@
           pname = "vrac";
           inherit version;
           src = clean ./.;
-          vendorHash = "sha256-2H6vPT96FfWhauIAPZTrlsKe8BcNOZMGjfK1IUVopq0=";
+          vendorHash = "sha256-V+ArIdxYYVmyKxrtFTEHLO+L8cu1Sl8aslWZ+isba9k=";
           subPackages = [ "cmd/vrac" ];
           env.CGO_ENABLED = "1";
           tags = [ "sqlite_fts5" ];

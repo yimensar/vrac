@@ -8,12 +8,21 @@ beforeEach(() => window.history.pushState({}, "", "/"))
 afterEach(() => vi.unstubAllGlobals())
 
 describe("app", () => {
-  it("asks for the password when signed out", async () => {
+  it("signs in with the password, then a passkey", async () => {
     const server = fakeServer({ authenticated: false })
+    // A browser with passkeys: the credential answers the server's challenge.
+    const get = vi.fn(async () => ({ toJSON: () => ({ id: "cred", type: "public-key" }) }))
+    vi.stubGlobal("PublicKeyCredential", function PublicKeyCredential() {})
+    Object.defineProperty(navigator, "credentials", { value: { create: vi.fn(), get }, configurable: true })
     render(<App client={makeClient()} />)
-    await userEvent.type(await screen.findByLabelText("Password"), "correct horse battery")
-    await userEvent.click(screen.getByRole("button", { name: "Sign in" }))
-    await waitFor(() => expect(server.calls.some((c) => c.url === "/api/v1/login" && c.body.password === "correct horse battery")).toBe(true))
+    await userEvent.type(await screen.findByLabelText("Username"), "yan")
+    await userEvent.type(screen.getByLabelText("Password"), "correct horse battery")
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }))
+    await waitFor(() => expect(server.calls.some((c) => c.url.startsWith("/api/v1/signin/finish?flow=f1"))).toBe(true))
+    const start = server.calls.find((c) => c.url === "/api/v1/login/start")!
+    expect(start.body).toEqual({ username: "yan", password: "correct horse battery" })
+    expect(get).toHaveBeenCalledOnce()
+    expect(server.calls.find((c) => c.url.startsWith("/api/v1/signin/finish"))!.body).toEqual({ id: "cred", type: "public-key" })
   })
 
   it("writes in today's journal through the editor", async () => {

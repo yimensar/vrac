@@ -33,7 +33,9 @@ export type Type = { name: string; builtin: boolean; color: string; count: numbe
 export type Creation = { name: string; types?: string[] }
 export type Unresolved = { kind: "type" | "node"; name: string; candidates: Brief[] }
 
-export type Session = { owner: boolean; authenticated: boolean; today: string; timezone: string; version: string; mcp_url: string }
+export type Session = { owner: boolean; authenticated: boolean; today: string; timezone: string; version: string; mcp_url: string; provider: string }
+export type Ceremony = { flow: string; mode: "create" | "get"; options: { publicKey: Record<string, any> } }
+export type Passkey = { id: string; name: string; created_at: string; last_used_at?: string }
 export type DayView = { day: string; exists: boolean; node?: Node; children: Page }
 export type NodeView = { node: Node; path: Brief[]; children: Page; refs: Refs }
 export type Sections = { open_tasks: Node[]; upcoming: Node[]; meetings: Node[]; decisions: Node[]; mentions: Page; refs: Refs }
@@ -100,8 +102,15 @@ const q = (params: Record<string, string | number | undefined>) => {
 
 export const api = {
   session: () => request<Session>("GET", "/api/v1/session"),
-  setup: (password: string) => request("POST", "/api/v1/setup", { password }),
-  login: (password: string) => request("POST", "/api/v1/login", { password }),
+  setupStart: (username: string, password: string) => request<Ceremony>("POST", "/api/v1/setup/start", { username, password }),
+  loginStart: (username: string, password: string) => request<Ceremony>("POST", "/api/v1/login/start", { username, password }),
+  signinFinish: (flow: string, credential: unknown, name: string) =>
+    request("POST", `/api/v1/signin/finish?flow=${encodeURIComponent(flow)}&name=${encodeURIComponent(name)}`, credential),
+  passkeys: () => request<{ passkeys: Passkey[] }>("GET", "/api/v1/passkeys"),
+  addPasskeyStart: () => request<Ceremony>("POST", "/api/v1/passkeys/start"),
+  addPasskeyFinish: (flow: string, credential: unknown, name: string) =>
+    request("POST", `/api/v1/passkeys/finish?flow=${encodeURIComponent(flow)}&name=${encodeURIComponent(name)}`, credential),
+  deletePasskey: (id: string) => request("DELETE", `/api/v1/passkeys/${encodeURIComponent(id)}`),
   logout: () => request("POST", "/api/v1/logout"),
   changePassword: (current: string, password: string) => request("POST", "/api/v1/password", { current, password }),
 

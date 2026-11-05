@@ -154,62 +154,12 @@ func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, authed := s.authenticate(r)
+	provider := ""
+	if s.opts.OIDC != nil {
+		provider = s.opts.OIDC.Name
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"owner": owner, "authenticated": authed, "today": s.engine.Today(),
-		"timezone": s.opts.Timezone, "version": s.opts.Version, "mcp_url": s.url("/mcp")})
-}
-
-type passwordBody struct {
-	Password string `json:"password"`
-}
-
-func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get(clientHeader) == "" {
-		fail(w, http.StatusForbidden, "forbidden", "missing "+clientHeader+" header")
-		return
-	}
-	var b passwordBody
-	if !decode(w, r, &b) {
-		return
-	}
-	if len(b.Password) < minPassword {
-		fail(w, http.StatusBadRequest, "invalid", fmt.Sprintf("the password needs at least %d characters", minPassword))
-		return
-	}
-	if err := s.engine.CreateOwner(r.Context(), hashPassword(b.Password)); err != nil {
-		failEngine(w, err)
-		return
-	}
-	s.startSession(w, r)
-}
-
-func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get(clientHeader) == "" {
-		fail(w, http.StatusForbidden, "forbidden", "missing "+clientHeader+" header")
-		return
-	}
-	if s.limit.blocked() {
-		fail(w, http.StatusTooManyRequests, "rate_limited", "too many attempts; wait a minute")
-		return
-	}
-	var b passwordBody
-	if !decode(w, r, &b) {
-		return
-	}
-	hash, err := s.engine.OwnerPasswordHash(r.Context())
-	if errors.Is(err, engine.ErrNotFound) {
-		fail(w, http.StatusConflict, "no_owner", "create the owner account first")
-		return
-	}
-	if err != nil {
-		failEngine(w, err)
-		return
-	}
-	if !checkPassword(hash, b.Password) {
-		s.limit.fail()
-		fail(w, http.StatusUnauthorized, "unauthorized", "wrong password")
-		return
-	}
-	s.startSession(w, r)
+		"timezone": s.opts.Timezone, "version": s.opts.Version, "mcp_url": s.url("/mcp"), "provider": provider})
 }
 
 func (s *Server) startSession(w http.ResponseWriter, r *http.Request) {
@@ -244,12 +194,12 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request, p princi
 	if !decode(w, r, &b) {
 		return
 	}
-	hash, err := s.engine.OwnerPasswordHash(r.Context())
+	owner, err := s.engine.Owner(r.Context())
 	if err != nil {
 		failEngine(w, err)
 		return
 	}
-	if !checkPassword(hash, b.Current) {
+	if !checkPassword(owner.PasswordHash, b.Current) {
 		s.limit.fail()
 		fail(w, http.StatusUnauthorized, "unauthorized", "wrong current password")
 		return
@@ -258,7 +208,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request, p princi
 		fail(w, http.StatusBadRequest, "invalid", fmt.Sprintf("the password needs at least %d characters", minPassword))
 		return
 	}
-	if err := s.engine.SetOwnerPassword(r.Context(), hashPassword(b.Password)); err != nil {
+	if err := s.engine.SetOwnerPassword(r.Context(), "", hashPassword(b.Password)); err != nil {
 		failEngine(w, err)
 		return
 	}
@@ -306,9 +256,10 @@ func (s *Server) revoke(w http.ResponseWriter, r *http.Request, p principal) {
 	writeJSON(w, http.StatusOK, map[string]bool{"revoked": true})
 }
 
-// ResetPassword sets the owner's password from the command line, creating
-// the owner if needed, and ends every browser session.
-func ResetPassword(ctx context.Context, e *engine.Engine, password string) error {
+// ResetPassword sets the owner's password, and username when given, from
+// the command line. Without an owner it creates one, who enrolls a passkey
+// at the first sign-in. It ends every browser session.
+func ResetPassword(ctx context.Context, e *engine.Engine, username, password string) error {
 	if len(password) < minPassword {
 		return fmt.Errorf("the password needs at least %d characters", minPassword)
 	}
@@ -317,9 +268,12 @@ func ResetPassword(ctx context.Context, e *engine.Engine, password string) error
 		return err
 	}
 	if !owner {
-		return e.CreateOwner(ctx, hashPassword(password))
+		if username == "" {
+			return errors.New("there is no owner yet: give a username")
+		}
+		return e.CreateOwner(ctx, engine.Owner{Username: username, PasswordHash: hashPassword(password), UserHandle: engine.NewUserHandle()}, nil)
 	}
-	return e.SetOwnerPassword(ctx, hashPassword(password))
+	return e.SetOwnerPassword(ctx, username, hashPassword(password))
 }
 
 // CreateToken creates a personal access token and returns it; only its hash

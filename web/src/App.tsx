@@ -24,7 +24,7 @@ function Gate() {
   const { data: session, error } = useQuery({ queryKey: ["session"], queryFn: api.session })
   if (error) return <p className="p-8 text-muted-foreground">Vrac is not reachable.</p>
   if (!session) return null
-  if (!session.authenticated) return <SignIn owner={session.owner} />
+  if (!session.authenticated) return <SignIn owner={session.owner} provider={session.provider} />
   return (
     <Routes>
       <Route element={<Layout />}>

@@ -2,45 +2,87 @@ import { useState, type FormEvent } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api"
 import { reportError, useRefresh } from "@/lib/hooks"
+import { ceremony, deviceName, passkeysSupported } from "@/lib/webauthn"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-export function SignIn({ owner }: { owner: boolean }) {
+/** Signs in, or creates the owner account on a new instance: username and
+ * password, then a passkey; or the identity provider when configured. */
+export function SignIn({ owner, provider }: { owner: boolean; provider: string }) {
   const refresh = useRefresh()
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
-  const [busy, setBusy] = useState(false)
+  const [confirm, setConfirm] = useState("")
+  const [step, setStep] = useState<"form" | "passkey">("form")
+  const [error, setError] = useState("")
+  const creating = !owner
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    setBusy(true)
+    setError("")
+    if (creating && password !== confirm) return setError("The passwords differ.")
+    if (!passkeysSupported()) return setError("This browser does not support passkeys.")
     try {
-      await (owner ? api.login(password) : api.setup(password))
+      const c = await (creating ? api.setupStart(username, password) : api.loginStart(username, password))
+      setStep("passkey")
+      const credential = await ceremony(c.mode, c.options)
+      await api.signinFinish(c.flow, credential, deviceName())
       await refresh()
     } catch (err) {
-      reportError(err)
-    } finally {
-      setBusy(false)
+      setStep("form")
+      if (err instanceof DOMException) setError("The passkey was cancelled or refused.")
+      else reportError(err)
     }
   }
+  const back = encodeURIComponent(window.location.pathname + window.location.search)
   return (
     <div className="flex min-h-svh items-center justify-center p-4">
       <Card className="w-full max-w-sm">
-        <form onSubmit={submit}>
-          <CardHeader>
-            <CardTitle>{owner ? "Sign in to vrac" : "Welcome to vrac"}</CardTitle>
-            <CardDescription>{owner ? "Enter your password." : "Choose the password of this instance (10 characters or more)."}</CardDescription>
-          </CardHeader>
-          <CardContent className="my-6 space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" autoFocus autoComplete={owner ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} />
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full" disabled={busy || (!owner && password.length < 10)}>
-              {owner ? "Sign in" : "Create my vrac"}
+        <CardHeader>
+          <CardTitle>{creating ? "Create your vrac" : "Sign in to vrac"}</CardTitle>
+          <CardDescription>
+            {step === "passkey"
+              ? "Confirm with your passkey."
+              : creating
+                ? "Choose a username and a password; a passkey will then protect the account."
+                : "Your username and password, then your passkey."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="mt-6 space-y-4">
+          {provider && (
+            <>
+              <Button asChild variant="outline" className="w-full">
+                <a href={`/auth/oidc/start?return=${back}`}>Continue with {provider}</a>
+              </Button>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="h-px flex-1 bg-border" />
+                or
+                <span className="h-px flex-1 bg-border" />
+              </div>
+            </>
+          )}
+          <form onSubmit={submit} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="username">Username</Label>
+              <Input id="username" autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" type="password" autoComplete={creating ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} />
+            </div>
+            {creating && (
+              <div className="space-y-1.5">
+                <Label htmlFor="confirm">Confirm the password</Label>
+                <Input id="confirm" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+              </div>
+            )}
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" className="w-full" disabled={step === "passkey" || !username || password.length < (creating ? 10 : 1)}>
+              {creating ? "Create the account and its passkey" : "Continue"}
             </Button>
-          </CardFooter>
-        </form>
+          </form>
+        </CardContent>
       </Card>
     </div>
   )
