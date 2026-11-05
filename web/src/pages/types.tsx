@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { PlusIcon } from "lucide-react"
 import { api } from "@/lib/api"
 import { reportError, useRefresh } from "@/lib/hooks"
-import { formatStamp, isDay, nodeInput } from "@/lib/syntax"
+import { formatDay, isDay, nodeInput } from "@/lib/syntax"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -85,7 +85,7 @@ export function TypePage() {
                     </Link>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{r.open_tasks || ""}</TableCell>
-                  <TableCell className="text-right text-muted-foreground">{r.last_activity ? formatStamp(r.last_activity) : ""}</TableCell>
+                  <TableCell className="text-right text-muted-foreground">{r.last_activity ? formatDay(r.last_activity) : ""}</TableCell>
                 </TableRow>
               )
             })}

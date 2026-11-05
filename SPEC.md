@@ -128,10 +128,13 @@ Examples:
 - a task under the node Northwind concerns Northwind;
 - a task referencing `[[Lot 2]]`, a child of Northwind, concerns Lot 2 and Northwind.
 
-Context is computed at query time from the tree and the reference index: the
-subject's subtree, the nodes referencing it, and their subtrees. Nothing is
-copied into descendants, so moves and renames never rewrite other nodes. A
-materialized index may be added if measurements show the need.
+Context is maintained at write time in a derived, rebuildable index that
+lists, for every node, the subjects it concerns, with the node's date. A
+subject's nodes are then read in date order and context queries stay fast
+on large workspaces. Writing a node or changing its references updates its
+subtree; moving a node also updates the nodes that reference it, which is
+the rare costly operation. Renames change nothing. A property test checks
+the index against the definition after random operations.
 
 ### 2.6 Hierarchy
 

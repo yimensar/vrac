@@ -25,6 +25,9 @@ func (s *txState) insert(parent sql.NullInt64, pos int64, text string, typeIDs [
 	if err := s.setRefs(seq, text); err != nil {
 		return 0, "", err
 	}
+	if err := s.refreshContext(seq); err != nil {
+		return 0, "", err
+	}
 	if err := s.index(seq); err != nil {
 		return 0, "", err
 	}

@@ -307,10 +307,6 @@ func (e *Engine) Types(ctx context.Context) ([]Type, error) {
 	return types, rows.Err()
 }
 
-func escapeLike(s string) string {
-	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
-}
-
 func clampLimit(limit, def, max int) int {
 	if limit <= 0 {
 		return def

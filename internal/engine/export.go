@@ -164,7 +164,7 @@ func (e *Engine) Import(ctx context.Context, r io.Reader) error {
 		if nodes != 1 || days != 0 {
 			return fmt.Errorf("%w: import requires an empty workspace", ErrConflict)
 		}
-		for _, stmt := range []string{`DELETE FROM revisions`, `DELETE FROM requests`, `DELETE FROM search`, `DELETE FROM nodes`, `DELETE FROM types`} {
+		for _, stmt := range []string{`DELETE FROM concerns`, `DELETE FROM revisions`, `DELETE FROM requests`, `DELETE FROM search`, `DELETE FROM nodes`, `DELETE FROM types`} {
 			if _, err := tx.ExecContext(ctx, stmt); err != nil {
 				return err
 			}
@@ -261,6 +261,9 @@ func (e *Engine) Import(ctx context.Context, r io.Reader) error {
 			if err := s.setRefs(seq, n.Text); err != nil {
 				return fmt.Errorf("node %s: %w", n.ID, err)
 			}
+		}
+		if err := rebuildContext(ctx, tx); err != nil {
+			return err
 		}
 		for _, n := range x.Nodes {
 			if err := s.syncTypeTokens(seqs[n.ID]); err != nil {

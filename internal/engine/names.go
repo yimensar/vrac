@@ -174,20 +174,22 @@ func (e *Engine) candidates(ctx context.Context, q queryer, name string, limit i
 	if key == "" {
 		return []Brief{}, nil
 	}
-	like := "%" + escapeLike(key) + "%"
+	// Names and aliases starting with the key, through their indexes;
+	// words anywhere come next from full text.
+	upper := key + "\U0010FFFF"
 	rows, err := q.QueryContext(ctx, `WITH matches(seq, rank) AS (
-			SELECT seq, CASE WHEN name_key = ?1 THEN 0 WHEN name_key LIKE ?2 ESCAPE '\' THEN 2 ELSE 3 END
-			FROM nodes WHERE name_key LIKE ?3 ESCAPE '\' AND kind = 'node' AND trashed_at IS NULL
+			SELECT seq, CASE WHEN name_key = ?1 THEN 0 ELSE 2 END
+			FROM nodes WHERE name_key >= ?1 AND name_key < ?2 AND kind = 'node' AND trashed_at IS NULL
 			UNION ALL
 			SELECT a.node_seq, CASE WHEN a.alias_key = ?1 THEN 1 ELSE 3 END FROM aliases a JOIN nodes n ON n.seq = a.node_seq
-			WHERE a.alias_key LIKE ?3 ESCAPE '\' AND n.trashed_at IS NULL)
+			WHERE a.alias_key >= ?1 AND a.alias_key < ?2 AND n.trashed_at IS NULL)
 		SELECT n.id, n.text, coalesce((SELECT group_concat(t.name, ' ') FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE nt.node_seq = n.seq), ''),
 			n.seq
 		FROM (SELECT seq, min(rank) AS rank FROM matches GROUP BY seq) m JOIN nodes n ON n.seq = m.seq
 		ORDER BY m.rank,
 			(EXISTS (SELECT 1 FROM node_types WHERE node_seq = n.seq) OR n.parent_seq IS NULL OR EXISTS (SELECT 1 FROM refs WHERE target_seq = n.seq)) DESC,
 			length(n.text), n.seq
-		LIMIT ?4`, key, escapeLike(key)+"%", like, limit)
+		LIMIT ?3`, key, upper, limit)
 	if err != nil {
 		return nil, err
 	}

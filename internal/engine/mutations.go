@@ -204,6 +204,16 @@ func (e *Engine) Update(ctx context.Context, actor Actor, req UpdateRequest) (Re
 		if err := s.setRefs(n.seq, text); err != nil {
 			return nil, err
 		}
+		if text != n.Text {
+			if err := s.refreshContext(n.seq); err != nil {
+				return nil, err
+			}
+		}
+		if f.Due != n.Due || f.Start != n.Start {
+			if err := s.redate(n.seq); err != nil {
+				return nil, err
+			}
+		}
 		if err := s.reindex(n.seq, text != n.Text || !slices.Equal(aliases, n.Aliases)); err != nil {
 			return nil, err
 		}
@@ -250,6 +260,9 @@ func (e *Engine) Move(ctx context.Context, actor Actor, req MoveRequest) (Result
 			return nil, err
 		}
 		if _, err := s.tx.ExecContext(ctx, `UPDATE nodes SET parent_seq = ?, position = ? WHERE seq = ?`, parent, pos, n.seq); err != nil {
+			return nil, err
+		}
+		if err := s.refreshMoved(n.seq); err != nil {
 			return nil, err
 		}
 		if err := s.bump(n.seq); err != nil {
@@ -401,6 +414,10 @@ func (s *txState) apply(n Node, snap snapshot) error {
 				}
 			}
 		}
+	}
+	// Text and location may both have changed.
+	if err := s.refreshMoved(n.seq); err != nil {
+		return err
 	}
 	return s.bump(n.seq)
 }
