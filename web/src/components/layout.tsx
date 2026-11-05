@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { NodeText } from "./node-text"
+import { Label, NodeText } from "./node-text"
 
 const nav = [
   { to: "/", label: "Today", icon: SunIcon, end: true },
@@ -126,8 +126,10 @@ function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bool
           <CommandGroup heading="Go to">
             {names!.candidates.map((c) => (
               <CommandItem key={c.id} value={"n" + c.id} onSelect={() => go(`/node/${c.id}`)}>
-                <span className="truncate">{c.name}</span>
-                <span className="ml-auto text-xs text-muted-foreground">{c.types.map((t) => "#" + t).join(" ")}</span>
+                <span className="truncate">
+                  <Label text={c.label || c.name} types={c.types} />
+                </span>
+                {c.path && c.path.length > 0 && <span className="ml-auto truncate text-xs text-muted-foreground">{c.path.filter((p) => p !== "Journal").slice(-2).join(" / ")}</span>}
               </CommandItem>
             ))}
           </CommandGroup>

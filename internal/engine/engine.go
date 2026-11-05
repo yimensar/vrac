@@ -130,7 +130,9 @@ func (e *Engine) migrate(path string) error {
 		return nil
 	}
 	if version > 0 {
-		backup := fmt.Sprintf("%s.pre-v%d-%s.backup", path, len(migrations), e.now().UTC().Format("20060102T150405Z"))
+		// Named after the version it preserves, so successive upgrades never
+		// collide.
+		backup := fmt.Sprintf("%s.v%d-%s.backup", path, version, e.now().UTC().Format("20060102T150405Z"))
 		if err := e.Backup(backup); err != nil {
 			return fmt.Errorf("snapshot before migration: %w", err)
 		}

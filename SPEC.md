@@ -78,9 +78,13 @@ fields. A node may carry several types (`#task #decision`).
 hidden type: a token stays where it was written, like a reference, so
 sentences read naturally (`#meeting with [[Alice]] about [[Globex]]`), and
 removing it removes the type. A type given outside the text, such as
-"Create Dupont as person", is written into it (`Dupont #person`). As a name, a
-node drops its trailing types and keeps inner ones as words: `Northwind #project`
-is named Northwind.
+"Create Dupont as person", is written into it (`Dupont #person`).
+
+One rule tells labels from words: **a `#type` at the end of the line labels
+the node; a `#type` inside the sentence is part of it.** A reference shows its
+target as written, without the trailing labels: `[[Northwind]]` to `Northwind #project`
+shows Northwind, and a reference to `#meeting with [[Bruno]] about [[Northwind]]`
+shows "#meeting with Bruno about Northwind", the type in its color.
 
 Built-in types (fixed fields, no configuration):
 
@@ -333,7 +337,7 @@ public sharing of a node or a form, the hosted offer.
    add a "move to root" action, or move typed entities automatically?
 2. **Evolving decisions.** Show the latest first only, or link a decision to
    the one it replaces?
-3. **What `[[ ]]` can target in the UI.** Every node, or only typed nodes and
-   root nodes at first?
+3. **What `[[ ]]` can target.** Resolved: any node. Completion matches names
+   and aliases first, then the words of any node (meetings, tasks).
 4. **Memos import** in V1 (including `#a/b` tags through the 2.6 shortcut)?
 5. **License.** AGPL-3.0 is proposed to protect a future hosted offer.

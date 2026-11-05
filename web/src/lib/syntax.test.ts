@@ -6,7 +6,7 @@ const northwind = "abcdefghijklmnopqrstuvwxyz"
 describe("syntax", () => {
   it("round-trips references through the editor", () => {
     const known = new Map<string, string>()
-    const value = toEditable({ text: `Call [[${northwind}]] #task` }, { [northwind]: { id: northwind, name: "Northwind", types: ["project"] } }, known)
+    const value = toEditable({ text: `Call [[${northwind}]] #task` }, { [northwind]: { id: northwind, name: "Northwind", label: "Northwind", types: ["project"] } }, known)
     expect(value).toBe("Call [[Northwind]] #task")
     expect(toInput(value + " [[Unknown]]", known)).toBe(`Call [[Northwind|${northwind}]] #task [[Unknown]]`)
   })

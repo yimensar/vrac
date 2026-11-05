@@ -270,6 +270,30 @@ func TestTypesStayWhereWritten(t *testing.T) {
 	}
 }
 
+// Any node can be referenced: completion finds meetings and tasks by their
+// words, and references carry a label keeping inner types.
+func TestCompletionFindsAnyNode(t *testing.T) {
+	e := newEngine(t)
+	write(t, e, "Northwind #project", "Bruno #person")
+	m := write(t, e, "#meeting with [[Bruno]] about [[Northwind]]")[0]
+	c, err := e.Resolve(ctx, "bruno northwind", 10)
+	if err != nil || len(c) != 1 || c[0].ID != m.ID {
+		t.Fatalf("candidates = %+v, %v", c, err)
+	}
+	if c[0].Label != "#meeting with Bruno about Northwind" || c[0].Name != "meeting with Bruno about Northwind" {
+		t.Fatalf("label = %q, name = %q", c[0].Label, c[0].Name)
+	}
+	// Named nodes still come first.
+	if c, _ := e.Resolve(ctx, "northwind", 10); c[0].Name != "Northwind" || c[0].Label != "Northwind" || len(c) != 2 {
+		t.Fatalf("northwind candidates = %+v", c)
+	}
+	ref := write(t, e, "see [["+m.ID+"]]")[0]
+	page, _ := e.Search(ctx, Query{Mentions: m.ID})
+	if r := page.Refs[m.ID]; len(page.Nodes) != 1 || page.Nodes[0].ID != ref.ID || r.Label != "#meeting with Bruno about Northwind" {
+		t.Fatalf("ref = %+v", r)
+	}
+}
+
 func TestSubProjectsAndRenames(t *testing.T) {
 	e := newEngine(t)
 	northwind := write(t, e, "Northwind #project")[0]
@@ -521,7 +545,7 @@ func TestMigrationWritesTypeTokens(t *testing.T) {
 	if c, _ := e.Resolve(ctx, "northwind", 1); len(c) != 1 || c[0].Name != "Northwind" {
 		t.Fatalf("resolve after migration = %+v", c)
 	}
-	backups, _ := filepath.Glob(path + ".pre-v2-*.backup")
+	backups, _ := filepath.Glob(path + ".v1-*.backup")
 	if len(backups) != 1 {
 		t.Fatalf("backups = %v", backups)
 	}

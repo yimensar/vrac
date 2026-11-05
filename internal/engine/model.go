@@ -73,8 +73,10 @@ type Node struct {
 
 // Ref describes a referenced node for display.
 type Ref struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Label is the name keeping the #type tokens written inside it.
+	Label   string   `json:"label"`
 	Types   []string `json:"types"`
 	Trashed bool     `json:"trashed,omitempty"`
 }
@@ -83,6 +85,7 @@ type Ref struct {
 type Brief struct {
 	ID    string   `json:"id"`
 	Name  string   `json:"name"`
+	Label string   `json:"label,omitempty"`
 	Types []string `json:"types"`
 	Path  []string `json:"path,omitempty"`
 }

@@ -160,10 +160,12 @@ func (e *Engine) refMap(ctx context.Context, q queryer, ids []string) (map[strin
 	for _, r := range refs {
 		list = append(list, r)
 	}
+	var labels []*string
 	for i := range list {
 		names = append(names, &list[i].Name)
+		labels = append(labels, &list[i].Label)
 	}
-	if err := e.resolveNames(ctx, q, names); err != nil {
+	if err := e.resolveNames(ctx, q, names, labels...); err != nil {
 		return nil, err
 	}
 	for _, r := range list {
@@ -173,8 +175,10 @@ func (e *Engine) refMap(ctx context.Context, q queryer, ids []string) (map[strin
 }
 
 // resolveNames turns canonical texts into names in place: references become
-// the names of their targets, one level deep, and types are removed.
-func (e *Engine) resolveNames(ctx context.Context, q queryer, names []*string) error {
+// the names of their targets, one level deep, and types are removed. When
+// labels[i] is not nil it receives the label: the same text keeping the
+// #type tokens written inside the sentence, for display.
+func (e *Engine) resolveNames(ctx context.Context, q queryer, names []*string, labels ...*string) error {
 	var ids []any
 	seen := map[string]bool{}
 	for _, n := range names {
@@ -204,13 +208,17 @@ func (e *Engine) resolveNames(ctx context.Context, q queryer, names []*string) e
 			return err
 		}
 	}
-	for _, n := range names {
-		*n = untyped(refTokenRe.ReplaceAllStringFunc(*n, func(tok string) string {
+	for i, n := range names {
+		label := labelOf(refTokenRe.ReplaceAllStringFunc(*n, func(tok string) string {
 			if t, ok := targets[tok[2:len(tok)-2]]; ok {
 				return t
 			}
 			return "…"
 		}))
+		if i < len(labels) && labels[i] != nil {
+			*labels[i] = label
+		}
+		*n = untyped(label)
 	}
 	return nil
 }
@@ -251,11 +259,17 @@ var typeTokenRe = regexp.MustCompile(`(^|\s)#([\p{L}\p{N}_-]+)`)
 
 var trailingTypesRe = regexp.MustCompile(`(\s*(^|\s)#[\p{L}\p{N}_-]+)+\s*$`)
 
+// labelOf drops the trailing type tokens of a text, which label the node,
+// and keeps those written inside the sentence.
+func labelOf(text string) string {
+	return strings.TrimSpace(trailingTypesRe.ReplaceAllString(text, ""))
+}
+
 // untyped is text as a name: trailing type tokens are dropped and inner
 // ones become plain words, so "Northwind #project" is named "Northwind" and "#meeting
 // with Alice" is named "meeting with Alice".
 func untyped(text string) string {
-	text = trailingTypesRe.ReplaceAllString(text, "")
+	text = labelOf(text)
 	return strings.TrimSpace(typeTokenRe.ReplaceAllString(text, "$1$2"))
 }
 
@@ -508,28 +522,54 @@ func (e *Engine) candidates(ctx context.Context, q queryer, name string, limit i
 		seq int64
 	}
 	var list []found
-	for rows.Next() {
-		var f found
-		var types string
-		if err := rows.Scan(&f.b.ID, &f.b.Name, &types, &f.seq); err != nil {
-			rows.Close()
-			return nil, err
+	seen := map[int64]bool{}
+	scan := func(rows *sql.Rows) error {
+		defer rows.Close()
+		for rows.Next() {
+			var f found
+			var types string
+			if err := rows.Scan(&f.b.ID, &f.b.Name, &types, &f.seq); err != nil {
+				return err
+			}
+			if seen[f.seq] {
+				continue
+			}
+			seen[f.seq] = true
+			f.b.Types = strings.Fields(types)
+			if f.b.Types == nil {
+				f.b.Types = []string{}
+			}
+			list = append(list, f)
 		}
-		f.b.Types = strings.Fields(types)
-		if f.b.Types == nil {
-			f.b.Types = []string{}
-		}
-		list = append(list, f)
+		return rows.Err()
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
+	if err := scan(rows); err != nil {
 		return nil, err
 	}
-	var names []*string
+	// Then any node whose words match, such as a meeting or a task, typed
+	// and recent ones first.
+	if match := ftsQuery(name); match != "" && len(list) < limit {
+		rows, err := q.QueryContext(ctx, `SELECT n.id, n.text, coalesce((SELECT group_concat(t.name, ' ') FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE nt.node_seq = n.seq), ''), n.seq
+			FROM search JOIN nodes n ON n.seq = search.rowid
+			WHERE search MATCH ? AND n.kind = 'node' AND n.trashed_at IS NULL AND n.text != ''
+			ORDER BY EXISTS (SELECT 1 FROM node_types WHERE node_seq = n.seq) DESC, n.updated_at DESC
+			LIMIT ?`, match, limit)
+		if err != nil {
+			return nil, err
+		}
+		if err := scan(rows); err != nil {
+			return nil, err
+		}
+		if len(list) > limit {
+			list = list[:limit]
+		}
+	}
+	var names, labels []*string
 	for i := range list {
 		names = append(names, &list[i].b.Name)
+		labels = append(labels, &list[i].b.Label)
 	}
-	if err := e.resolveNames(ctx, q, names); err != nil {
+	if err := e.resolveNames(ctx, q, names, labels...); err != nil {
 		return nil, err
 	}
 	out := make([]Brief, 0, len(list))

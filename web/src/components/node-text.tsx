@@ -19,7 +19,34 @@ export function TypeBadge({ name }: { name: string }) {
   )
 }
 
-/** A reference: a quiet link, so that only types carry color. */
+/** A label: plain words with #type tokens in their color. */
+export function Label({ text, types = [] }: { text: string; types?: string[] }) {
+  const all = useTypes()
+  const segs = segments(text)
+  const inline = new Set(segs.flatMap((s) => ("type" in s ? [s.type] : [])))
+  return (
+    <>
+      {segs.map((s, i) =>
+        "type" in s ? (
+          <span key={i} className={typeClass(all.get(s.type)?.color)}>
+            #{s.type}
+          </span>
+        ) : (
+          <span key={i}>{"text" in s ? s.text : ""}</span>
+        ),
+      )}
+      {types
+        .filter((t) => !inline.has(t))
+        .map((t) => (
+          <span key={t} className={cn("ml-1.5 text-xs", typeClass(all.get(t)?.color))}>
+            #{t}
+          </span>
+        ))}
+    </>
+  )
+}
+
+/** A reference: a quiet link showing the target's label. */
 export function RefChip({ id, refs }: { id: string; refs: Refs }) {
   const r = refs[id]
   return (
@@ -31,7 +58,7 @@ export function RefChip({ id, refs }: { id: string; refs: Refs }) {
         r?.trashed && "line-through opacity-60",
       )}
     >
-      {r?.name ?? "missing"}
+      {r ? <Label text={r.label || r.name} /> : "missing"}
     </Link>
   )
 }

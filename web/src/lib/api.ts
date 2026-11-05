@@ -24,10 +24,11 @@ export type Node = {
   ref_ids: string[]
 }
 
-export type Ref = { id: string; name: string; types: string[]; trashed?: boolean }
+/** name is plain; label keeps the #types written inside the sentence. */
+export type Ref = { id: string; name: string; label: string; types: string[]; trashed?: boolean }
 export type Refs = Record<string, Ref>
 export type Page = { nodes: Node[]; refs: Refs; next_cursor?: string }
-export type Brief = { id: string; name: string; types: string[]; path?: string[] }
+export type Brief = { id: string; name: string; label?: string; types: string[]; path?: string[] }
 export type Type = { name: string; builtin: boolean; color: string; count: number }
 export type Creation = { name: string; types?: string[] }
 export type Unresolved = { kind: "type" | "node"; name: string; candidates: Brief[] }

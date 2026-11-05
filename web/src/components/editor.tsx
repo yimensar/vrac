@@ -5,6 +5,7 @@ import { typeClass } from "@/lib/colors"
 import { useTypes } from "@/lib/hooks"
 import { replaceTrigger, trigger, type Known, type Trigger } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
+import { Label } from "./node-text"
 
 /** What the editor collected besides its text. */
 export type Intent = { known: Known; create: Creation[]; createTypes: string[] }
@@ -13,7 +14,9 @@ export function newIntent(known: Known = new Map()): Intent {
   return { known, create: [], createTypes: [] }
 }
 
-type Option = { key: string; label: string; hint?: string; color?: string; apply: () => void }
+/** A completion. Node names stay plain; their types and types themselves
+ * are shown in the type's color. */
+type Option = { key: string; label: string; types?: string[]; hint?: string; color?: string; rich?: boolean; apply: () => void }
 
 type Props = {
   value: string
@@ -83,9 +86,10 @@ export function Editor({ value, onChange, intent, onKey, onBlur, placeholder, au
       for (const c of found?.candidates ?? []) {
         options.push({
           key: c.id,
-          label: c.name,
-          hint: [...c.types.map((x) => "#" + x), ...(c.path?.length ? [c.path.slice(-2).join(" / ")] : [])].join("  "),
-          color: c.types[0] ? types.get(c.types[0])?.color : undefined,
+          label: c.label || c.name,
+          types: c.types,
+          rich: true,
+          hint: c.path?.filter((p) => p !== "Journal").slice(-2).join(" / "),
           apply: () => {
             intent.known.set(c.name.toLowerCase(), c.id)
             insert(t, `[[${c.name}]] `)
@@ -185,7 +189,7 @@ export function Editor({ value, onChange, intent, onKey, onBlur, placeholder, au
               onMouseEnter={() => setActive(i)}
               className={cn("flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-sm", i === index && "bg-accent")}
             >
-              <span className={cn("truncate rounded px-1", o.color && typeClass(o.color))}>{o.label}</span>
+              <span className={cn("min-w-0 truncate", o.color && typeClass(o.color))}>{o.rich ? <Label text={o.label} types={o.types} /> : o.label}</span>
               {o.hint && <span className="truncate text-xs text-muted-foreground">{o.hint}</span>}
             </button>
           ))}
