@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react"
 import { api, type Page, type Placement } from "@/lib/api"
 import { reportError } from "@/lib/hooks"
 import { NewRow, Row } from "./row"
@@ -48,11 +49,27 @@ export function Outline({ source, compose = true }: { source: Source; compose?: 
   }, [query.data, store])
   if (!query.data) return null
   return (
-    <div data-testid="outline">
+    <div data-testid="outline" className="group/outline relative">
+      {store.foldable && <Folding store={store} />}
       {store.root.map((k) => (
         <Row key={k} store={store} k={k} />
       ))}
       {compose && <NewRow store={store} />}
+    </div>
+  )
+}
+
+/** Expand all and collapse all, shown discreetly at the outline's corner. */
+function Folding({ store }: { store: OutlineStore }) {
+  const button = "flex size-6 items-center justify-center rounded text-muted-foreground/60 hover:bg-accent hover:text-foreground"
+  return (
+    <div className="absolute -top-6 right-0 flex gap-0.5 opacity-60 transition-opacity group-hover/outline:opacity-100">
+      <button type="button" className={button} aria-label="Expand all" title="Expand all" onClick={() => store.expandAll()}>
+        <ChevronsUpDownIcon className="size-3.5" />
+      </button>
+      <button type="button" className={button} aria-label="Collapse all" title="Collapse all" onClick={() => store.collapseAll()}>
+        <ChevronsDownUpIcon className="size-3.5" />
+      </button>
     </div>
   )
 }

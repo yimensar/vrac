@@ -449,6 +449,44 @@ export class OutlineStore {
     })
   }
 
+  /** True when some row has children. */
+  get foldable() {
+    return [...this.entries.values()].some((e) => (e.children?.length ?? e.node?.child_count ?? 0) > 0)
+  }
+
+  /** Expands every row, loading children level by level. */
+  async expandAll() {
+    let level = this.childrenOf(ROOT)
+    while (level.length > 0) {
+      const next: string[] = []
+      await Promise.all(
+        level.map(async (k) => {
+          const e = this.entry(k)
+          if ((e.children?.length ?? e.node?.child_count ?? 0) === 0) return
+          e.expanded = true
+          await this.ensureChildren(e)
+          next.push(...(e.children ?? []))
+        }),
+      )
+      this.emit()
+      level = next
+    }
+  }
+
+  /** Collapses every row; the edited one stays visible. */
+  collapseAll() {
+    const editing = this.editing?.key
+    for (const e of this.entries.values()) e.expanded = false
+    // Keep the path to the edited row open.
+    for (let k = editing; k && k !== GHOST && k !== ROOT; ) {
+      const e = this.entries.get(k)
+      if (!e) break
+      if (e.parent !== ROOT) this.entry(e.parent).expanded = true
+      k = e.parent
+    }
+    this.emit()
+  }
+
   async toggle(key: string) {
     const e = this.entry(key)
     e.expanded = !e.expanded

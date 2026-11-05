@@ -123,6 +123,24 @@ describe("outline store", () => {
     expect(server.calls.filter((c) => c.method === "PATCH")).toHaveLength(1)
   })
 
+  it("expands and collapses everything", async () => {
+    const s = await tree()
+    capture(s, "a")
+    capture(s, "b")
+    capture(s, "c")
+    await s.settled()
+    await s.indent(keyOf(s, "b"), 0)
+    await s.indent(keyOf(s, "c"), 0)
+    await s.indent(keyOf(s, "c"), 0)
+    await s.settled()
+    // A fresh store shows the saved tree; folding works on loaded data.
+    const fresh = await tree()
+    fresh.collapseAll()
+    expect(fresh.visible().map((k) => fresh.text(k))).toEqual(["a"])
+    await fresh.expandAll()
+    expect(fresh.visible().map((k) => fresh.text(k))).toEqual(["a", "b", "c"])
+  })
+
   it("keeps a list's rows in place and writes inside them", async () => {
     const t = await tree()
     capture(t, "a result")
