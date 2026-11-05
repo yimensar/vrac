@@ -106,6 +106,8 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/v1/types/{name}", s.api(s.typeView))
 	m.HandleFunc("GET /api/v1/activity", s.api(s.activity))
 	m.HandleFunc("GET /api/v1/export", s.api(s.export))
+	m.HandleFunc("GET /api/v1/preferences", s.api(s.preferences))
+	m.HandleFunc("PUT /api/v1/preferences", s.api(s.setPreferences))
 	m.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "not_found", "unknown endpoint")
 	})

@@ -202,3 +202,17 @@ func (s *Server) export(w http.ResponseWriter, r *http.Request, p principal) {
 		s.log.Error("export failed", "error", err)
 	}
 }
+
+func (s *Server) preferences(w http.ResponseWriter, r *http.Request, p principal) {
+	v, err := s.engine.Preferences(r.Context())
+	respond(w, v, err)
+}
+
+func (s *Server) setPreferences(w http.ResponseWriter, r *http.Request, p principal) {
+	var b engine.Preferences
+	if !decode(w, r, &b) {
+		return
+	}
+	v, err := s.engine.SetPreferences(r.Context(), b)
+	respond(w, v, err)
+}

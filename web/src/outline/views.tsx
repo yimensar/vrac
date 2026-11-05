@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react"
-import { api, type Page, type Placement } from "@/lib/api"
+import { api, current, type Page, type Placement } from "@/lib/api"
 import { reportError } from "@/lib/hooks"
 import { NewRow, Row } from "./row"
 import { OutlineStore } from "./store"
@@ -10,6 +10,7 @@ export type Source = { day: string } | { node: string }
 
 function useStore(mode: "tree" | "list", id: string, placement: Placement, reload: () => Promise<{ page: Page; rootId?: string } | undefined>) {
   const client = useQueryClient()
+  const { fold } = current
   const reloadRef = useRef(reload)
   reloadRef.current = reload
   const store = useMemo(() => {
@@ -21,10 +22,10 @@ function useStore(mode: "tree" | "list", id: string, placement: Placement, reloa
         const r = await reloadRef.current()
         if (r) s.load(r.page, r.rootId, true)
       },
-    })
+    }, fold)
     return s
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id, fold])
   useSyncExternalStore(store.subscribe, store.snapshot)
   return store
 }

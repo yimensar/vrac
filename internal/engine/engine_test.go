@@ -606,3 +606,23 @@ func TestTypesAlwaysAppearInText(t *testing.T) {
 		t.Fatalf("update = %+v, %v", up.Nodes, err)
 	}
 }
+
+func TestPreferences(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "vrac.sqlite")
+	e := open(t, path)
+	if p, err := e.Preferences(ctx); err != nil || p != DefaultPreferences {
+		t.Fatalf("defaults = %+v, %v", p, err)
+	}
+	if _, err := e.SetPreferences(ctx, Preferences{Fold: "sideways", Theme: "dark"}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("invalid fold accepted: %v", err)
+	}
+	want := Preferences{Fold: "collapsed", Theme: "dark", ParseDates: false}
+	if _, err := e.SetPreferences(ctx, want); err != nil {
+		t.Fatal(err)
+	}
+	e.Close()
+	e = open(t, path)
+	if p, _ := e.Preferences(ctx); p != want {
+		t.Fatalf("reopened preferences = %+v", p)
+	}
+}

@@ -43,6 +43,11 @@ export type TypeView = { type: Type; rows: TypeRow[]; refs: Refs }
 export type Activity = { node: Brief; revision: number; action: string; at: string; actor: string; source: string; latest: boolean }
 export type Connection = { id: string; kind: "token" | "client"; name: string; created_at: string; last_used_at?: string }
 export type Result = { nodes: Node[]; refs: Refs; created?: Brief[] }
+export type Fold = "default" | "expanded" | "collapsed"
+export type Preferences = { fold: Fold; theme: "system" | "light" | "dark"; parse_dates: boolean }
+
+/** The preferences in effect, kept current by the app (see preferences.ts). */
+export const current: Preferences = { fold: "default", theme: "system", parse_dates: true }
 
 export type Query = {
   text?: string
@@ -115,15 +120,18 @@ export const api = {
   activity: (cursor?: string) => request<{ items: Activity[]; next_cursor?: string }>("GET", "/api/v1/activity" + q({ cursor })),
 
   create: (body: { placement?: Placement; nodes: { input: string; due?: string; start?: string }[]; create?: Creation[]; create_types?: string[]; parse_dates?: boolean }) =>
-    request<Result>("POST", "/api/v1/nodes", { request_id: requestId(), parse_dates: true, ...body }),
+    request<Result>("POST", "/api/v1/nodes", { request_id: requestId(), parse_dates: current.parse_dates, ...body }),
   update: (
     node: Node,
     change: { input?: string; status?: string; due?: string; start?: string; end?: string; aliases?: string[]; create?: Creation[]; create_types?: string[] },
-  ) => request<Result>("PATCH", `/api/v1/nodes/${node.id}`, { request_id: requestId(), expected_revision: node.revision, parse_dates: true, ...change }),
+  ) => request<Result>("PATCH", `/api/v1/nodes/${node.id}`, { request_id: requestId(), expected_revision: node.revision, parse_dates: current.parse_dates, ...change }),
   move: (node: Node, placement: Placement) =>
     request<Result>("POST", `/api/v1/nodes/${node.id}/move`, { request_id: requestId(), expected_revision: node.revision, placement }),
   trash: (node: Node) => request<Result>("POST", `/api/v1/nodes/${node.id}/trash`, { request_id: requestId(), expected_revision: node.revision }),
   undo: (id: string, revision: number) => request<Result>("POST", `/api/v1/nodes/${id}/undo`, { request_id: requestId(), expected_revision: revision }),
+
+  preferences: () => request<Preferences>("GET", "/api/v1/preferences"),
+  setPreferences: (p: Preferences) => request<Preferences>("PUT", "/api/v1/preferences", p),
 
   connections: () => request<{ connections: Connection[] }>("GET", "/api/v1/connections"),
   createToken: (name: string) => request<{ token: string }>("POST", "/api/v1/tokens", { name }),

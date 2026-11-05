@@ -273,6 +273,12 @@ The agenda and upcoming sections show only meetings and events with an
 explicit date; a meeting noted in the journal without a time is not
 scheduled.
 
+Preferences live on the server, so they follow the owner across devices:
+how outlines open (projects and people collapsed, everything expanded or
+everything collapsed), the theme (system, light, dark) and whether typed
+dates become fields. Each outline can also be expanded or collapsed at
+once.
+
 ## 6. MCP
 
 Streamable HTTP at `/mcp`. Server instructions explain Vrac's conventions to

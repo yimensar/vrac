@@ -8,7 +8,9 @@ import { reportError, useRefresh } from "@/lib/hooks"
 import { formatStamp } from "@/lib/syntax"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PageTitle, Section } from "@/components/page"
+import { usePreferences, useSetPreferences } from "@/lib/preferences"
 
 export function SettingsPage() {
   const refresh = useRefresh()
@@ -23,6 +25,9 @@ export function SettingsPage() {
   return (
     <>
       <PageTitle>Settings</PageTitle>
+      <Section title="Preferences">
+        <PreferencesForm />
+      </Section>
       <Section title="Connect an AI">
         <p className="mb-2 text-sm text-muted-foreground">
           Add Vrac as a custom connector (MCP) in Claude, ChatGPT or any MCP client with this URL. You approve the connection here.
@@ -135,3 +140,67 @@ export function SettingsPage() {
   )
 }
 
+
+function Choice<T extends string>({ label, hint, value, options, onChange }: { label: string; hint: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+      <div>
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-sm text-muted-foreground">{hint}</div>
+      </div>
+      <Select value={value} onValueChange={(v) => onChange(v as T)}>
+        <SelectTrigger className="w-56" aria-label={label}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map(([v, text]) => (
+            <SelectItem key={v} value={v}>
+              {text}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
+function PreferencesForm() {
+  const p = usePreferences()
+  const set = useSetPreferences()
+  return (
+    <div className="max-w-2xl divide-y">
+      <Choice
+        label="Outlines open"
+        hint="How rows appear when a day or a page opens."
+        value={p.fold}
+        options={[
+          ["default", "Projects and people collapsed"],
+          ["expanded", "Everything expanded"],
+          ["collapsed", "Everything collapsed"],
+        ]}
+        onChange={(fold) => set({ fold })}
+      />
+      <Choice
+        label="Theme"
+        hint="Follow the system or choose one."
+        value={p.theme}
+        options={[
+          ["system", "System"],
+          ["light", "Light"],
+          ["dark", "Dark"],
+        ]}
+        onChange={(theme) => set({ theme })}
+      />
+      <Choice
+        label="Typed dates"
+        hint="“Friday” or “14h” in a task or meeting sets its due date or time."
+        value={p.parse_dates ? "on" : "off"}
+        options={[
+          ["on", "Convert into dates"],
+          ["off", "Keep as text"],
+        ]}
+        onChange={(v) => set({ parse_dates: v === "on" })}
+      />
+    </div>
+  )
+}

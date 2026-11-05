@@ -1,4 +1,4 @@
-import { ApiError, api, type Creation, type Node, type Page, type Placement, type Refs } from "@/lib/api"
+import { ApiError, api, type Creation, type Fold, type Node, type Page, type Placement, type Refs } from "@/lib/api"
 import { nodeInput } from "@/lib/syntax"
 
 // The state of rows being edited. Changes apply locally at once and reach
@@ -58,6 +58,8 @@ export class OutlineStore {
     /** Where top-level rows of a tree go while its container may not exist. */
     readonly placement: Placement,
     private callbacks: Callbacks,
+    /** How rows open: see the fold preference. */
+    readonly fold: Fold = "default",
   ) {}
 
   // React integration.
@@ -96,7 +98,7 @@ export class OutlineStore {
     return page.nodes.map((n) => {
       // A list may show a node twice; keys stay unique.
       const key = this.entries.has(n.id) ? `${n.id}-${++tmp}` : n.id
-      const expanded = this.mode === "tree" && !n.types.some((t) => collapsed.has(t))
+      const expanded = this.fold === "expanded" || (this.fold === "default" && this.mode === "tree" && !n.types.some((t) => collapsed.has(t)))
       const e: Entry = { key, id: n.id, node: n, parent, expanded, create: [], createTypes: [] }
       this.entries.set(key, e)
       if (expanded && n.child_count > 0) this.loadChildren(e)

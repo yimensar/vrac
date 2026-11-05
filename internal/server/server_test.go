@@ -282,3 +282,16 @@ func TestResetPassword(t *testing.T) {
 	h.call("POST", "/api/v1/login", map[string]string{"password": "correct horse battery"}, http.StatusUnauthorized)
 	h.call("POST", "/api/v1/login", map[string]string{"password": "a brand new password"}, 200)
 }
+
+func TestPreferencesAPI(t *testing.T) {
+	h := newHarness(t)
+	h.call("POST", "/api/v1/setup", map[string]string{"password": "correct horse battery"}, 200)
+	if p := h.call("GET", "/api/v1/preferences", nil, 200); p["fold"] != "default" || p["parse_dates"] != true {
+		t.Fatalf("defaults = %v", p)
+	}
+	h.call("PUT", "/api/v1/preferences", map[string]any{"fold": "nope", "theme": "dark", "parse_dates": true}, http.StatusBadRequest)
+	h.call("PUT", "/api/v1/preferences", map[string]any{"fold": "collapsed", "theme": "dark", "parse_dates": false}, 200)
+	if p := h.call("GET", "/api/v1/preferences", nil, 200); p["fold"] != "collapsed" || p["theme"] != "dark" || p["parse_dates"] != false {
+		t.Fatalf("stored = %v", p)
+	}
+}

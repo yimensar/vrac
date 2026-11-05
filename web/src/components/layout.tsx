@@ -23,6 +23,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { useTypes } from "@/lib/hooks"
 import { Content } from "@/outline/content"
 import { setTypes } from "@/editor/schema"
+import { usePreferences } from "@/lib/preferences"
 
 const nav = [
   { to: "/", label: "Today", icon: SunIcon, end: true },
@@ -62,6 +63,8 @@ export function Layout() {
   const [palette, setPalette] = useState(false)
   // Editor atoms render outside React and need the type colors.
   const types = useTypes()
+  // A new fold preference reopens the page with it.
+  const preferences = usePreferences()
   useEffect(() => setTypes(new Map([...types.values()].map((t) => [t.name, t.color]))), [types])
   const [menu, setMenu] = useState(false)
   useEffect(() => {
@@ -103,7 +106,7 @@ export function Layout() {
           </Sheet>
           <div className="flex-1">{searchButton}</div>
         </header>
-        <main className="mx-auto w-full max-w-5xl px-4 py-6 md:px-8">
+        <main key={preferences.fold} className="mx-auto w-full max-w-5xl px-4 py-6 md:px-8">
           <Outlet />
         </main>
       </div>

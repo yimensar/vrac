@@ -133,6 +133,14 @@ describe("outline store", () => {
     await s.indent(keyOf(s, "c"), 0)
     await s.indent(keyOf(s, "c"), 0)
     await s.settled()
+    // The fold preference decides how a store opens.
+    const d = await api.day("2026-11-05")
+    const closed = new OutlineStore("tree", { day: "2026-11-05" }, { onError: (e) => errors.push(e), onSaved: () => {}, reload: () => {} }, "collapsed")
+    closed.load(d.children, d.node?.id)
+    expect(closed.visible().map((k) => closed.text(k))).toEqual(["a"])
+    const open = new OutlineStore("list", {}, { onError: (e) => errors.push(e), onSaved: () => {}, reload: () => {} }, "expanded")
+    open.load(d.children)
+    await vi.waitFor(() => expect(open.visible().map((k) => open.text(k))).toEqual(["a", "b", "c"]))
     // A fresh store shows the saved tree; folding works on loaded data.
     const fresh = await tree()
     fresh.collapseAll()
