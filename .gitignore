@@ -1,0 +1,14 @@
+.DS_Store
+/.direnv/
+/bin/
+/data/
+/result
+/result-*
+/tmp/
+/web/node_modules/
+/web/dist/*
+!/web/dist/.keep
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+/web/.vite/
