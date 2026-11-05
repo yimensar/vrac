@@ -197,7 +197,14 @@ func serve(e *engine.Engine, c config, loc *time.Location) error {
 		return err
 	case <-ctx.Done():
 	}
-	shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// A second Ctrl+C now ends the process at once.
+	stop()
+	log.Info("shutting down")
+	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	return h.Shutdown(shutdown)
+	if err := h.Shutdown(shutdown); err != nil {
+		// Open streams (such as MCP clients) do not delay the exit further.
+		return h.Close()
+	}
+	return nil
 }
