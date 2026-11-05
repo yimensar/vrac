@@ -3,7 +3,8 @@ import { Link } from "react-router"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ChevronRightIcon } from "lucide-react"
 import { api, type Node, type Page, type Placement, type Refs } from "@/lib/api"
-import { reportError, useRefresh } from "@/lib/hooks"
+import { dotClass } from "@/lib/colors"
+import { reportError, useRefresh, useTypes } from "@/lib/hooks"
 import { GHOST, OutlineStore } from "@/lib/outline-store"
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -115,6 +116,7 @@ function Row({ store, k }: { store: OutlineStore; k: string }) {
   const types = node?.types ?? []
   const isTask = types.includes("task")
   const hasChildren = (e.children?.length ?? node?.child_count ?? 0) > 0
+  const color = useTypes().get(types[0])?.color
   return (
     <div>
       <div className="group flex items-start">
@@ -129,11 +131,11 @@ function Row({ store, k }: { store: OutlineStore; k: string }) {
         </button>
         {e.id ? (
           <Link to={`/node/${e.id}`} tabIndex={-1} aria-label="Zoom in" className="flex h-6 w-4 shrink-0 items-center justify-center">
-            <Bullet folded={hasChildren && !e.expanded} />
+            <Bullet folded={hasChildren && !e.expanded} color={color} />
           </Link>
         ) : (
           <span className="flex h-6 w-4 shrink-0 items-center justify-center">
-            <Bullet folded={false} />
+            <Bullet folded={false} color={color} />
           </span>
         )}
         {isTask && (
@@ -200,8 +202,17 @@ function Ghost({ store, placeholder }: { store: OutlineStore; placeholder?: stri
   )
 }
 
-function Bullet({ folded }: { folded: boolean }) {
-  return <span className={cn("size-1.5 rounded-full bg-foreground/70 transition-transform group-hover:scale-125", folded && "ring-[3px] ring-muted-foreground/30")} />
+function Bullet({ folded, color }: { folded: boolean; color?: string }) {
+  return (
+    <span
+      className={cn(
+        "rounded-full transition-transform group-hover:scale-125",
+        color ? "size-2" : "size-1.5",
+        dotClass(color),
+        folded && "ring-[3px] ring-muted-foreground/30",
+      )}
+    />
+  )
 }
 
 /** Unsaved text, shown with the same tokens as the editor. */
@@ -238,13 +249,14 @@ export function Item({ node, refs, showParent = true }: { node: Node; refs: Refs
     }
   }
   const parent = node.parent_id ? refs[node.parent_id] : undefined
+  const color = useTypes().get(node.types[0])?.color
   return (
     <div className="flex items-start gap-2 py-0.5">
       <span className="flex h-6 w-4 shrink-0 items-center justify-center">
         {node.types.includes("task") ? (
           <Checkbox checked={node.status === "done"} onCheckedChange={toggle} aria-label="Done" className="size-3.5" />
         ) : (
-          <span className="size-1.5 rounded-full bg-foreground/60" />
+          <span className={cn("rounded-full", color ? "size-2" : "size-1.5", dotClass(color))} />
         )}
       </span>
       <div className="min-w-0 flex-1 leading-6">

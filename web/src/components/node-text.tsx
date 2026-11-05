@@ -19,17 +19,15 @@ export function TypeBadge({ name }: { name: string }) {
   )
 }
 
+/** A reference: a quiet link, so that only types carry color. */
 export function RefChip({ id, refs }: { id: string; refs: Refs }) {
   const r = refs[id]
-  const types = useTypes()
-  const color = r?.types[0] ? types.get(r.types[0])?.color : undefined
   return (
     <Link
       to={`/node/${id}`}
       onClick={(e) => e.stopPropagation()}
       className={cn(
-        "rounded px-1 font-medium underline-offset-2 hover:underline",
-        color ? typeClass(color) : "text-primary underline decoration-muted-foreground/40",
+        "font-medium underline decoration-muted-foreground/40 underline-offset-[3px] hover:decoration-foreground",
         r?.trashed && "line-through opacity-60",
       )}
     >

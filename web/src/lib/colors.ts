@@ -17,3 +17,23 @@ const colors: Record<string, string> = {
 export function typeClass(color: string | undefined): string {
   return colors[color ?? ""] ?? "bg-muted text-muted-foreground"
 }
+
+const dots: Record<string, string> = {
+  blue: "bg-blue-500",
+  violet: "bg-violet-500",
+  amber: "bg-amber-500",
+  emerald: "bg-emerald-500",
+  rose: "bg-rose-500",
+  cyan: "bg-cyan-500",
+  lime: "bg-lime-500",
+  orange: "bg-orange-500",
+  fuchsia: "bg-fuchsia-500",
+  teal: "bg-teal-500",
+  sky: "bg-sky-500",
+  pink: "bg-pink-500",
+}
+
+/** The bullet of a typed node. */
+export function dotClass(color: string | undefined): string {
+  return dots[color ?? ""] ?? "bg-foreground/70"
+}
