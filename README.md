@@ -79,7 +79,8 @@ The [`vrac` skill](skills/vrac/SKILL.md) tells the AI when and how to write.
 | `-timezone` | `VRAC_TIMEZONE` | system time zone |
 
 Maintenance: `vrac backup PATH`, `vrac export [PATH]`, `vrac import PATH`
-(into an empty instance), `vrac check`.
+(into an empty instance), `vrac check`, `vrac password` (set the owner
+password if it is lost; it signs out every browser).
 
 ## License
 

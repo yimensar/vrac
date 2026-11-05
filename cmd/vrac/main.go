@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -14,6 +15,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/term"
 
 	"github.com/yan-imensar/vrac/internal/engine"
 	"github.com/yan-imensar/vrac/internal/server"
@@ -30,6 +33,7 @@ Commands:
   export [PATH]    write a JSON export (stdout by default)
   import PATH      load a JSON export into an empty workspace
   check            run integrity checks
+  password         set the owner password (signs out every browser)
   version          print the version
 
 Configuration (flags override environment):
@@ -123,6 +127,16 @@ func run(args []string) error {
 		}
 		defer f.Close()
 		return e.Import(context.Background(), f)
+	case "password":
+		password, err := readPassword()
+		if err != nil {
+			return err
+		}
+		if err := server.ResetPassword(context.Background(), e, password); err != nil {
+			return err
+		}
+		fmt.Println("password changed; sign in again")
+		return nil
 	case "check":
 		if err := e.Check(); err != nil {
 			return err
@@ -131,6 +145,35 @@ func run(args []string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown command %q", cmd)
+}
+
+// readPassword asks twice without echo on a terminal, or reads one line
+// from standard input otherwise.
+func readPassword() (string, error) {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil && line == "" {
+			return "", err
+		}
+		return strings.TrimRight(line, "\r\n"), nil
+	}
+	fmt.Fprint(os.Stderr, "New password: ")
+	first, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", err
+	}
+	fmt.Fprint(os.Stderr, "Repeat: ")
+	second, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", err
+	}
+	if string(first) != string(second) {
+		return "", errors.New("the passwords differ")
+	}
+	return string(first), nil
 }
 
 func serve(e *engine.Engine, c config, loc *time.Location) error {

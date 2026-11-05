@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -307,4 +308,20 @@ func (s *Server) revoke(w http.ResponseWriter, r *http.Request, p principal) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"revoked": true})
+}
+
+// ResetPassword sets the owner's password from the command line, creating
+// the owner if needed, and ends every browser session.
+func ResetPassword(ctx context.Context, e *engine.Engine, password string) error {
+	if len(password) < minPassword {
+		return fmt.Errorf("the password needs at least %d characters", minPassword)
+	}
+	owner, err := e.HasOwner(ctx)
+	if err != nil {
+		return err
+	}
+	if !owner {
+		return e.CreateOwner(ctx, hashPassword(password))
+	}
+	return e.SetOwnerPassword(ctx, hashPassword(password))
 }

@@ -24,9 +24,10 @@ import (
 )
 
 type harness struct {
-	t   *testing.T
-	srv *httptest.Server
-	web *http.Client
+	t      *testing.T
+	srv    *httptest.Server
+	web    *http.Client
+	engine *engine.Engine
 }
 
 func newHarness(t *testing.T) *harness {
@@ -41,7 +42,7 @@ func newHarnessWith(t *testing.T, web fs.FS) *harness {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { e.Close() })
-	h := &harness{t: t}
+	h := &harness{t: t, engine: e}
 	var handler http.Handler
 	h.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
 	t.Cleanup(h.srv.Close)
@@ -265,4 +266,19 @@ func TestServesTheSinglePageApp(t *testing.T) {
 	if res, _ := http.Post(h.srv.URL+"/somewhere", "text/plain", nil); res.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("POST to the app = %d", res.StatusCode)
 	}
+}
+
+func TestResetPassword(t *testing.T) {
+	h := newHarness(t)
+	h.call("POST", "/api/v1/setup", map[string]string{"password": "correct horse battery"}, 200)
+	e := h.engine
+	if err := ResetPassword(context.Background(), e, "short"); err == nil {
+		t.Fatal("short password accepted")
+	}
+	if err := ResetPassword(context.Background(), e, "a brand new password"); err != nil {
+		t.Fatal(err)
+	}
+	h.call("GET", "/api/v1/today", nil, http.StatusUnauthorized)
+	h.call("POST", "/api/v1/login", map[string]string{"password": "correct horse battery"}, http.StatusUnauthorized)
+	h.call("POST", "/api/v1/login", map[string]string{"password": "a brand new password"}, 200)
 }
