@@ -34,7 +34,7 @@
           pname = "vrac-web";
           inherit version;
           src = clean ./web;
-          npmDepsHash = "sha256-kAk2+kFiMWonu+dETvANOAAhcd1S8fWtpIPbs6u3nME=";
+          npmDepsHash = "3.";
           installPhase = ''
             runHook preInstall
             cp -r dist $out

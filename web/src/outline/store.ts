@@ -1,10 +1,14 @@
-import { ApiError, api, type Creation, type Node, type Page, type Placement, type Refs } from "./api"
-import { toEditable, toInput, type Known } from "./syntax"
+import { ApiError, api, type Creation, type Node, type Page, type Placement, type Refs } from "@/lib/api"
+import { nodeInput } from "@/lib/syntax"
 
-// The state of one outline being edited. Changes apply locally at once and
-// are sent to the server through one serial queue, so typing never waits for
-// the network and the outline never reloads under the caret. Each row has a
-// local key that never changes, even when a new row receives its server ID.
+// The state of rows being edited. Changes apply locally at once and reach
+// the server through one serial queue, so typing never waits for the
+// network and rows never reload under the caret. Each row has a local key
+// that never changes, even when a new row receives its server ID.
+//
+// A tree store holds an outline: a journal day or a node's children. A list
+// store holds unrelated nodes, such as search results; its top rows cannot
+// be reordered, but their children are a normal outline.
 
 export const ROOT = "root"
 export const GHOST = "ghost"
@@ -17,16 +21,19 @@ export type Entry = {
   /** Child keys in order; undefined until loaded. */
   children?: string[]
   expanded: boolean
-  /** Editable text when it differs from the saved node. */
+  /** Input text when it differs from the saved node. */
   draft?: string
-  known: Known
+  /** Names this row asked to create, sent with its next save. */
   create: Creation[]
   createTypes: string[]
 }
 
+/** Which row is edited, and where its caret goes (an input offset). */
 export type Editing = { key: string; caret: number; seq: number }
 
 type Callbacks = { onError: (err: unknown) => void; onSaved: () => void; reload: () => void }
+
+export const END = Number.MAX_SAFE_INTEGER
 
 // Entities are collapsed by default: their content is on their own page.
 const collapsed = new Set(["project", "person"])
@@ -39,7 +46,7 @@ export class OutlineStore {
   refs: Refs = {}
   rootId?: string
   editing: Editing | null = null
-  ghost = { text: "", known: new Map() as Known, create: [] as Creation[], createTypes: [] as string[] }
+  ghost = { text: "", create: [] as Creation[], createTypes: [] as string[] }
   private queue: Promise<void> = Promise.resolve()
   private pending = 0
   private listeners = new Set<() => void>()
@@ -47,7 +54,8 @@ export class OutlineStore {
   private seq = 0
 
   constructor(
-    /** Where top-level nodes go while the container may not exist yet. */
+    readonly mode: "tree" | "list",
+    /** Where top-level rows of a tree go while its container may not exist. */
     readonly placement: Placement,
     private callbacks: Callbacks,
   ) {}
@@ -61,6 +69,11 @@ export class OutlineStore {
   private emit() {
     this.version++
     for (const l of this.listeners) l()
+  }
+
+  /** Resolves once every queued change has reached the server. */
+  async settled() {
+    while (this.pending > 0) await this.queue
   }
 
   /** True while local changes are not saved yet. */
@@ -81,10 +94,13 @@ export class OutlineStore {
   private insertPage(page: Page, parent: string): string[] {
     Object.assign(this.refs, page.refs)
     return page.nodes.map((n) => {
-      const e: Entry = { key: n.id, id: n.id, node: n, parent, expanded: !n.types.some((t) => collapsed.has(t)), known: new Map(), create: [], createTypes: [] }
-      this.entries.set(e.key, e)
-      if (e.expanded && n.child_count > 0) this.loadChildren(e)
-      return e.key
+      // A list may show a node twice; keys stay unique.
+      const key = this.entries.has(n.id) ? `${n.id}-${++tmp}` : n.id
+      const expanded = this.mode === "tree" && !n.types.some((t) => collapsed.has(t))
+      const e: Entry = { key, id: n.id, node: n, parent, expanded, create: [], createTypes: [] }
+      this.entries.set(key, e)
+      if (expanded && n.child_count > 0) this.loadChildren(e)
+      return key
     })
   }
 
@@ -102,7 +118,7 @@ export class OutlineStore {
     }
   }
 
-  async ensureChildren(e: Entry) {
+  private async ensureChildren(e: Entry) {
     if (e.children !== undefined) return
     if (!e.node || e.node.child_count === 0) {
       e.children = []
@@ -115,7 +131,7 @@ export class OutlineStore {
   childrenOf(key: string): string[] {
     return key === ROOT ? this.root : (this.entries.get(key)?.children ?? [])
   }
-  setChildren(key: string, list: string[]) {
+  private setChildren(key: string, list: string[]) {
     if (key === ROOT) this.root = list
     else this.entries.get(key)!.children = list
   }
@@ -135,15 +151,20 @@ export class OutlineStore {
     walk(this.root)
     return out
   }
-  /** The editable text of a row: its draft or its saved text. */
-  text(e: Entry): string {
+  /** The input text of a row: its draft or its saved text. */
+  text(key: string): string {
+    if (key === GHOST) return this.ghost.text
+    const e = this.entry(key)
     if (e.draft !== undefined) return e.draft
-    if (!e.node) return ""
-    return toEditable(e.node, this.refs, e.known)
+    return e.node ? nodeInput(e.node, this.refs) : ""
+  }
+  /** True for top rows of a list, which belong to other outlines. */
+  private fixed(key: string) {
+    return this.mode === "list" && this.entry(key).parent === ROOT
   }
 
   // Focus.
-  focus(key: string, caret = Number.MAX_SAFE_INTEGER) {
+  focus(key: string, caret = END) {
     this.editing = { key, caret, seq: ++this.seq }
     this.emit()
   }
@@ -156,14 +177,22 @@ export class OutlineStore {
 
   // Editing.
   setText(key: string, value: string) {
-    if (key === GHOST) {
-      this.ghost.text = value
-    } else {
+    if (key === GHOST) this.ghost.text = value
+    else {
       const e = this.entry(key)
-      const saved = e.node ? toEditable(e.node, this.refs, e.known) : ""
-      e.draft = value === saved ? undefined : value
+      e.draft = e.node && value === nodeInput(e.node, this.refs) ? undefined : value
     }
     this.emit()
+  }
+
+  /** Remembers names to create with the row's next save. */
+  intend(key: string, create?: Creation, type?: string) {
+    const target = key === GHOST ? this.ghost : this.entry(key)
+    if (create) {
+      target.create = target.create.filter((c) => c.name.toLowerCase() !== create.name.toLowerCase())
+      target.create.push(create)
+    }
+    if (type && !target.createTypes.includes(type)) target.createTypes.push(type)
   }
 
   /** Saves a row's draft. */
@@ -176,7 +205,7 @@ export class OutlineStore {
       const create = e.create.splice(0)
       const createTypes = e.createTypes.splice(0)
       try {
-        const res = await api.update(e.node, { input: toInput(sent.trim(), e.known), create, create_types: createTypes })
+        const res = await api.update(e.node, { input: sent.trim(), create, create_types: createTypes })
         this.accept(e, res.nodes[0], res.refs)
         if (e.draft === sent) e.draft = undefined
       } catch (err) {
@@ -197,29 +226,26 @@ export class OutlineStore {
     Object.assign(this.refs, refs)
     e.node = node
     e.id = node.id
-    if (!this.rootId && e.parent === ROOT && node.parent_id) this.rootId = node.parent_id
+    if (!this.rootId && this.mode === "tree" && e.parent === ROOT && node.parent_id) this.rootId = node.parent_id
   }
 
   private idOf(key: string): string | undefined {
     return this.entries.get(key)?.id
   }
 
-  /** Placement of a child of parent, after the nearest saved previous sibling. */
-  private placementIn(parent: string, before: string[]): Placement {
+  /** Placement of a row, after the nearest saved previous sibling. */
+  private placementOf(key: string): Placement {
+    const e = this.entry(key)
+    const siblings = this.childrenOf(e.parent)
     let base: Placement
-    if (parent === ROOT) base = this.rootId ? { parent_id: this.rootId } : { ...this.placement }
-    else base = { parent_id: this.idOf(parent) }
+    if (e.parent === ROOT) base = this.rootId ? { parent_id: this.rootId } : { ...this.placement }
+    else base = { parent_id: this.idOf(e.parent) }
+    const before = siblings.slice(0, siblings.indexOf(key))
     for (let i = before.length - 1; i >= 0; i--) {
       const id = this.idOf(before[i])
       if (id) return { ...base, after_id: id }
     }
     return { ...base, first: true }
-  }
-
-  private placementOf(key: string): Placement {
-    const e = this.entry(key)
-    const siblings = this.childrenOf(e.parent)
-    return this.placementIn(e.parent, siblings.slice(0, siblings.indexOf(key)))
   }
 
   private enqueue(op: () => Promise<void>) {
@@ -245,9 +271,9 @@ export class OutlineStore {
   }
 
   /** Inserts a new local row and creates it on the server. */
-  private insert(parent: string, index: number, text: string, known: Known = new Map(), create: Creation[] = [], createTypes: string[] = []): string {
+  private insert(parent: string, index: number, text: string, create: Creation[] = [], createTypes: string[] = []): string {
     const key = `tmp-${++tmp}`
-    const e: Entry = { key, parent, children: [], expanded: true, draft: text === "" ? undefined : text, known, create, createTypes }
+    const e: Entry = { key, parent, children: [], expanded: true, draft: text === "" ? undefined : text, create, createTypes }
     this.entries.set(key, e)
     const list = [...this.childrenOf(parent)]
     list.splice(index, 0, key)
@@ -257,12 +283,12 @@ export class OutlineStore {
       const c = e.create.splice(0)
       const ct = e.createTypes.splice(0)
       try {
-        const res = await api.create({ placement: this.placementOf(key), nodes: [{ input: toInput(sent.trim(), e.known) }], create: c, create_types: ct })
+        const res = await api.create({ placement: this.placementOf(key), nodes: [{ input: sent.trim() }], create: c, create_types: ct })
         this.accept(e, res.nodes[0], res.refs)
         if (e.draft === sent) e.draft = undefined
       } catch (err) {
         if (err instanceof ApiError && err.code === "unresolved") {
-          // Create the row empty, keep the text as a draft to fix.
+          // Create the row empty and keep the text as a draft to fix.
           e.create.push(...c)
           e.createTypes.push(...ct)
           const res = await api.create({ placement: this.placementOf(key), nodes: [{ input: "" }] })
@@ -277,28 +303,29 @@ export class OutlineStore {
     return key
   }
 
-  /** Enter: split the row at the caret into a new row below. */
-  enter(key: string, caret: number) {
+  /** Enter: the text after the caret moves to a new row below. */
+  enter(key: string, before: string, after: string) {
     if (key === GHOST) {
       const g = this.ghost
-      if (!g.text.trim()) return
-      this.insert(ROOT, this.root.length, g.text, g.known, g.create, g.createTypes)
-      this.ghost = { text: "", known: new Map(), create: [], createTypes: [] }
+      const text = (before + after).trim()
+      if (!text) return
+      this.insert(ROOT, this.root.length, text, g.create, g.createTypes)
+      this.ghost = { text: "", create: [], createTypes: [] }
       this.focus(GHOST)
       return
     }
     const e = this.entry(key)
-    const value = this.text(e)
-    const before = value.slice(0, caret).trimEnd()
-    const after = value.slice(caret).trimStart()
-    if (after) this.setText(key, before)
+    this.setText(key, before.trimEnd())
     this.save(key)
     const kids = e.children ?? []
     let next: string
-    if (!after && e.expanded && kids.length > 0) next = this.insert(key, 0, "", new Map(e.known))
-    else {
+    if (this.fixed(key) || (!after.trim() && e.expanded && kids.length > 0)) {
+      // A list's rows belong elsewhere: new rows go inside them.
+      e.expanded = true
+      next = this.insert(key, 0, after.trim())
+    } else {
       const siblings = this.childrenOf(e.parent)
-      next = this.insert(e.parent, siblings.indexOf(key) + 1, after, new Map(e.known))
+      next = this.insert(e.parent, siblings.indexOf(key) + 1, after.trim())
     }
     this.focus(next, 0)
   }
@@ -308,7 +335,7 @@ export class OutlineStore {
     const e = this.entry(key)
     const siblings = this.childrenOf(e.parent)
     const i = siblings.indexOf(key)
-    if (i <= 0) return
+    if (i <= 0 || this.fixed(key)) return
     const prev = this.entry(siblings[i - 1])
     this.save(key)
     await this.ensureChildren(prev)
@@ -323,7 +350,7 @@ export class OutlineStore {
   /** Shift+Tab: place the row right after its parent. */
   outdent(key: string, caret: number) {
     const e = this.entry(key)
-    if (e.parent === ROOT) return
+    if (e.parent === ROOT || this.fixed(e.parent)) return
     const parent = this.entry(e.parent)
     this.save(key)
     parent.children = parent.children!.filter((k) => k !== key)
@@ -337,6 +364,7 @@ export class OutlineStore {
 
   /** Alt+Shift+Up/Down: swap with a sibling. */
   shift(key: string, delta: -1 | 1, caret: number) {
+    if (this.fixed(key)) return
     const e = this.entry(key)
     const list = [...this.childrenOf(e.parent)]
     const i = list.indexOf(key)
@@ -359,19 +387,20 @@ export class OutlineStore {
     })
   }
 
-  /** Backspace at the start: delete an empty row or merge into the row above. */
+  /** Backspace at the start: delete an empty row or merge it into the row
+   * above. Returns false when there is nothing to do. */
   backspace(key: string): boolean {
+    if (key === GHOST) return false
     const e = this.entry(key)
     const rows = this.visible()
     const prevKey = rows[rows.indexOf(key) - 1]
     const hasChildren = (e.children?.length ?? e.node?.child_count ?? 0) > 0
-    if (hasChildren) return false
-    const value = this.text(e)
-    if (value !== "" && !prevKey) return false
+    if (hasChildren || this.fixed(key)) return false
+    const value = this.text(key)
     if (value !== "") {
+      if (!prevKey) return false
+      const prevText = this.text(prevKey)
       const prev = this.entry(prevKey)
-      const prevText = this.text(prev)
-      for (const [k, v] of e.known) prev.known.set(k, v)
       prev.create.push(...e.create)
       prev.createTypes.push(...e.createTypes)
       this.setText(prevKey, prevText + value)
@@ -400,14 +429,15 @@ export class OutlineStore {
   /** Arrow keys: move the caret to the row above or below. */
   step(key: string, delta: -1 | 1, caret: number) {
     const rows = this.visible()
-    const i = key === GHOST ? rows.length : rows.indexOf(key)
-    const j = i + delta
-    if (j < 0) return
+    if (this.mode === "tree") rows.push(GHOST)
+    const j = rows.indexOf(key) + delta
+    if (j < 0 || j >= rows.length) return
     this.save(key)
-    this.focus(j >= rows.length ? GHOST : rows[j], caret)
+    this.focus(rows[j], caret)
   }
 
   toggleDone(key: string) {
+    if (key === GHOST) return
     const e = this.entry(key)
     if (!e.node?.types.includes("task")) return
     const status = e.node.status === "done" ? "open" : "done"

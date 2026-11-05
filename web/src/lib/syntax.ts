@@ -1,69 +1,62 @@
 import type { Node, Refs } from "./api"
 
-// Presentation of the Vrac syntax. Canonical text stores references as
-// [[ID]]; the editor shows [[Name]] and #type, and sends [[Name|ID]] for
-// names it knows, so the engine never has to guess.
+// The Vrac syntax as the interface uses it.
+//
+// Canonical text, stored by the server, writes references as [[ID]].
+// Input, written by the editor and sent back, writes them [[Name|ID]], or
+// [[Name]] for a node to resolve or create by name. #type tokens are the
+// same in both. Rows display input, so a saved row and a row being edited
+// look the same.
 
-export const refToken = /\[\[([a-z2-7]{26})\]\]/g
+const canonicalRef = /\[\[([a-z2-7]{26})\]\]/g
 
-export type Segment = { text: string } | { ref: string } | { type: string }
+/** Turns canonical text into input, naming references from refs. */
+export function toInput(text: string, refs: Refs): string {
+  return text.replace(canonicalRef, (_, id: string) => `[[${refs[id]?.name ?? id}|${id}]]`)
+}
 
-// References, and #type tokens at a word start, in canonical text.
-const tokens = /\[\[([a-z2-7]{26})\]\]|(^|\s)#([\p{L}\p{N}_-]+)/gu
+export function nodeInput(node: Pick<Node, "text">, refs: Refs): string {
+  return toInput(node.text, refs)
+}
 
-export function segments(text: string): Segment[] {
-  const out: Segment[] = []
+export type Token =
+  | { kind: "text"; start: number; text: string }
+  | { kind: "ref"; start: number; length: number; name: string; id?: string }
+  | { kind: "type"; start: number; length: number; name: string }
+
+const inputTokens = /\[\[([^[\]|]+?)(?:\|([a-z2-7]{26}))?\]\]|(^|\s)#([\p{L}\p{N}_-]+)/gu
+
+/** Splits input into text, references and types, with their offsets. */
+export function tokens(input: string): Token[] {
+  const out: Token[] = []
   let last = 0
-  for (const m of text.matchAll(tokens)) {
-    const start = m.index + (m[2]?.length ?? 0)
-    if (start > last) out.push({ text: text.slice(last, start) })
-    out.push(m[1] ? { ref: m[1] } : { type: m[3] })
+  const text = (end: number) => {
+    if (end > last) out.push({ kind: "text", start: last, text: input.slice(last, end) })
+  }
+  for (const m of input.matchAll(inputTokens)) {
+    if (m[1] !== undefined) {
+      text(m.index)
+      out.push({ kind: "ref", start: m.index, length: m[0].length, name: m[1].trim(), id: m[2] })
+    } else {
+      const start = m.index + m[3].length
+      text(start)
+      out.push({ kind: "type", start, length: m[0].length - m[3].length, name: m[4].toLowerCase() })
+    }
     last = m.index + m[0].length
   }
-  if (last < text.length) out.push({ text: text.slice(last) })
+  text(input.length)
   return out
 }
 
+export type Trigger = { kind: "ref" | "type"; query: string; length: number }
 
-export function plain(text: string, refs: Refs): string {
-  return text.replace(refToken, (_, id: string) => refs[id]?.name ?? "…")
-}
-
-/** Names the editor can turn back into IDs, keyed by lower-case name. */
-export type Known = Map<string, string>
-
-/** The editable text of a node. Types are its #type tokens, so the text
- * already shows them where they were written. */
-export function toEditable(node: Pick<Node, "text">, refs: Refs, known: Known): string {
-  return node.text.replace(refToken, (_, id: string) => {
-    const name = refs[id]?.name ?? id
-    known.set(name.toLowerCase(), id)
-    return `[[${name}]]`
-  })
-}
-
-export function toInput(value: string, known: Known): string {
-  return value.replace(/\[\[([^[\]]+)\]\]/g, (whole, name: string) => {
-    const id = known.get(name.trim().toLowerCase())
-    return id ? `[[${name.trim()}|${id}]]` : whole
-  })
-}
-
-export type Trigger = { kind: "ref" | "type"; query: string; start: number }
-
-/** Finds an autocomplete trigger ending at the caret. */
-export function trigger(value: string, caret: number): Trigger | null {
-  const before = value.slice(0, caret)
+/** Finds a completion trigger at the end of the text before the caret. */
+export function trigger(before: string): Trigger | null {
   const ref = /\[\[([^[\]]*)$/.exec(before)
-  if (ref) return { kind: "ref", query: ref[1], start: ref.index }
+  if (ref) return { kind: "ref", query: ref[1], length: ref[0].length }
   const type = /(^|\s)#([\p{L}\p{N}_-]*)$/u.exec(before)
-  if (type) return { kind: "type", query: type[2], start: type.index + type[1].length }
+  if (type) return { kind: "type", query: type[2], length: type[2].length + 1 }
   return null
-}
-
-export function replaceTrigger(value: string, caret: number, t: Trigger, insert: string): { value: string; caret: number } {
-  const next = value.slice(0, t.start) + insert + value.slice(caret)
-  return { value: next, caret: t.start + insert.length }
 }
 
 // Dates are local calendar values: never convert them through UTC.
@@ -91,3 +84,5 @@ export function formatMoment(m: string): string {
 export function formatStamp(at: string): string {
   return new Date(at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
 }
+
+export const isDay = (name: string) => /^\d{4}-\d{2}-\d{2}$/.test(name)

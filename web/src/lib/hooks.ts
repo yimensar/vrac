@@ -1,10 +1,11 @@
+import { useMemo } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { ApiError, api, type Type } from "./api"
 
 export function useTypes(): Map<string, Type> {
   const { data } = useQuery({ queryKey: ["types"], queryFn: api.types, staleTime: 60_000 })
-  return new Map((data?.types ?? []).map((t) => [t.name, t]))
+  return useMemo(() => new Map((data?.types ?? []).map((t) => [t.name, t])), [data])
 }
 
 /** Refreshes every view after a mutation. Personal workspaces are small. */

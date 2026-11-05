@@ -17,3 +17,10 @@ globalThis.ResizeObserver ??= class {
   disconnect() {}
 }
 Element.prototype.scrollIntoView ??= () => {}
+
+// ProseMirror measures text for scrolling; jsdom has no layout.
+const rects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList
+Range.prototype.getClientRects ??= rects
+Range.prototype.getBoundingClientRect ??= () => new DOMRect()
+;(Text.prototype as unknown as { getClientRects: () => DOMRectList }).getClientRects ??= rects
+document.elementFromPoint ??= () => null

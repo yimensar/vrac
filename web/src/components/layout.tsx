@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useState } from "react"
 import { NavLink, Outlet, useNavigate } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import {
@@ -15,11 +15,14 @@ import {
   UsersIcon,
 } from "lucide-react"
 import { api } from "@/lib/api"
+import { nodeInput } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { Label, NodeText } from "./node-text"
+import { useTypes } from "@/lib/hooks"
+import { Content } from "@/outline/content"
+import { setTypes } from "@/editor/schema"
 
 const nav = [
   { to: "/", label: "Today", icon: SunIcon, end: true },
@@ -57,6 +60,9 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
 
 export function Layout() {
   const [palette, setPalette] = useState(false)
+  // Editor atoms render outside React and need the type colors.
+  const types = useTypes()
+  useEffect(() => setTypes(new Map([...types.values()].map((t) => [t.name, t.color]))), [types])
   const [menu, setMenu] = useState(false)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -127,7 +133,7 @@ function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bool
             {names!.candidates.map((c) => (
               <CommandItem key={c.id} value={"n" + c.id} onSelect={() => go(`/node/${c.id}`)}>
                 <span className="truncate">
-                  <Label text={c.label || c.name} types={c.types} />
+                  <Content input={c.label || c.name} extra={c.types} />
                 </span>
                 {c.path && c.path.length > 0 && <span className="ml-auto truncate text-xs text-muted-foreground">{c.path.filter((p) => p !== "Journal").slice(-2).join(" / ")}</span>}
               </CommandItem>
@@ -138,7 +144,9 @@ function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bool
           <CommandGroup heading="Mentions">
             {found!.nodes.map((n) => (
               <CommandItem key={n.id} value={"s" + n.id} onSelect={() => go(`/node/${n.id}`)}>
-                <NodeText node={n} refs={found!.refs} className="truncate" />
+                <span className="truncate">
+                  <Content input={nodeInput(n, found!.refs)} refs={found!.refs} />
+                </span>
               </CommandItem>
             ))}
           </CommandGroup>
@@ -163,26 +171,5 @@ function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bool
         )}
       </CommandList>
     </CommandDialog>
-  )
-}
-
-export function PageTitle({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
-  return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
-      <h1 className="text-2xl font-semibold tracking-tight">{children}</h1>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
-    </div>
-  )
-}
-
-export function Section({ title, children, count }: { title: string; children: ReactNode; count?: number }) {
-  return (
-    <section className="mb-8">
-      <h2 className="mb-2 flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
-        {title}
-        {count !== undefined && <span className="rounded bg-muted px-1.5 text-xs">{count}</span>}
-      </h2>
-      {children}
-    </section>
   )
 }

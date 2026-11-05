@@ -1,32 +1,29 @@
 import { describe, expect, it } from "vitest"
-import { addDays, replaceTrigger, segments, toEditable, toInput, trigger } from "./syntax"
+import { addDays, toInput, tokens, trigger } from "./syntax"
 
 const northwind = "abcdefghijklmnopqrstuvwxyz"
 
 describe("syntax", () => {
-  it("round-trips references through the editor", () => {
-    const known = new Map<string, string>()
-    const value = toEditable({ text: `Call [[${northwind}]] #task` }, { [northwind]: { id: northwind, name: "Northwind", label: "Northwind", types: ["project"] } }, known)
-    expect(value).toBe("Call [[Northwind]] #task")
-    expect(toInput(value + " [[Unknown]]", known)).toBe(`Call [[Northwind|${northwind}]] #task [[Unknown]]`)
+  it("writes canonical references as named input", () => {
+    expect(toInput(`Call [[${northwind}]] #task`, { [northwind]: { id: northwind, name: "Northwind", label: "Northwind", types: [] } })).toBe(`Call [[Northwind|${northwind}]] #task`)
   })
 
-  it("splits canonical text", () => {
-    expect(segments(`a [[${northwind}]] b`)).toEqual([{ text: "a " }, { ref: northwind }, { text: " b" }])
-    expect(segments(`#meeting with [[${northwind}]] C#`)).toEqual([{ type: "meeting" }, { text: " with " }, { ref: northwind }, { text: " C#" }])
+  it("splits input into tokens with offsets", () => {
+    expect(tokens(`#meeting with [[Northwind|${northwind}]] and [[New]] C#`)).toEqual([
+      { kind: "type", start: 0, length: 8, name: "meeting" },
+      { kind: "text", start: 8, text: " with " },
+      { kind: "ref", start: 14, length: 40, name: "Northwind", id: northwind },
+      { kind: "text", start: 54, text: " and " },
+      { kind: "ref", start: 59, length: 7, name: "New", id: undefined },
+      { kind: "text", start: 66, text: " C#" },
+    ])
   })
 
-  it("edits exactly the text, types in place", () => {
-    expect(toEditable({ text: "#meeting with Alice" }, {}, new Map())).toBe("#meeting with Alice")
-  })
-
-  it("detects completion triggers at the caret", () => {
-    expect(trigger("see [[Su", 8)).toEqual({ kind: "ref", query: "Su", start: 4 })
-    expect(trigger("done #ta", 8)).toEqual({ kind: "type", query: "ta", start: 5 })
-    expect(trigger("C#", 2)).toBeNull()
-    expect(trigger("[[Northwind]] ok", 11)).toBeNull()
-    const t = trigger("x #ta y", 5)!
-    expect(replaceTrigger("x #ta y", 5, t, "#task ")).toEqual({ value: "x #task  y", caret: 8 })
+  it("detects completion triggers before the caret", () => {
+    expect(trigger("see [[Su")).toEqual({ kind: "ref", query: "Su", length: 4 })
+    expect(trigger("done #ta")).toEqual({ kind: "type", query: "ta", length: 3 })
+    expect(trigger("C#")).toBeNull()
+    expect(trigger("[[Northwind]] ok")).toBeNull()
   })
 
   it("adds days in local time", () => {
