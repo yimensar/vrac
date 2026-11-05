@@ -2,75 +2,116 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { App, makeClient } from "./App"
+import { fakeServer } from "./test-server"
 
-type Call = { method: string; url: string; body: any }
-
-const northwind = { id: "abcdefghijklmnopqrstuvwxyz", name: "Northwind", types: ["project"] }
-const types = [
-  { name: "task", builtin: true, color: "blue", count: 0 },
-  { name: "meeting", builtin: true, color: "violet", count: 0 },
-  { name: "project", builtin: true, color: "emerald", count: 1 },
-]
-
-let calls: Call[]
-
-function mockServer(authenticated = true) {
-  calls = []
-  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
-    const method = init?.method ?? "GET"
-    const body = init?.body ? JSON.parse(String(init.body)) : undefined
-    calls.push({ method, url, body })
-    const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } })
-    if (url === "/api/v1/session") return json({ owner: true, authenticated, today: "2026-11-05", timezone: "Europe/Paris", version: "test", mcp_url: "http://localhost/mcp" })
-    if (url === "/api/v1/today") return json({ today: "2026-11-05", day: { day: "2026-11-05", exists: false, children: { nodes: [], refs: {} } }, agenda: { nodes: [], refs: {} }, due: { nodes: [], refs: {} } })
-    if (url === "/api/v1/types") return json({ types })
-    if (url.startsWith("/api/v1/resolve")) return json({ candidates: [northwind] })
-    if (url === "/api/v1/nodes" && method === "POST") return json({ nodes: [], refs: {} })
-    if (url === "/api/v1/login") return json({ authenticated: true })
-    return json({ error: "not_found", message: "not found" }, 404)
-  }))
-}
-
-beforeEach(() => {
-  window.history.pushState({}, "", "/")
-})
+beforeEach(() => window.history.pushState({}, "", "/"))
 afterEach(() => vi.unstubAllGlobals())
 
-describe("app", () => {
+const focused = () => document.activeElement as HTMLTextAreaElement
+
+async function start() {
+  const server = fakeServer()
+  render(<App client={makeClient()} />)
+  const ghost = await screen.findByPlaceholderText(/Write…/)
+  return { server, ghost }
+}
+
+describe("sign-in", () => {
   it("asks for the password when signed out", async () => {
-    mockServer(false)
+    const server = fakeServer({ authenticated: false })
     render(<App client={makeClient()} />)
     await userEvent.type(await screen.findByLabelText("Password"), "correct horse battery")
     await userEvent.click(screen.getByRole("button", { name: "Sign in" }))
-    await waitFor(() => expect(calls.some((c) => c.url === "/api/v1/login" && c.body.password === "correct horse battery")).toBe(true))
+    await waitFor(() => expect(server.calls.some((c) => c.url === "/api/v1/login" && c.body.password === "correct horse battery")).toBe(true))
+  })
+})
+
+describe("writing", () => {
+  it("captures several lines in a row without losing focus", async () => {
+    const { server, ghost } = await start()
+    await userEvent.click(ghost)
+    await userEvent.keyboard("first{Enter}second{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["first", "second"]))
+    expect(focused()).toBe(screen.getByPlaceholderText(/Write…/))
+    await userEvent.keyboard("third")
+    expect(focused().value).toBe("third")
   })
 
-  it("writes in today's journal with a completed reference and type", async () => {
-    mockServer()
-    render(<App client={makeClient()} />)
-    const box = await screen.findByPlaceholderText(/Write…/)
-    await userEvent.type(box, "Call [[[[Su")
+  it("completes references and types", async () => {
+    const { server, ghost } = await start()
+    await userEvent.type(ghost, "Call [[[[Su")
     await userEvent.click(await screen.findByRole("option", { name: /Northwind/ }))
-    await userEvent.type(box, "#ta")
-    await userEvent.keyboard("{Enter}")
-    await userEvent.type(box, "{Enter}")
-    await waitFor(() => expect(calls.some((c) => c.url === "/api/v1/nodes")).toBe(true))
-    const create = calls.find((c) => c.url === "/api/v1/nodes")!
-    expect(create.body.placement).toEqual({ day: "2026-11-05" })
-    expect(create.body.nodes[0].input).toBe(`Call [[Northwind|${northwind.id}]] #task`)
-    expect(create.body.parse_dates).toBe(true)
+    await userEvent.keyboard("#ta{Enter}{Enter}")
+    await waitFor(() => expect(server.calls.some((c) => c.url === "/api/v1/nodes")).toBe(true))
+    const create = server.calls.find((c) => c.url === "/api/v1/nodes")!
+    expect(create.body.placement).toMatchObject({ parent_id: expect.stringMatching(/^day/), first: true })
+    expect(create.body.nodes[0].input).toBe("Call [[Northwind|northwindaaaaaaaaaaaaaaaaa]] #task")
   })
 
   it("creates an unknown reference only when asked", async () => {
-    mockServer()
-    render(<App client={makeClient()} />)
-    const box = await screen.findByPlaceholderText(/Write…/)
-    await userEvent.type(box, "Lunch with [[[[Dupont")
+    const { server, ghost } = await start()
+    await userEvent.type(ghost, "Lunch with [[[[Dupont")
     await userEvent.click(await screen.findByRole("option", { name: "Create “Dupont” as #person" }))
-    await userEvent.type(box, "{Enter}")
-    await waitFor(() => expect(calls.some((c) => c.url === "/api/v1/nodes")).toBe(true))
-    const create = calls.find((c) => c.url === "/api/v1/nodes")!
+    await userEvent.keyboard("{Enter}")
+    await waitFor(() => expect(server.calls.some((c) => c.url === "/api/v1/nodes")).toBe(true))
+    const create = server.calls.find((c) => c.url === "/api/v1/nodes")!
     expect(create.body.nodes[0].input).toBe("Lunch with [[Dupont]]")
     expect(create.body.create).toEqual([{ name: "Dupont", types: ["person"] }])
+  })
+})
+
+describe("outline keys", () => {
+  it("splits with Enter, indents with Tab and outdents with Shift+Tab", async () => {
+    const { server, ghost } = await start()
+    await userEvent.click(ghost)
+    await userEvent.keyboard("parent{Enter}")
+    await userEvent.click(await screen.findByText("parent"))
+    await userEvent.keyboard("{End}{Enter}")
+    expect(focused().value).toBe("")
+    await userEvent.keyboard("child{Tab}")
+    await waitFor(() => expect(server.tree()).toEqual(["parent", "  child"]))
+    expect(focused().value).toBe("child")
+    await userEvent.keyboard("{Enter}grandchild{Tab}")
+    await waitFor(() => expect(server.tree()).toEqual(["parent", "  child", "    grandchild"]))
+    await userEvent.keyboard("{Shift>}{Tab}{/Shift}")
+    await waitFor(() => expect(server.tree()).toEqual(["parent", "  child", "  grandchild"]))
+    expect(focused().value).toBe("grandchild")
+  })
+
+  it("deletes an empty row and moves to the end of the previous one", async () => {
+    const { server, ghost } = await start()
+    await userEvent.click(ghost)
+    await userEvent.keyboard("one{Enter}")
+    await userEvent.click(await screen.findByText("one"))
+    await userEvent.keyboard("{End}{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["one", ""]))
+    await userEvent.keyboard("{Backspace}")
+    expect(focused().value).toBe("one")
+    expect(focused().selectionStart).toBe(3)
+    await waitFor(() => expect(server.tree()).toEqual(["one"]))
+  })
+
+  it("merges a row into the previous one with Backspace at the start", async () => {
+    const { server, ghost } = await start()
+    await userEvent.click(ghost)
+    await userEvent.keyboard("ab{Enter}cd{Enter}")
+    await userEvent.click(await screen.findByText("cd"))
+    await userEvent.keyboard("{Home}{Backspace}")
+    expect(focused().value).toBe("abcd")
+    expect(focused().selectionStart).toBe(2)
+    await waitFor(() => expect(server.tree()).toEqual(["abcd"]))
+  })
+
+  it("moves between rows with the arrow keys and saves on the way", async () => {
+    const { server, ghost } = await start()
+    await userEvent.click(ghost)
+    await userEvent.keyboard("one{Enter}two{Enter}")
+    await userEvent.keyboard("{ArrowUp}")
+    expect(focused().value).toBe("two")
+    await userEvent.keyboard("{End}!{ArrowUp}")
+    expect(focused().value).toBe("one")
+    await waitFor(() => expect(server.tree()).toEqual(["one", "two!"]))
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}")
+    expect(focused()).toBe(screen.getByPlaceholderText(/Write…/))
   })
 })

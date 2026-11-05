@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { PageTitle, Section } from "@/components/layout"
-import { Item, Outline } from "@/components/outline"
+import { Item, OutlineView } from "@/components/outline"
 import { NodeText, TypeBadge } from "@/components/node-text"
 
 function List({ nodes, refs, empty }: { nodes: Node[]; refs: Refs; empty: string }) {
@@ -42,7 +42,7 @@ export function TodayPage() {
       <PageTitle>{formatDay(data.today, { weekday: "long", day: "numeric", month: "long" })}</PageTitle>
       <div className="grid gap-8 lg:grid-cols-[1fr_18rem]">
         <div>
-          <Outline nodes={data.day.children.nodes} refs={data.day.children.refs} placement={{ day: data.today }} composer />
+          <OutlineView source={{ day: data.today }} composer />
         </div>
         <div>
           <Section title="Agenda" count={data.agenda.nodes.length}>
@@ -60,7 +60,6 @@ export function TodayPage() {
 export function DayPage() {
   const { day = localDate() } = useParams()
   const navigate = useNavigate()
-  const { data } = useQuery({ queryKey: ["day", day], queryFn: () => api.day(day) })
   return (
     <>
       <PageTitle
@@ -78,13 +77,12 @@ export function DayPage() {
       >
         {formatDay(day, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
       </PageTitle>
-      {data ? <Outline nodes={data.children.nodes} refs={data.children.refs} placement={{ day }} composer /> : <Loading />}
+      <OutlineView key={day} source={{ day }} composer />
     </>
   )
 }
 
 function JournalDay({ day }: { day: string }) {
-  const { data } = useQuery({ queryKey: ["day", day], queryFn: () => api.day(day) })
   return (
     <section className="mb-10">
       <h2 className="mb-2 font-medium">
@@ -92,7 +90,7 @@ function JournalDay({ day }: { day: string }) {
           {formatDay(day, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </Link>
       </h2>
-      {data && <Outline nodes={data.children.nodes} refs={data.children.refs} placement={{ day }} />}
+      <OutlineView source={{ day }} />
     </section>
   )
 }
@@ -152,7 +150,7 @@ export function NodePage() {
           <NodeFields node={n} />
         </div>
       )}
-      <Outline nodes={data.children.nodes} refs={data.children.refs} placement={{ parent_id: n.id }} composer placeholder="Add a note…" />
+      <OutlineView key={n.id} source={{ node: n.id }} composer placeholder="Add a note…" />
       {sections && (
         <div className="mt-10 grid gap-x-10 md:grid-cols-2">
           {sections.open_tasks.length > 0 && (

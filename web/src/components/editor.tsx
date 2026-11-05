@@ -24,11 +24,13 @@ type Props = {
   onBlur?: () => void
   placeholder?: string
   autoFocus?: boolean
+  /** Caret position when focused on mount; the end by default. */
+  initialCaret?: number
   className?: string
 }
 
 /** A single-paragraph text area with #type and [[reference]] completion. */
-export function Editor({ value, onChange, intent, onKey, onBlur, placeholder, autoFocus, className }: Props) {
+export function Editor({ value, onChange, intent, onKey, onBlur, placeholder, autoFocus, initialCaret, className }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null)
   const [caret, setCaret] = useState(0)
   const [active, setActive] = useState(0)
@@ -59,10 +61,12 @@ export function Editor({ value, onChange, intent, onKey, onBlur, placeholder, au
   useEffect(() => {
     if (autoFocus && ref.current) {
       ref.current.focus()
-      const end = ref.current.value.length
-      ref.current.setSelectionRange(end, end)
-      setCaret(end)
+      const at = Math.min(initialCaret ?? ref.current.value.length, ref.current.value.length)
+      ref.current.setSelectionRange(at, at)
+      setCaret(at)
     }
+    // Only on mount or when asked to focus again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocus])
 
   const insert = (tr: Trigger, text: string) => {
@@ -154,7 +158,7 @@ export function Editor({ value, onChange, intent, onKey, onBlur, placeholder, au
         value={value}
         placeholder={placeholder}
         aria-label={placeholder ?? "Edit"}
-        className={cn("block w-full resize-none overflow-hidden bg-transparent outline-none placeholder:text-muted-foreground", className)}
+        className={cn("m-0 block w-full resize-none overflow-hidden border-0 bg-transparent p-0 outline-none placeholder:text-muted-foreground", className)}
         onChange={(e) => {
           setCaret(e.target.selectionStart)
           setDismissed(null)
@@ -162,12 +166,7 @@ export function Editor({ value, onChange, intent, onKey, onBlur, placeholder, au
         }}
         onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
         onKeyDown={keyDown}
-        onBlur={() => {
-          // Let a click on a suggestion run first.
-          setTimeout(() => {
-            if (document.activeElement !== ref.current) onBlur?.()
-          }, 120)
-        }}
+        onBlur={() => onBlur?.()}
       />
       {open && options.length > 0 && (
         <div role="listbox" className="absolute left-0 top-full z-50 mt-1 w-80 max-w-[90vw] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md">

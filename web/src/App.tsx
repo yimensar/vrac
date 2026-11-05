@@ -4,7 +4,6 @@ import { api } from "@/lib/api"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Layout } from "@/components/layout"
-import { FocusProvider } from "@/components/outline"
 import { AgendaPage, DayPage, JournalPage, NodePage, TasksPage, TodayPage, TypePage, TypesPage } from "@/pages/workspace"
 import { ActivityPage, AuthorizePage, SearchPage, SettingsPage, SharePage, SignIn } from "@/pages/other"
 
@@ -43,11 +42,9 @@ export function App({ client = makeClient() }: { client?: QueryClient }) {
   return (
     <QueryClientProvider client={client}>
       <TooltipProvider>
-        <FocusProvider>
-          <BrowserRouter>
-            <Gate />
-          </BrowserRouter>
-        </FocusProvider>
+        <BrowserRouter>
+          <Gate />
+        </BrowserRouter>
         <Toaster position="bottom-right" />
       </TooltipProvider>
     </QueryClientProvider>
