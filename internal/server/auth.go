@@ -286,12 +286,8 @@ func (s *Server) createToken(w http.ResponseWriter, r *http.Request, p principal
 		return
 	}
 	b.Name = strings.TrimSpace(b.Name)
-	if b.Name == "" || len(b.Name) > 60 || b.Name == "owner" {
-		fail(w, http.StatusBadRequest, "invalid", "token names have 1 to 60 characters and cannot be owner")
-		return
-	}
-	token := randomToken("vrac_")
-	if err := s.engine.SaveToken(r.Context(), hashToken(token), engine.TokenInfo{Kind: engine.TokenPersonal, Name: b.Name, Scope: scope}, time.Time{}); err != nil {
+	token, err := CreateToken(r.Context(), s.engine, b.Name)
+	if err != nil {
 		failEngine(w, err)
 		return
 	}
@@ -324,4 +320,16 @@ func ResetPassword(ctx context.Context, e *engine.Engine, password string) error
 		return e.CreateOwner(ctx, hashPassword(password))
 	}
 	return e.SetOwnerPassword(ctx, hashPassword(password))
+}
+
+// CreateToken creates a personal access token and returns it; only its hash
+// is stored.
+func CreateToken(ctx context.Context, e *engine.Engine, name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 60 || name == "owner" {
+		return "", fmt.Errorf("%w: token names have 1 to 60 characters and cannot be owner", engine.ErrInvalid)
+	}
+	token := randomToken("vrac_")
+	err := e.SaveToken(ctx, hashToken(token), engine.TokenInfo{Kind: engine.TokenPersonal, Name: name, Scope: scope}, time.Time{})
+	return token, err
 }

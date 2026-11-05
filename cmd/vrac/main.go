@@ -34,6 +34,7 @@ Commands:
   import PATH      load a JSON export into an empty workspace
   check            run integrity checks
   password         set the owner password (signs out every browser)
+  token NAME       create a personal access token for an MCP or API client
   version          print the version
 
 Configuration (flags override environment):
@@ -73,10 +74,18 @@ func run(args []string) error {
 	fs.StringVar(&c.listen, "listen", env("VRAC_LISTEN", "127.0.0.1:8080"), "")
 	fs.StringVar(&c.publicURL, "url", env("VRAC_PUBLIC_URL", ""), "")
 	fs.StringVar(&c.timezone, "timezone", env("VRAC_TIMEZONE", ""), "")
-	if err := fs.Parse(args); err != nil {
-		return err
+	// Flags may come before or after positional arguments.
+	var rest []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return err
+		}
+		if fs.NArg() == 0 {
+			break
+		}
+		rest = append(rest, fs.Arg(0))
+		args = fs.Args()[1:]
 	}
-	rest := fs.Args()
 	switch cmd {
 	case "version":
 		fmt.Println(version)
@@ -136,6 +145,16 @@ func run(args []string) error {
 			return err
 		}
 		fmt.Println("password changed; sign in again")
+		return nil
+	case "token":
+		if len(rest) != 1 {
+			return errors.New("token needs a name, such as \"Claude Code\"")
+		}
+		token, err := server.CreateToken(context.Background(), e, rest[0])
+		if err != nil {
+			return err
+		}
+		fmt.Println(token)
 		return nil
 	case "check":
 		if err := e.Check(); err != nil {

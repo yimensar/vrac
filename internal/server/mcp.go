@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -195,7 +196,7 @@ var writeSchema = func() map[string]any {
 
 func (s *Server) tools(srv *mcp.Server) {
 	e := s.engine
-	mcp.AddTool(srv, tool("vrac_today", "Start here. Today's date and time zone, today's journal, today's agenda, open tasks due today or overdue, and the available types.", true),
+	mcp.AddTool(srv, tool("vrac_today", "Start here. Today's date, weekday and the dates of the next seven days, the time zone, today's journal, today's agenda, open tasks due today or overdue, and the available types.", true),
 		func(ctx context.Context, req *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, any, error) {
 			r, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
 			v, err := s.todayView(r)
@@ -206,7 +207,7 @@ func (s *Server) tools(srv *mcp.Server) {
 			if err != nil {
 				return toolError(err)
 			}
-			return nil, map[string]any{"today": v.Today, "timezone": s.opts.Timezone, "journal": aiPageOf(v.Day.Children),
+			return nil, map[string]any{"today": v.Today, "weekday": weekday(v.Today), "next_days": nextDays(v.Today), "timezone": s.opts.Timezone, "journal": aiPageOf(v.Day.Children),
 				"agenda": aiPageOf(v.Agenda), "due_or_overdue": aiPageOf(v.Due), "types": types}, nil
 		})
 	mcp.AddTool(srv, tool("vrac_search", "Search current nodes. Combine text (word prefixes), types (any of), concerns (node IDs, all required, with inherited context), mentions (direct references to an ID), status, from/to (node date: due for tasks, start for meetings/events, journal day otherwise) and sort.", true),
@@ -324,4 +325,27 @@ func (s *Server) tools(srv *mcp.Server) {
 			}
 			return nil, a, nil
 		})
+}
+
+func weekday(day string) string {
+	t, err := time.Parse("2006-01-02", day)
+	if err != nil {
+		return ""
+	}
+	return t.Weekday().String()
+}
+
+// nextDays names the seven days after today, so clients resolve "Friday"
+// or "next Wednesday" without computing calendars.
+func nextDays(day string) []string {
+	t, err := time.Parse("2006-01-02", day)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, 7)
+	for i := 1; i <= 7; i++ {
+		d := t.AddDate(0, 0, i)
+		out = append(out, d.Weekday().String()+" "+d.Format("2006-01-02"))
+	}
+	return out
 }
