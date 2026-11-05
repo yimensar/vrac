@@ -41,6 +41,25 @@ SQLite in WAL with FULL synchronization.
 | complete words | 2.4 ms | 2.7 ms |
 | project table | 60 ms | (10 runs) |
 
+## 1 000 000 nodes (stress test)
+
+| operation | p50 | p95 |
+|---|---|---|
+| write a journal line | 0.39 ms | 2.8 ms |
+| edit a line | 0.38 ms | 2.8 ms |
+| read a journal day | 0.37 ms | 0.63 ms |
+| open tasks of the busiest project | 1.8 ms | 2.1 ms |
+| decisions of the busiest project | 0.29 ms | 0.41 ms |
+| tasks of a project and a person | 2.0 ms | 2.2 ms |
+| mentions of the busiest project | 0.54 ms | 0.65 ms |
+| complete a name | 0.20 ms | 0.26 ms |
+| search words | 16.7 ms | 17.1 ms |
+| complete words | 12.4 ms | 12.7 ms |
+| sections of the busiest project | 48 ms | (10 runs) |
+| project table | 317 ms | (10 runs) |
+
+Building this workspace took 5 minutes.
+
 ## How it got there
 
 The first measurement at 200 000 nodes computed context at query time and
@@ -53,7 +72,8 @@ prefix ranges and full text, and the project table reads the index once.
 
 - The project table grows with the number of projects and open tasks: about
   60 ms for 60 projects at 200 000 nodes. It is a page view, not typing.
-- Searching very common words has a p99 around 30 ms at 200 000 nodes.
+- Full-text matches of very common words grow with the workspace: about
+  17 ms at one million nodes. Completion falls back to them after names.
 - Moving a node rewrites the context of what references it. Moving the
   busiest project takes about 80 ms at 20 000 nodes and grows with the
   number of nodes referencing it; it is rare, and a set-based rewrite can
