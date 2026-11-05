@@ -263,6 +263,9 @@ func (e *Engine) Import(ctx context.Context, r io.Reader) error {
 			}
 		}
 		for _, n := range x.Nodes {
+			if err := s.syncTypeTokens(seqs[n.ID]); err != nil {
+				return err
+			}
 			if err := s.index(seqs[n.ID]); err != nil {
 				return err
 			}

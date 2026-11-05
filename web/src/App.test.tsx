@@ -60,6 +60,19 @@ describe("writing", () => {
   })
 })
 
+describe("types", () => {
+  // Regression: the editor appended types at the end, so a type moved to the
+  // start came back at the end.
+  it("edits a type where it is written, without adding it again", async () => {
+    const { server, ghost } = await start()
+    await userEvent.click(ghost)
+    await userEvent.keyboard("#meeting with Bruno{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["#meeting with Bruno"]))
+    await userEvent.click(await screen.findByText(/with Bruno/))
+    expect(focused().value).toBe("#meeting with Bruno")
+  })
+})
+
 describe("outline keys", () => {
   it("splits with Enter, indents with Tab and outdents with Shift+Tab", async () => {
     const { server, ghost } = await start()

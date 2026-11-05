@@ -25,8 +25,17 @@ var schemaV1 string
 // applicationID marks a SQLite file as a Vrac database ("VRAC").
 const applicationID = 0x56524143
 
-// migrations[i] upgrades user_version i to i+1.
-var migrations = []string{schemaV1}
+// migrations[i] upgrades user_version i to i+1. Published migrations are
+// never modified.
+var migrations = []func(*Engine, *sql.Tx) error{
+	func(e *Engine, tx *sql.Tx) error {
+		if _, err := tx.Exec(schemaV1); err != nil {
+			return err
+		}
+		return e.seed(tx)
+	},
+	migrateTypeTokens,
+}
 
 // Errors returned by the engine. Callers compare with errors.Is.
 var (
@@ -128,13 +137,8 @@ func (e *Engine) migrate(path string) error {
 	}
 	return e.write(context.Background(), func(tx *sql.Tx) error {
 		for v := version; v < len(migrations); v++ {
-			if _, err := tx.Exec(migrations[v]); err != nil {
+			if err := migrations[v](e, tx); err != nil {
 				return fmt.Errorf("migration %d: %w", v+1, err)
-			}
-			if v == 0 {
-				if err := e.seed(tx); err != nil {
-					return err
-				}
 			}
 		}
 		if _, err := tx.Exec(fmt.Sprintf(`PRAGMA application_id = %d`, applicationID)); err != nil {

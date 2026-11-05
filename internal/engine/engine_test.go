@@ -276,7 +276,7 @@ func TestSubProjectsAndRenames(t *testing.T) {
 	res := create(t, e, CreateRequest{Nodes: []Draft{{Input: "Prepare the [[Northwind/Lot 2]] kickoff #task"}}, Create: []Creation{{Name: "Northwind/Lot 2", Types: []string{"project"}}}})
 	lot := res.Created[0]
 	v, _ := e.GetNode(ctx, lot.ID)
-	if v.Node.ParentID != northwind.ID || v.Node.Text != "Lot 2" {
+	if v.Node.ParentID != northwind.ID || v.Node.Text != "Lot 2 #project" {
 		t.Fatalf("Lot 2 = %+v", v.Node)
 	}
 	tasks := search(t, e, Query{Concerns: []string{northwind.ID}, Types: []string{"task"}})
@@ -490,5 +490,62 @@ func TestBackupIsAConsistentSnapshot(t *testing.T) {
 	b := open(t, backup)
 	if _, err := b.GetNode(ctx, n.ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Migration 2 writes the tokens of types that version 1 kept out of the text,
+// after a snapshot backup.
+func TestMigrationWritesTypeTokens(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "vrac.sqlite")
+	e := open(t, path)
+	n := write(t, e, "#meeting with Bruno", "Northwind #project")
+	// Recreate the version 1 representation: types outside the text.
+	for _, stmt := range []string{
+		`UPDATE nodes SET text = 'with Bruno' WHERE id = '` + n[0].ID + `'`,
+		`UPDATE nodes SET text = 'Northwind' WHERE id = '` + n[1].ID + `'`,
+		`PRAGMA user_version = 1`,
+	} {
+		if _, err := e.db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.Close()
+	e = open(t, path)
+	for id, want := range map[string]string{n[0].ID: "with Bruno #meeting", n[1].ID: "Northwind #project"} {
+		v, err := e.GetNode(ctx, id)
+		if err != nil || v.Node.Text != want {
+			t.Fatalf("migrated text = %q, %v", v.Node.Text, err)
+		}
+	}
+	if c, _ := e.Resolve(ctx, "northwind", 1); len(c) != 1 || c[0].Name != "Northwind" {
+		t.Fatalf("resolve after migration = %+v", c)
+	}
+	backups, _ := filepath.Glob(path + ".pre-v2-*.backup")
+	if len(backups) != 1 {
+		t.Fatalf("backups = %v", backups)
+	}
+	if err := e.Check(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Types given outside the text, such as a creation, are written in it.
+func TestTypesAlwaysAppearInText(t *testing.T) {
+	e := newEngine(t)
+	res := create(t, e, CreateRequest{Nodes: []Draft{{Input: "Lunch with [[Dupont]] about #project/Northwind"}},
+		Create: []Creation{{Name: "Dupont", Types: []string{"person"}}, {Name: "Northwind"}}})
+	for _, b := range res.Created {
+		v, _ := e.GetNode(ctx, b.ID)
+		if v.Node.Text != b.Name+" #"+b.Types[0] {
+			t.Fatalf("created text = %q", v.Node.Text)
+		}
+	}
+	// Removing the token removes the type.
+	v, _ := e.GetNode(ctx, res.Created[0].ID)
+	in := "Dupont"
+	up, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: v.Node.ID, ExpectedRevision: v.Node.Revision, Input: &in})
+	if err != nil || len(up.Nodes[0].Types) != 0 {
+		t.Fatalf("update = %+v, %v", up.Nodes, err)
 	}
 }

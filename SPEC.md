@@ -72,11 +72,15 @@ visible everywhere it matters.
 ### 2.3 Types: `#` says what a node is
 
 A type changes what a node is. Typed nodes get a color, an icon and the type's
-fields. A node may carry several types (`#task #decision`). The `#type` token
-stays in the text where it was written, like a reference, so sentences read
-naturally: `#meeting with [[Alice]] about [[Globex]]`. As a name, a node drops
-its trailing types and keeps inner ones as words: `Northwind #project` is named
-Northwind.
+fields. A node may carry several types (`#task #decision`).
+
+**A node's types are exactly the `#type` tokens of its text.** There is no
+hidden type: a token stays where it was written, like a reference, so
+sentences read naturally (`#meeting with [[Alice]] about [[Globex]]`), and
+removing it removes the type. A type given outside the text, such as
+"Create Dupont as person", is written into it (`Dupont #person`). As a name, a
+node drops its trailing types and keeps inner ones as words: `Northwind #project`
+is named Northwind.
 
 Built-in types (fixed fields, no configuration):
 

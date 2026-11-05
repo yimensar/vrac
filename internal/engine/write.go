@@ -350,6 +350,10 @@ func (s *txState) createNamed(c Creation, extraType string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	name := text
+	for _, t := range names {
+		text += " #" + t
+	}
 	f, _, err := normalizeFields(names, fields{}, text, false, day)
 	if err != nil {
 		return 0, err
@@ -359,7 +363,7 @@ func (s *txState) createNamed(c Creation, extraType string) (int64, error) {
 		return 0, err
 	}
 	s.created[key] = seq
-	s.briefs = append(s.briefs, Brief{ID: id, Name: text, Types: append([]string{}, names...)})
+	s.briefs = append(s.briefs, Brief{ID: id, Name: name, Types: append([]string{}, names...)})
 	return seq, nil
 }
 
@@ -1157,6 +1161,9 @@ func (s *txState) apply(n Node, snap snapshot) error {
 	if err := s.setRefs(n.seq, snap.Text); err != nil {
 		return err
 	}
+	if err := s.syncTypeTokens(n.seq); err != nil {
+		return err
+	}
 	if err := s.reindex(n.seq, true); err != nil {
 		return err
 	}
@@ -1225,4 +1232,71 @@ func levenshtein(a, b string) int {
 		prev = cur
 	}
 	return prev[len(rb)]
+}
+
+// syncTypeTokens keeps the rule that a node's types are the #type tokens of
+// its text: it appends the tokens of types the text does not show.
+func (s *txState) syncTypeTokens(seq int64) error {
+	var text string
+	if err := s.tx.QueryRowContext(s.ctx, `SELECT text FROM nodes WHERE seq = ?`, seq).Scan(&text); err != nil {
+		return err
+	}
+	rows, err := s.tx.QueryContext(s.ctx, `SELECT t.name FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE nt.node_seq = ? ORDER BY t.builtin DESC, t.id`, seq)
+	if err != nil {
+		return err
+	}
+	var types []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			rows.Close()
+			return err
+		}
+		types = append(types, t)
+	}
+	rows.Close()
+	present := map[string]bool{}
+	for _, m := range typeTokenRe.FindAllStringSubmatch(text, -1) {
+		present[strings.ToLower(m[2])] = true
+	}
+	next := text
+	for _, t := range types {
+		if !present[t] {
+			next = strings.TrimSpace(next + " #" + t)
+		}
+	}
+	if next == text {
+		return nil
+	}
+	_, err = s.tx.ExecContext(s.ctx, `UPDATE nodes SET text = ?, name_key = ? WHERE seq = ?`, next, nameKeyOf(next), seq)
+	return err
+}
+
+// migrateTypeTokens is migration 2: types become visible tokens of the text,
+// which is from now on their only source.
+func migrateTypeTokens(e *Engine, tx *sql.Tx) error {
+	s := &txState{e: e, ctx: context.Background(), tx: tx}
+	rows, err := tx.Query(`SELECT DISTINCT node_seq FROM node_types`)
+	if err != nil {
+		return err
+	}
+	var seqs []int64
+	for rows.Next() {
+		var seq int64
+		if err := rows.Scan(&seq); err != nil {
+			rows.Close()
+			return err
+		}
+		seqs = append(seqs, seq)
+	}
+	rows.Close()
+	for _, seq := range seqs {
+		if err := s.syncTypeTokens(seq); err != nil {
+			return err
+		}
+		if err := s.index(seq); err != nil {
+			return err
+		}
+	}
+	return nil
 }

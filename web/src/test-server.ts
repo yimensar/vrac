@@ -29,7 +29,8 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string } = {
   const page = (parent: string) => ({ nodes: children(parent).map(view), refs: {} })
   const parse = (input: string) => {
     const types = [...input.matchAll(/(?:^|\s)#([\p{L}\p{N}_-]+)/gu)].map((m) => m[1])
-    const text = input.replace(/(?:^|\s)#[\p{L}\p{N}_-]+/gu, "").replace(/\[\[([^|\]]+)\|[a-z]{26}\]\]/g, "[[$1]]").trim()
+    // Like the engine, type tokens stay where they are written.
+    const text = input.replace(/\[\[([^|\]]+)\|[a-z]{26}\]\]/g, "[[$1]]").trim()
     return { text, types }
   }
   const place = (r: Row, p: any) => {

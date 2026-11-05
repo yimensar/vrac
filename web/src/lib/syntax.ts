@@ -24,10 +24,6 @@ export function segments(text: string): Segment[] {
   return out
 }
 
-/** Types written in the text; the others are shown after it. */
-export function inlineTypes(text: string): Set<string> {
-  return new Set(segments(text).flatMap((s) => ("type" in s ? [s.type] : [])))
-}
 
 export function plain(text: string, refs: Refs): string {
   return text.replace(refToken, (_, id: string) => refs[id]?.name ?? "…")
@@ -36,14 +32,14 @@ export function plain(text: string, refs: Refs): string {
 /** Names the editor can turn back into IDs, keyed by lower-case name. */
 export type Known = Map<string, string>
 
-export function toEditable(node: Pick<Node, "text" | "types">, refs: Refs, known: Known): string {
-  const text = node.text.replace(refToken, (_, id: string) => {
+/** The editable text of a node. Types are its #type tokens, so the text
+ * already shows them where they were written. */
+export function toEditable(node: Pick<Node, "text">, refs: Refs, known: Known): string {
+  return node.text.replace(refToken, (_, id: string) => {
     const name = refs[id]?.name ?? id
     known.set(name.toLowerCase(), id)
     return `[[${name}]]`
   })
-  const inline = inlineTypes(node.text)
-  return [text, ...node.types.filter((t) => !inline.has(t)).map((t) => "#" + t)].filter(Boolean).join(" ")
 }
 
 export function toInput(value: string, known: Known): string {

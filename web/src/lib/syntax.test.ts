@@ -6,7 +6,7 @@ const northwind = "abcdefghijklmnopqrstuvwxyz"
 describe("syntax", () => {
   it("round-trips references through the editor", () => {
     const known = new Map<string, string>()
-    const value = toEditable({ text: `Call [[${northwind}]]`, types: ["task"] }, { [northwind]: { id: northwind, name: "Northwind", types: ["project"] } }, known)
+    const value = toEditable({ text: `Call [[${northwind}]] #task` }, { [northwind]: { id: northwind, name: "Northwind", types: ["project"] } }, known)
     expect(value).toBe("Call [[Northwind]] #task")
     expect(toInput(value + " [[Unknown]]", known)).toBe(`Call [[Northwind|${northwind}]] #task [[Unknown]]`)
   })
@@ -16,9 +16,8 @@ describe("syntax", () => {
     expect(segments(`#meeting with [[${northwind}]] C#`)).toEqual([{ type: "meeting" }, { text: " with " }, { ref: northwind }, { text: " C#" }])
   })
 
-  it("keeps inline types in place when editing", () => {
-    const known = new Map<string, string>()
-    expect(toEditable({ text: "#meeting with Alice", types: ["meeting", "decision"] }, {}, known)).toBe("#meeting with Alice #decision")
+  it("edits exactly the text, types in place", () => {
+    expect(toEditable({ text: "#meeting with Alice" }, {}, new Map())).toBe("#meeting with Alice")
   })
 
   it("detects completion triggers at the caret", () => {
