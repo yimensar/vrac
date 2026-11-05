@@ -12,7 +12,7 @@ export function TypeBadge({ name }: { name: string }) {
     <Link
       to={`/type/${name}`}
       onClick={(e) => e.stopPropagation()}
-      className={cn("rounded-sm px-1 font-medium decoration-clone hover:underline", typeClass(types.get(name)?.color))}
+      className={cn("font-medium hover:underline", typeClass(types.get(name)?.color))}
     >
       #{name}
     </Link>
