@@ -145,14 +145,74 @@ func (e *Engine) refMap(ctx context.Context, q queryer, ids []string) (map[strin
 		if err := rows.Scan(&r.ID, &r.Name, &r.Trashed, &types); err != nil {
 			return nil, err
 		}
-		r.Name = plainName(r.Name)
 		r.Types = strings.Fields(types)
 		if r.Types == nil {
 			r.Types = []string{}
 		}
 		refs[r.ID] = r
 	}
-	return refs, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	var names []*string
+	list := make([]Ref, 0, len(refs))
+	for _, r := range refs {
+		list = append(list, r)
+	}
+	for i := range list {
+		names = append(names, &list[i].Name)
+	}
+	if err := e.resolveNames(ctx, q, names); err != nil {
+		return nil, err
+	}
+	for _, r := range list {
+		refs[r.ID] = r
+	}
+	return refs, nil
+}
+
+// resolveNames turns canonical texts into names in place: references become
+// the names of their targets, one level deep, and types are removed.
+func (e *Engine) resolveNames(ctx context.Context, q queryer, names []*string) error {
+	var ids []any
+	seen := map[string]bool{}
+	for _, n := range names {
+		for _, id := range refIDs(*n) {
+			if !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+	}
+	targets := map[string]string{}
+	if len(ids) > 0 {
+		rows, err := q.QueryContext(ctx, `SELECT id, text FROM nodes WHERE id IN (`+placeholders(len(ids))+`)`, ids...)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var id, text string
+			if err := rows.Scan(&id, &text); err != nil {
+				rows.Close()
+				return err
+			}
+			targets[id] = plainName(text)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+	for _, n := range names {
+		*n = untyped(refTokenRe.ReplaceAllStringFunc(*n, func(tok string) string {
+			if t, ok := targets[tok[2:len(tok)-2]]; ok {
+				return t
+			}
+			return "…"
+		}))
+	}
+	return nil
 }
 
 var refTokenRe = regexp.MustCompile(`\[\[([a-z2-7]{26})\]\]`)
@@ -183,7 +243,20 @@ func Render(text string, refs map[string]Ref) string {
 
 // plainName renders canonical text without resolving nested references.
 func plainName(text string) string {
-	return refTokenRe.ReplaceAllString(text, "…")
+	return untyped(refTokenRe.ReplaceAllString(text, "…"))
+}
+
+// typeTokenRe matches #type tokens of canonical text.
+var typeTokenRe = regexp.MustCompile(`(^|\s)#([\p{L}\p{N}_-]+)`)
+
+var trailingTypesRe = regexp.MustCompile(`(\s*(^|\s)#[\p{L}\p{N}_-]+)+\s*$`)
+
+// untyped is text as a name: trailing type tokens are dropped and inner
+// ones become plain words, so "Northwind #project" is named "Northwind" and "#meeting
+// with Alice" is named "meeting with Alice".
+func untyped(text string) string {
+	text = trailingTypesRe.ReplaceAllString(text, "")
+	return strings.TrimSpace(typeTokenRe.ReplaceAllString(text, "$1$2"))
 }
 
 func placeholders(n int) string {
@@ -241,14 +314,21 @@ func (e *Engine) path(ctx context.Context, q queryer, seq int64) ([]Brief, error
 		if err := rows.Scan(&b.ID, &b.Name, &types); err != nil {
 			return nil, err
 		}
-		b.Name = plainName(b.Name)
 		b.Types = strings.Fields(types)
 		if b.Types == nil {
 			b.Types = []string{}
 		}
 		path = append(path, b)
 	}
-	return path, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	var names []*string
+	for i := range path {
+		names = append(names, &path[i].Name)
+	}
+	return path, e.resolveNames(ctx, q, names)
 }
 
 // Children returns a page of the children of a node, in order.
@@ -435,7 +515,6 @@ func (e *Engine) candidates(ctx context.Context, q queryer, name string, limit i
 			rows.Close()
 			return nil, err
 		}
-		f.b.Name = plainName(f.b.Name)
 		f.b.Types = strings.Fields(types)
 		if f.b.Types == nil {
 			f.b.Types = []string{}
@@ -444,6 +523,13 @@ func (e *Engine) candidates(ctx context.Context, q queryer, name string, limit i
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	var names []*string
+	for i := range list {
+		names = append(names, &list[i].b.Name)
+	}
+	if err := e.resolveNames(ctx, q, names); err != nil {
 		return nil, err
 	}
 	out := make([]Brief, 0, len(list))

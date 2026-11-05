@@ -24,7 +24,8 @@ type refToken struct {
 }
 
 // parsedInput is input split into canonical text, types and references.
-// Text contains placeholders \x00N\x00 for refs[N].
+// Text keeps #type tokens in place and contains placeholders \x00N\x00 for
+// refs[N].
 type parsedInput struct {
 	Text  string
 	Types []string
@@ -76,9 +77,14 @@ func parseInput(raw string) (parsedInput, error) {
 				}
 				if shortcut && name != "" {
 					addRef(refToken{Name: name, Type: typ})
-				} else if !seenType[typ] {
-					seenType[typ] = true
-					p.Types = append(p.Types, typ)
+				} else {
+					// The type stays where it was written, so a sentence
+					// such as "#meeting with Alice" reads naturally.
+					b.WriteString("#" + typ)
+					if !seenType[typ] {
+						seenType[typ] = true
+						p.Types = append(p.Types, typ)
+					}
 				}
 				i += 1 + n
 				continue

@@ -365,7 +365,6 @@ func (e *Engine) Activity(ctx context.Context, actor, cursor string, limit int) 
 			page.NextCursor = encodeCursor(last)
 			break
 		}
-		a.Node.Name = plainName(a.Node.Name)
 		a.Node.Types = strings.Fields(types)
 		if a.Node.Types == nil {
 			a.Node.Types = []string{}
@@ -373,5 +372,13 @@ func (e *Engine) Activity(ctx context.Context, actor, cursor string, limit int) 
 		page.Items = append(page.Items, a)
 		last.A, last.S, last.R = a.At, seq, a.Revision
 	}
-	return page, rows.Err()
+	if err := rows.Err(); err != nil {
+		return page, err
+	}
+	rows.Close()
+	var names []*string
+	for i := range page.Items {
+		names = append(names, &page.Items[i].Node.Name)
+	}
+	return page, e.resolveNames(ctx, e.db, names)
 }

@@ -86,7 +86,7 @@ func TestReopenAndRefuseForeignDatabases(t *testing.T) {
 	e.Close()
 	e = open(t, path)
 	v, err := e.GetNode(ctx, n.ID)
-	if err != nil || v.Node.Text != "Northwind" || !slices.Equal(v.Node.Types, []string{"project"}) {
+	if err != nil || v.Node.Text != "Northwind #project" || !slices.Equal(v.Node.Types, []string{"project"}) {
 		t.Fatalf("reopened node = %+v, %v", v.Node, err)
 	}
 	if err := e.Check(); err != nil {
@@ -210,10 +210,10 @@ func TestContextIsInherited(t *testing.T) {
 			{Input: "Follow up with Marc on the schedule Friday #task"},
 		},
 	}}}).Nodes
-	if meeting[0].Start != "2026-11-05T14:00" || meeting[0].Text != "Copil [["+northwind.ID+"]] with [["+marc.ID+"]]" {
+	if meeting[0].Start != "2026-11-05T14:00" || meeting[0].Text != "Copil [["+northwind.ID+"]] with [["+marc.ID+"]] #meeting" {
 		t.Fatalf("meeting = %+v", meeting[0])
 	}
-	if meeting[2].Due != "2026-11-06" || meeting[2].Status != StatusOpen || meeting[2].Text != "Follow up with Marc on the schedule" {
+	if meeting[2].Due != "2026-11-06" || meeting[2].Status != StatusOpen || meeting[2].Text != "Follow up with Marc on the schedule #task" {
 		t.Fatalf("task = %+v", meeting[2])
 	}
 	write(t, e, "We use API v2 rather than CSV [[Globex]] #decision")
@@ -244,6 +244,29 @@ func TestContextIsInherited(t *testing.T) {
 	meetings := search(t, e, Query{Types: []string{"meeting"}})
 	if len(meetings) != 1 {
 		t.Fatalf("meetings = %v", ids(meetings))
+	}
+}
+
+// Regression: types were removed from the text, so "#meeting with Alice
+// about Globex" became "with Alice about Globex".
+func TestTypesStayWhereWritten(t *testing.T) {
+	e := newEngine(t)
+	write(t, e, "Alice #person", "Globex #project")
+	m := write(t, e, "#meeting with [[Alice]] about [[Globex]] 10h")[0]
+	if m.Text[:9] != "#meeting " || !slices.Equal(m.Types, []string{"meeting"}) {
+		t.Fatalf("meeting = %q %v", m.Text, m.Types)
+	}
+	// Names ignore trailing types and keep inner ones as words.
+	if got := search(t, e, Query{Text: "meeting alice"}); len(got) != 1 {
+		t.Fatalf("search = %v", ids(got))
+	}
+	if c, _ := e.Resolve(ctx, "Globex", 1); len(c) != 1 || c[0].Name != "Globex" {
+		t.Fatalf("resolve = %+v", c)
+	}
+	child := create(t, e, CreateRequest{Placement: Placement{ParentID: m.ID}, Nodes: []Draft{{Input: "x"}}}).Nodes[0]
+	v, _ := e.GetNode(ctx, child.ID)
+	if v.Path[len(v.Path)-1].Name != "meeting with Alice about Globex 10h" {
+		t.Fatalf("path name = %q", v.Path[len(v.Path)-1].Name)
 	}
 }
 

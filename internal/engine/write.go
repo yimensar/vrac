@@ -650,10 +650,11 @@ func (s *txState) insert(parent sql.NullInt64, pos int64, text string, typeIDs [
 }
 
 func nameKeyOf(text string) any {
-	if len(refIDs(text)) > 0 || len(text) > maxNameKeyLen || strings.TrimSpace(text) == "" {
+	name := untyped(text)
+	if len(refIDs(text)) > 0 || len(name) > maxNameKeyLen || name == "" {
 		return nil
 	}
-	return nameKey(text)
+	return nameKey(name)
 }
 
 func (s *txState) setTypes(seq int64, typeIDs []int64) error {
@@ -711,9 +712,9 @@ func (s *txState) index(seq int64) error {
 	if err != nil {
 		return err
 	}
-	body := refTokenRe.ReplaceAllStringFunc(text, func(tok string) string {
+	body := typeTokenRe.ReplaceAllString(refTokenRe.ReplaceAllStringFunc(text, func(tok string) string {
 		return refs[tok[2:len(tok)-2]].Name
-	})
+	}), "$1$2")
 	rows, err := s.tx.QueryContext(s.ctx, `SELECT alias FROM aliases WHERE node_seq = ?`, seq)
 	if err != nil {
 		return err

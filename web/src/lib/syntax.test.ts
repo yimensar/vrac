@@ -13,6 +13,12 @@ describe("syntax", () => {
 
   it("splits canonical text", () => {
     expect(segments(`a [[${northwind}]] b`)).toEqual([{ text: "a " }, { ref: northwind }, { text: " b" }])
+    expect(segments(`#meeting with [[${northwind}]] C#`)).toEqual([{ type: "meeting" }, { text: " with " }, { ref: northwind }, { text: " C#" }])
+  })
+
+  it("keeps inline types in place when editing", () => {
+    const known = new Map<string, string>()
+    expect(toEditable({ text: "#meeting with Alice", types: ["meeting", "decision"] }, {}, known)).toBe("#meeting with Alice #decision")
   })
 
   it("detects completion triggers at the caret", () => {

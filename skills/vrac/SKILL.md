@@ -21,7 +21,10 @@ After an action, write when it produced at least one of:
   referencing it.
 
 Do not write chit-chat, restatements of what is already in Vrac, or your own
-reasoning. One short line per item; children for details.
+reasoning. One short line per item; children for details. `#type` and
+`[[references]]` stay where you write them, so write natural sentences:
+`#meeting with [[Alice|…]] about [[Globex|…]]`, never a sentence that only
+makes sense once the type is removed.
 
 ## How to write
 

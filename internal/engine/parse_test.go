@@ -18,7 +18,7 @@ func TestParseInput(t *testing.T) {
 	if !slices.Equal(p.Refs, want) {
 		t.Fatalf("refs = %+v", p.Refs)
 	}
-	if p.Text != "Call \x000\x00 about \x001\x00 today C# \x002\x00 \x003\x00" {
+	if p.Text != "Call \x000\x00 about \x001\x00 today #task #task C# \x002\x00 \x003\x00" {
 		t.Fatalf("text = %q", p.Text)
 	}
 	if _, err := parseInput("bad #ty.pe"); err != nil {

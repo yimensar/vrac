@@ -14,7 +14,7 @@ import (
 
 const instructions = `Vrac is the user's memory for notes, projects, tasks, meetings and events. You are the brain: record what matters after your actions (triaging mail or messages, a meeting, a decision, an analysis) without being asked to organize anything.
 
-Model. Everything is a node in one outline. #type says what a node is; [[Name]] says what it is about. Built-in types: task (status open/done, optional due date), meeting (an exchange with people; start date/time; its children are its notes), event (something happening: a trip, a deadline event; start, optional end), decision, project, person. Free types exist only if created explicitly.
+Model. Everything is a node in one outline. #type says what a node is; [[Name]] says what it is about. Both stay where they are written, so write natural sentences: "#meeting with [[Alice|ID]] about [[Globex|ID]]", "Send the estimate to [[Marc|ID]] Friday #task". Built-in types: task (status open/done, optional due date), meeting (an exchange with people; start date/time; its children are its notes), event (something happening: a trip, a deadline event; start, optional end), decision, project, person. Free types exist only if created explicitly.
 
 Context is inherited, types are not: a node concerns X when X or a descendant of X is the node, an ancestor of it, or referenced by it or an ancestor. So a task written under "Copil [[Northwind]] #meeting" concerns Northwind without repeating the reference.
 

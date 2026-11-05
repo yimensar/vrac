@@ -6,18 +6,27 @@ import type { Node, Refs } from "./api"
 
 export const refToken = /\[\[([a-z2-7]{26})\]\]/g
 
-export type Segment = { text: string } | { ref: string }
+export type Segment = { text: string } | { ref: string } | { type: string }
+
+// References, and #type tokens at a word start, in canonical text.
+const tokens = /\[\[([a-z2-7]{26})\]\]|(^|\s)#([\p{L}\p{N}_-]+)/gu
 
 export function segments(text: string): Segment[] {
   const out: Segment[] = []
   let last = 0
-  for (const m of text.matchAll(refToken)) {
-    if (m.index > last) out.push({ text: text.slice(last, m.index) })
-    out.push({ ref: m[1] })
+  for (const m of text.matchAll(tokens)) {
+    const start = m.index + (m[2]?.length ?? 0)
+    if (start > last) out.push({ text: text.slice(last, start) })
+    out.push(m[1] ? { ref: m[1] } : { type: m[3] })
     last = m.index + m[0].length
   }
   if (last < text.length) out.push({ text: text.slice(last) })
   return out
+}
+
+/** Types written in the text; the others are shown after it. */
+export function inlineTypes(text: string): Set<string> {
+  return new Set(segments(text).flatMap((s) => ("type" in s ? [s.type] : [])))
 }
 
 export function plain(text: string, refs: Refs): string {
@@ -33,7 +42,8 @@ export function toEditable(node: Pick<Node, "text" | "types">, refs: Refs, known
     known.set(name.toLowerCase(), id)
     return `[[${name}]]`
   })
-  return [text, ...node.types.map((t) => "#" + t)].filter(Boolean).join(" ")
+  const inline = inlineTypes(node.text)
+  return [text, ...node.types.filter((t) => !inline.has(t)).map((t) => "#" + t)].filter(Boolean).join(" ")
 }
 
 export function toInput(value: string, known: Known): string {

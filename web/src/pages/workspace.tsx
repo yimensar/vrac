@@ -386,7 +386,7 @@ export function TypePage() {
                   <TableCell className="whitespace-normal">
                     <Link to={`/node/${r.node.id}`} className="hover:underline">
                       {path.length > 0 && <span className="text-muted-foreground">{path.join(" / ")} / </span>}
-                      <NodeText node={{ ...r.node, types: r.node.types.filter((t) => t !== name) }} refs={data.refs} />
+                      <NodeText node={r.node} refs={data.refs} hide={name} />
                     </Link>
                   </TableCell>
                   <TableCell className="text-right">{r.open_tasks || ""}</TableCell>
