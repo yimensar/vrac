@@ -69,6 +69,7 @@ type Node struct {
 	RefIDs     []string `json:"ref_ids"`
 	seq        int64
 	parentSeq  int64
+	position   int64
 }
 
 // Ref describes a referenced node for display.
