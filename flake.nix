@@ -112,6 +112,48 @@
         }
       );
 
+      nixosModules.default = import ./nix/module.nix { inherit self; };
+      nixosModules.vrac = self.nixosModules.default;
+
+      # The module evaluates to the expected service on Linux.
+      checks = forAllSystems (
+        system:
+        lib.optionalAttrs (lib.hasSuffix "linux" system) {
+          nixos-module =
+            let
+              eval = lib.nixosSystem {
+                inherit system;
+                modules = [
+                  self.nixosModules.default
+                  {
+                    system.stateVersion = "26.05";
+                    boot.loader.grub.enable = false;
+                    fileSystems."/" = {
+                      device = "none";
+                      fsType = "tmpfs";
+                    };
+                    services.vrac = {
+                      enable = true;
+                      publicURL = "https://vrac.example.test";
+                      oidc = {
+                        enable = true;
+                        issuer = "https://id.example.test";
+                        clientID = "vrac";
+                        allow = [ "owner@example.test" ];
+                      };
+                    };
+                  }
+                ];
+              };
+              service = eval.config.systemd.services.vrac.serviceConfig;
+            in
+            assert service.User == "vrac";
+            assert lib.hasInfix "-oidc-allow" service.ExecStart;
+            assert lib.hasInfix "https://vrac.example.test" service.ExecStart;
+            nixpkgs.legacyPackages.${system}.writeText "vrac-module-check" service.ExecStart;
+        }
+      );
+
       formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt);
     };
 }

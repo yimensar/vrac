@@ -52,6 +52,31 @@ cd web && npm run typecheck && npm test && npm run build
 `nix develop` sets `CGO_ENABLED=1` and `GOFLAGS=-tags=sqlite_fts5`; outside it,
 pass `-tags sqlite_fts5` yourself.
 
+## Deploy on NixOS
+
+The flake provides `nixosModules.default`:
+
+```nix
+services.vrac = {
+  enable = true;
+  publicURL = "https://vrac.example.com"; # HTTPS, terminated by your proxy
+  listenAddress = "127.0.0.1:8080";
+  # Optional: sign in through an identity provider such as Pocket ID.
+  oidc = {
+    enable = true;
+    issuer = "https://id.example.com";
+    clientID = "…"; # redirect URI: https://vrac.example.com/auth/oidc/callback
+    name = "Pocket ID";
+    allow = [ "you@example.com" ];
+  };
+};
+```
+
+Without OIDC, open `/` once deployed and create the owner account (username,
+password, passkey). Recovery runs on the server as the service user:
+`sudo -u vrac vrac password -data /var/lib/vrac` and
+`sudo -u vrac vrac passkeys reset -data /var/lib/vrac`.
+
 ## Connect an AI
 
 Vrac exposes MCP over Streamable HTTP at `<url>/mcp` with a built-in OAuth
