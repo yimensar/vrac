@@ -12,7 +12,7 @@ export function TypeBadge({ name }: { name: string }) {
     <Link
       to={`/type/${name}`}
       onClick={(e) => e.stopPropagation()}
-      className={cn("inline-flex items-center rounded px-1.5 py-px text-xs font-medium leading-5", typeClass(types.get(name)?.color))}
+      className={cn("rounded-sm px-1 font-medium decoration-clone hover:underline", typeClass(types.get(name)?.color))}
     >
       #{name}
     </Link>
@@ -41,7 +41,7 @@ export function DateChip({ node }: { node: Node }) {
   if (node.due) {
     const late = node.status === "open" && node.due < today
     return (
-      <span className={cn("inline-flex items-center gap-1 text-xs text-muted-foreground", late && "text-destructive", node.due === today && "text-foreground")}>
+      <span className={cn("inline-flex items-center gap-1 text-sm text-muted-foreground", late && "text-destructive", node.due === today && "text-foreground")}>
         <CalendarIcon className="size-3" />
         {node.due === today ? "Today" : formatDay(node.due)}
       </span>
@@ -49,7 +49,7 @@ export function DateChip({ node }: { node: Node }) {
   }
   if (node.start) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
         <ClockIcon className="size-3" />
         {formatMoment(node.start)}
         {node.end && ` → ${formatMoment(node.end)}`}
