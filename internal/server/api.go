@@ -38,7 +38,7 @@ func (s *Server) todayView(r *http.Request) (TodayView, error) {
 	if v.Day, err = s.engine.Day(ctx, today, "", 0); err != nil {
 		return v, err
 	}
-	if v.Agenda, err = s.engine.Search(ctx, engine.Query{Types: []string{engine.TypeMeeting, engine.TypeEvent}, From: today, To: today, Sort: "date_asc", Limit: 50}); err != nil {
+	if v.Agenda, err = s.engine.Search(ctx, engine.Query{Types: []string{engine.TypeMeeting, engine.TypeEvent}, From: today, To: today, Scheduled: true, Sort: "date_asc", Limit: 50}); err != nil {
 		return v, err
 	}
 	v.Due, err = s.engine.Search(ctx, engine.Query{Types: []string{engine.TypeTask}, Status: engine.StatusOpen, To: today, Scheduled: true, Sort: "date_asc", Limit: 100})

@@ -240,8 +240,13 @@ func TestContextIsInherited(t *testing.T) {
 	if len(sections.OpenTasks) != 1 || len(sections.Upcoming) != 1 || len(sections.Decisions) != 1 || len(sections.Mentions.Nodes) != 1 {
 		t.Fatalf("sections = %+v", sections)
 	}
+	// Only explicit dates are upcoming: a meeting noted today is not.
+	write(t, e, "Lunch about [[Northwind]] #meeting")
+	if s, _ := e.NodeSections(ctx, northwind.ID); len(s.Upcoming) != 1 || len(s.Meetings) != 1 {
+		t.Fatalf("upcoming = %d, meetings = %d", len(s.Upcoming), len(s.Meetings))
+	}
 	// Types are not inherited: the task is not a meeting.
-	meetings := search(t, e, Query{Types: []string{"meeting"}})
+	meetings := search(t, e, Query{Types: []string{"meeting"}, Scheduled: true})
 	if len(meetings) != 1 {
 		t.Fatalf("meetings = %v", ids(meetings))
 	}

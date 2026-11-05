@@ -278,7 +278,7 @@ export function AgendaPage() {
   const to = addDays(from, 42)
   const { data } = useQuery({
     queryKey: ["agenda", from],
-    queryFn: () => api.search({ types: ["meeting", "event"], from, to, sort: "date_asc", limit: 200 }),
+    queryFn: () => api.search({ types: ["meeting", "event"], from, to, scheduled: true, sort: "date_asc", limit: 200 }),
   })
   const byDay = new Map<string, Node[]>()
   for (const n of data?.nodes ?? []) {

@@ -214,7 +214,7 @@ func (e *Engine) NodeSections(ctx context.Context, id string) (Sections, error) 
 	if s.OpenTasks, err = merge(e.Search(ctx, Query{Concerns: []string{id}, Types: []string{TypeTask}, Status: StatusOpen, Sort: "date_asc", Limit: 50})); err != nil {
 		return s, err
 	}
-	if s.Upcoming, err = merge(e.Search(ctx, Query{Concerns: []string{id}, Types: []string{TypeMeeting, TypeEvent}, From: today, Sort: "date_asc", Limit: 10})); err != nil {
+	if s.Upcoming, err = merge(e.Search(ctx, Query{Concerns: []string{id}, Types: []string{TypeMeeting, TypeEvent}, From: today, Scheduled: true, Sort: "date_asc", Limit: 10})); err != nil {
 		return s, err
 	}
 	if s.Meetings, err = merge(e.Search(ctx, Query{Concerns: []string{id}, Types: []string{TypeMeeting}, To: today, Limit: 10})); err != nil {
@@ -227,7 +227,13 @@ func (e *Engine) NodeSections(ctx context.Context, id string) (Sections, error) 
 	for k, v := range s.Mentions.Refs {
 		s.Refs[k] = v
 	}
-	// The node itself is not one of its own sections.
+	// The node itself is not one of its own sections, and a meeting shows
+	// once: upcoming when scheduled ahead, among meetings otherwise.
+	upcoming := map[string]bool{}
+	for _, n := range s.Upcoming {
+		upcoming[n.ID] = true
+	}
+	s.Meetings = slices.DeleteFunc(s.Meetings, func(n Node) bool { return upcoming[n.ID] })
 	for _, list := range []*[]Node{&s.OpenTasks, &s.Upcoming, &s.Meetings, &s.Decisions} {
 		*list = slices.DeleteFunc(*list, func(n Node) bool { return n.ID == id })
 	}
