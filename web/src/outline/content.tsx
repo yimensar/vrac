@@ -11,10 +11,18 @@ import { refClass } from "@/editor/schema"
 // and completions. Spans carry their input offsets so a click can place the
 // caret where it lands.
 
-export function TypeName({ name, className, ...rest }: { name: string; className?: string } & React.HTMLAttributes<HTMLSpanElement>) {
+export function TypeName({ name, className, link = false, ...rest }: { name: string; className?: string; link?: boolean } & React.HTMLAttributes<HTMLElement>) {
   const types = useTypes()
+  const cls = cn("font-medium", typeClass(types.get(name)?.color), link && "hover:underline", className)
+  if (link) {
+    return (
+      <Link to={`/tag/${name}`} onClick={(e) => e.stopPropagation()} className={cls} {...rest}>
+        #{name}
+      </Link>
+    )
+  }
   return (
-    <span className={cn("font-medium", typeClass(types.get(name)?.color), className)} {...rest}>
+    <span className={cls} {...rest}>
       #{name}
     </span>
   )
@@ -35,7 +43,7 @@ export function Content({ input, refs = {}, extra = [], links = false }: { input
           )
         }
         const atom = { "data-start": t.start, "data-length": t.length }
-        if (t.kind === "type") return <TypeName key={t.start} name={t.name} {...atom} />
+        if (t.kind === "type") return <TypeName key={t.start} name={t.name} link={links} {...atom} />
         const label = (t.id && refs[t.id]?.label) || t.name
         return links && t.id ? (
           <Link key={t.start} to={`/node/${t.id}`} onClick={(e) => e.stopPropagation()} className={cn(refClass, "hover:decoration-foreground", refs[t.id]?.trashed && "line-through opacity-60")} {...atom}>

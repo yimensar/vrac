@@ -17,7 +17,8 @@ import { END, GHOST, type OutlineStore } from "./store"
 /** The keys of a row. title renders a page heading: keys that shape an
  * outline only leave it. The new line at the end has no node yet, but it
  * indents, outdents and leaves like a row. */
-function handlers(store: OutlineStore, k: string, zoom: (id: string) => void, title = false): LineHandlers {
+function handlers(store: OutlineStore, k: string, navigate: (to: string) => void, title = false): LineHandlers {
+  const zoom = (id: string) => navigate(`/node/${id}`)
   const leave = () => {
     store.save(k)
     store.blur(k)
@@ -33,6 +34,7 @@ function handlers(store: OutlineStore, k: string, zoom: (id: string) => void, ti
     dated: () => Boolean(e?.node?.date || (k === GHOST ? store.ghost.fields : e?.fields)?.date_text),
     setFields: (f: Parameters<OutlineStore["setFields"]>[1]) => store.setFields(k, f),
     setTodo: (tag: string | null) => store.setTodo(k, tag),
+    open: navigate,
     zoom: e?.id ? () => zoom(e.id!) : undefined,
     leave,
   }
@@ -99,7 +101,7 @@ export function Row({ store, k, context, title }: { store: OutlineStore; k: stri
         {checkbox && <Check checked={checkbox === "done"} onToggle={() => store.toggleDone(k)} />}
         <div className={cn("min-w-0 flex-1", !title && "pl-1.5", checkbox === "done" && !editing && "text-muted-foreground line-through")}>
           {editing ? (
-            <LineEditor key={editing.seq} value={store.text(k)} refs={store.refs} caret={editing.caret} on={handlers(store, k, (id) => navigate(`/node/${id}`), title)} />
+            <LineEditor key={editing.seq} value={store.text(k)} refs={store.refs} caret={editing.caret} on={handlers(store, k, navigate, title)} />
           ) : (
             <div
               role="textbox"
@@ -180,7 +182,7 @@ export function NewRow({ store }: { store: OutlineStore }) {
       {checkbox && <Check checked={checkbox === "done"} onToggle={() => store.toggleDone(GHOST)} />}
       <div className="min-w-0 flex-1 pl-1.5">
         {editing ? (
-          <LineEditor key={editing.seq} value={store.ghost.text} refs={store.refs} caret={editing.caret} label="New line" on={handlers(store, GHOST, (id) => navigate(`/node/${id}`))} />
+          <LineEditor key={editing.seq} value={store.ghost.text} refs={store.refs} caret={editing.caret} label="New line" on={handlers(store, GHOST, navigate)} />
         ) : (
           <div
             role="textbox"

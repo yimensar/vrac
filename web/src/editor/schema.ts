@@ -28,7 +28,7 @@ export const schema = new Schema({
       atom: true,
       selectable: false,
       attrs: { id: { default: null }, name: {}, label: { default: "" } },
-      toDOM: (n: PMNode) => ["span", { class: refClass, "data-ref": n.attrs.id ?? "" }, n.attrs.label || n.attrs.name],
+      toDOM: (n: PMNode) => ["span", { class: refClass + (n.attrs.id ? " cursor-pointer" : ""), "data-ref": n.attrs.id ?? "" }, n.attrs.label || n.attrs.name],
     },
     type: {
       group: "inline",
@@ -36,7 +36,7 @@ export const schema = new Schema({
       atom: true,
       selectable: false,
       attrs: { name: {} },
-      toDOM: (n: PMNode) => ["span", { class: "font-medium " + typeClass(typeColor(n.attrs.name)) }, "#" + n.attrs.name],
+      toDOM: (n: PMNode) => ["span", { class: "font-medium cursor-pointer " + typeClass(typeColor(n.attrs.name)), "data-tag": n.attrs.name }, "#" + n.attrs.name],
     },
   },
 })

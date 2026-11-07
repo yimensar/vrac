@@ -323,8 +323,13 @@ the same while reading and while editing (ProseMirror), and a click places
 the caret where it lands. Outline keys: Enter splits, Tab and Shift+Tab
 indent and outdent, Backspace deletes an empty row or merges into the row
 above, arrows move between rows, Alt+Shift+arrows reorder, Cmd+Enter
-toggles a task. In lists of unrelated nodes the listed rows stay in place
-and new rows go inside them.
+toggles a to-do. A row is saved shortly after each pause in typing, so the
+same node is current in every list that shows it within a moment, and a
+save refreshes every view, which keeps its folds. In lists of unrelated
+nodes (the journal head, a node's lists, search results) the listed rows
+stay in place: Enter saves and leaves a row rather than adding one.
+Tags and references are links to their pages, while reading and while
+editing.
 
 The agenda and the week show only nodes with a date; a meeting noted in
 the journal without one is not scheduled.

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/lib/api"
 import { fakeServer } from "@/test-server"
 import { setTypes } from "@/editor/schema"
-import { GHOST, OutlineStore, ROOT } from "./store"
+import { GHOST, OutlineStore, ROOT, SAVE_DELAY } from "./store"
 
 // The outline's behavior against an in-memory server: what the user does
 // with the keyboard, and what the server ends up holding.
@@ -151,7 +151,7 @@ describe("outline store", () => {
     expect(fresh.visible().map((k) => fresh.text(k))).toEqual(["a", "b", "c"])
   })
 
-  it("keeps a list's rows in place and writes inside them", async () => {
+  it("keeps a list's rows in place; Enter saves and leaves them", async () => {
     const t = await tree()
     capture(t, "a result")
     await t.settled()
@@ -161,13 +161,44 @@ describe("outline store", () => {
     const k = list.root[0]
     await list.indent(k, 0)
     expect(list.root).toEqual([k])
-    list.enter(k, "a result", "")
-    expect(list.entry(list.editing!.key).parent).toBe(k)
-    list.setText(list.editing!.key, "a note")
-    list.save(list.editing!.key)
+    list.focus(k)
+    list.setText(k, "a result, edited")
+    list.enter(k, "a result, edited", "")
+    expect(list.editing).toBeNull()
     await list.settled()
-    expect(server.tree()).toEqual(["a result", "  a note"])
+    expect(server.tree()).toEqual(["a result, edited"])
     expect(list.childrenOf(ROOT)).toEqual([k])
+  })
+
+  it("saves a row after a pause in typing, and keeps folds on reload", async () => {
+    vi.useFakeTimers()
+    try {
+      const s = await tree()
+      capture(s, "parent")
+      capture(s, "child")
+      await s.settled()
+      await s.indent(keyOf(s, "child"), 0)
+      await s.settled()
+      const k = keyOf(s, "parent")
+      s.focus(k)
+      s.setText(k, "paren")
+      s.setText(k, "parent, typed")
+      expect(server.calls.filter((c) => c.method === "PATCH")).toHaveLength(0)
+      await vi.advanceTimersByTimeAsync(SAVE_DELAY + 1)
+      await s.settled()
+      expect(server.tree()).toEqual(["parent, typed", "  child"])
+      expect(s.editing?.key).toBe(k)
+      // A fold survives a reload from the server.
+      s.blur(k)
+      await s.toggle(k)
+      expect(s.visible()).toEqual([k])
+      const d = await api.day("2026-11-05")
+      s.load(d.children, d.node?.id)
+      expect(s.visible().map((x) => s.text(x))).toEqual(["parent, typed"])
+      expect(s.entry(s.root[0]).expanded).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

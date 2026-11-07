@@ -17,8 +17,9 @@ function useStore(mode: "tree" | "list", id: string, placement: Placement, reloa
   const store = useMemo(() => {
     const s: OutlineStore = new OutlineStore(mode, placement, {
       onError: reportError,
-      // Other views reflect the change; this one already shows it.
-      onSaved: () => client.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "outline" }),
+      // Every view of the node follows, this outline included: it keeps
+      // its folds and waits while a row is being edited.
+      onSaved: () => client.invalidateQueries(),
       reload: async () => {
         const r = await reloadRef.current()
         if (r) s.load(r.page, r.rootId, true)
@@ -104,7 +105,7 @@ function Folding({ store }: { store: OutlineStore }) {
 export function NodeList({ id, page, context = true, empty, title }: { id: string; page?: Page; context?: boolean; empty?: string; title?: boolean }) {
   const client = useQueryClient()
   const store = useStore("list", id, {}, async () => {
-    await client.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "outline" })
+    await client.invalidateQueries()
     return undefined
   })
   useEffect(() => {

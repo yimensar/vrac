@@ -3,9 +3,11 @@ import { nodeInput, typesOf } from "@/lib/syntax"
 import { hasType, isTodo, todoTags } from "@/editor/schema"
 
 // The state of rows being edited. Changes apply locally at once and reach
-// the server through one serial queue, so typing never waits for the
-// network and rows never reload under the caret. Each row has a local key
-// that never changes, even when a new row receives its server ID.
+// the server through one serial queue, shortly after each pause in typing,
+// so typing never waits for the network, rows never reload under the
+// caret, and every other view of the same node follows within a moment.
+// Each row has a local key that never changes, even when a new row
+// receives its server ID.
 //
 // A tree store holds an outline: a journal day or a node's children. A list
 // store holds unrelated nodes, such as search results; its top rows cannot
@@ -42,6 +44,9 @@ type Callbacks = { onError: (err: unknown) => void; onSaved: () => void; reload:
 
 export const END = Number.MAX_SAFE_INTEGER
 
+/** How long typing pauses before a row is saved. */
+export const SAVE_DELAY = 400
+
 let tmp = 0
 
 const emptyGhost = () => ({ text: "", create: [] as Creation[], createTypes: [] as string[], parent: ROOT, fields: {} as Fields })
@@ -58,6 +63,7 @@ export class OutlineStore {
   private listeners = new Set<() => void>()
   private version = 0
   private seq = 0
+  private timers = new Map<string, ReturnType<typeof setTimeout>>()
 
   constructor(
     readonly mode: "tree" | "list",
@@ -89,38 +95,42 @@ export class OutlineStore {
     return this.pending > 0 || [...this.entries.values()].some((e) => e.draft !== undefined)
   }
 
-  /** Replaces the state with server data, unless the user is working. */
+  /** Replaces the state with server data, unless the user is working.
+   * Rows keep their fold, and the new line its place. */
   load(page: Page, rootId?: string, force = false) {
     if (!force && (this.editing || this.busy)) return
+    const folds = new Map<string, boolean>()
+    for (const e of this.entries.values()) if (e.id) folds.set(e.id, e.expanded)
+    const ghostParent = this.entries.get(this.ghost.parent)?.id
     this.entries.clear()
     this.refs = { ...page.refs }
     this.rootId = rootId
-    this.root = this.insertPage(page, ROOT)
-    this.ghost.parent = ROOT
+    this.root = this.insertPage(page, ROOT, folds)
+    this.ghost.parent = (ghostParent && this.entries.has(ghostParent) && ghostParent) || ROOT
     this.emit()
   }
 
-  private insertPage(page: Page, parent: string): string[] {
+  private insertPage(page: Page, parent: string, folds = new Map<string, boolean>()): string[] {
     Object.assign(this.refs, page.refs)
     return page.nodes.map((n) => {
       // A list may show a node twice; keys stay unique.
       const key = this.entries.has(n.id) ? `${n.id}-${++tmp}` : n.id
-      const expanded = this.fold !== "collapsed"
+      const expanded = folds.get(n.id) ?? this.fold !== "collapsed"
       const e: Entry = { key, id: n.id, node: n, parent, expanded, create: [], createTypes: [], fields: {} }
       this.entries.set(key, e)
-      if (expanded && n.child_count > 0) this.loadChildren(e)
+      if (expanded && n.child_count > 0) this.loadChildren(e, folds)
       return key
     })
   }
 
-  private async loadChildren(e: Entry) {
+  private async loadChildren(e: Entry, folds?: Map<string, boolean>) {
     if (!e.id) {
       e.children = []
       return
     }
     try {
       const page = await api.children(e.id)
-      if (e.children === undefined) e.children = this.insertPage(page, e.key)
+      if (e.children === undefined) e.children = this.insertPage(page, e.key, folds)
       this.emit()
     } catch (err) {
       this.callbacks.onError(err)
@@ -204,6 +214,9 @@ export class OutlineStore {
     else {
       const e = this.entry(key)
       e.draft = e.node && value === nodeInput(e.node, this.refs) ? undefined : value
+      // Saved after a pause, so the node is current everywhere it shows.
+      clearTimeout(this.timers.get(key))
+      if (e.draft !== undefined) this.timers.set(key, setTimeout(() => this.save(key), SAVE_DELAY))
     }
     this.emit()
   }
@@ -220,6 +233,8 @@ export class OutlineStore {
 
   /** Saves a row's draft. */
   save(key: string) {
+    clearTimeout(this.timers.get(key))
+    this.timers.delete(key)
     const e = this.entries.get(key)
     if (!e || e.draft === undefined) return
     const sent = e.draft
@@ -341,12 +356,17 @@ export class OutlineStore {
       return
     }
     const e = this.entry(key)
+    if (this.fixed(key)) {
+      // A list's rows belong to other outlines: Enter only leaves them.
+      this.save(key)
+      this.blur(key)
+      return
+    }
     this.setText(key, before.trimEnd())
     this.save(key)
     const kids = e.children ?? []
     let next: string
-    if (this.fixed(key) || (!after.trim() && e.expanded && kids.length > 0)) {
-      // A list's rows belong elsewhere: new rows go inside them.
+    if (!after.trim() && e.expanded && kids.length > 0) {
       e.expanded = true
       next = this.insert(key, 0, after.trim())
     } else {
@@ -476,6 +496,7 @@ export class OutlineStore {
   /** Moves a row to the trash, with its children. */
   remove(key: string) {
     const e = this.entry(key)
+    clearTimeout(this.timers.get(key))
     e.draft = undefined
     this.setChildren(e.parent, this.childrenOf(e.parent).filter((k) => k !== key))
     if (this.ghost.parent === key) this.ghost.parent = e.parent

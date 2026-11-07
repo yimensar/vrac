@@ -40,6 +40,8 @@ export type LineHandlers = {
   leave: () => void
   /** Opens the row's own page; absent while the row has no ID. */
   zoom?: () => void
+  /** Opens another page: a tag's or a referenced node's. */
+  open: (to: string) => void
   /** Moves the row to the trash; absent where a row cannot be removed. */
   remove?: () => void
 }
@@ -132,6 +134,15 @@ export function LineEditor({ value, refs, caret, label, on }: { value: string; r
           return true
         }
         return false
+      },
+      // A tag or a reference is a link while editing too.
+      handleClick(_v, _pos, event) {
+        const el = (event.target as HTMLElement).closest<HTMLElement>("[data-tag], [data-ref]")
+        if (!el) return false
+        const to = el.dataset.tag ? `/tag/${el.dataset.tag}` : el.dataset.ref ? `/node/${el.dataset.ref}` : ""
+        if (!to) return false
+        h().open(to)
+        return true
       },
       handleDOMEvents: {
         blur: () => {
