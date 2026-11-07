@@ -64,6 +64,39 @@ describe("app", () => {
     await waitFor(() => expect(server.calls.some((c) => c.url.startsWith("/api/v1/days?"))).toBe(true))
   })
 
+  it("creates a tag from the palette, then acts on it in its own menu", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await screen.findByLabelText("New line")
+    await userEvent.keyboard("{Meta>}k{/Meta}")
+    const input = await screen.findByPlaceholderText("Find a note, a tag, a view, a setting…")
+    // "Create a tag" opens its menu; the field then takes the name.
+    await userEvent.type(input, "new")
+    await userEvent.click(await screen.findByRole("option", { name: /Create a tag/ }))
+    await userEvent.type(await screen.findByPlaceholderText("Name of the new tag"), "idea")
+    expect(screen.getByRole("navigation", { name: "Menu path" })).toHaveTextContent("New tag")
+    await userEvent.keyboard("{ArrowDown}{Enter}")
+    await waitFor(() => expect(server.calls.find((c) => c.url === "/api/v1/types" && c.method === "POST")?.body).toMatchObject({ name: "idea", todo: true }))
+    // The new tag has its own menu: make it a plain tag.
+    await userEvent.keyboard("{Meta>}k{/Meta}")
+    await userEvent.type(await screen.findByPlaceholderText("Find a note, a tag, a view, a setting…"), "#ide")
+    await userEvent.click(await screen.findByRole("option", { name: /idea/ }))
+    await screen.findByPlaceholderText("Do with #idea…")
+    await userEvent.keyboard("plain{Enter}")
+    await waitFor(() => expect(server.calls.find((c) => c.method === "PATCH")).toMatchObject({ url: "/api/v1/types/idea", body: { todo: false } }))
+  })
+
+  it("goes back up a palette menu with Backspace", async () => {
+    fakeServer()
+    render(<App client={makeClient()} />)
+    await screen.findByLabelText("New line")
+    await userEvent.keyboard("{Meta>}k{/Meta}")
+    await userEvent.type(await screen.findByPlaceholderText("Find a note, a tag, a view, a setting…"), "theme{Enter}")
+    expect(await screen.findByRole("option", { name: "Dark" })).toBeInTheDocument()
+    await userEvent.keyboard("{Backspace}")
+    expect(await screen.findByPlaceholderText("Find a note, a tag, a view, a setting…")).toHaveValue("")
+  })
+
   it("offers types and commands after a slash", async () => {
     const server = fakeServer()
     render(<App client={makeClient()} />)

@@ -311,12 +311,19 @@ non-goal; it would require synchronization and a different model.
 - **Tag pages**: every node carrying the tag, most recent first; a to-do
   tag shows open ones then done ones; the to-do trait is toggled there.
 - **Agenda**: everything dated, day by day.
-- **Search and command palette**: query chips (tag, context, status, date),
-  jump to any node, any tag page, any view, and the settings.
+- **Search**: query chips (tag, context, status, date).
+- **Command palette** (⌘K): one field that searches everything (nodes,
+  tags, views, commands, settings) and runs what it finds. An entry with a
+  chevron opens its own menu in place, searched the same way, with the
+  path above the field; Backspace in an empty field goes back up. A tag
+  opens its actions (its page, its nodes in the search, to-do tag or
+  plain); a setting its options; "Create a tag" asks the name, then plain
+  or to-do. `#name` of a tag that does not exist offers to create it
+  directly.
 - **Activity**: what changed, by whom and from which source, with undo.
 
 There are no other pages: tags, projects, people and settings are reached
-from the search. Settings is kept for security (passkeys, password, the
+from the palette, and tags are created there or while writing. Settings is kept for security (passkeys, password, the
 connected AIs and tokens).
 
 **A row is the node itself.** Wherever a node appears with its bullet (a

@@ -54,6 +54,16 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string; sear
     if (url === "/api/v1/login/start") return json({ flow: "f1", mode: "get", options: { publicKey: { challenge: "AA" } } })
     if (url.startsWith("/api/v1/signin/finish")) return json({ authenticated: true })
     if (url === "/api/v1/today") return json({ today, day: { day: today, exists: true, children: page(dayId) }, agenda: { nodes: [], refs: {} }, due: { nodes: [], refs: {} } })
+    if (url === "/api/v1/types" && method === "POST") {
+      const t = { name: body.name, color: "amber", todo: body.todo, count: 0 }
+      types.push(t)
+      return json(t)
+    }
+    if ((m = url.match(/^\/api\/v1\/types\/(.+)$/)) && method === "PATCH") {
+      const t = types.find((t) => t.name === decodeURIComponent(m![1]))!
+      t.todo = body.todo
+      return json(t)
+    }
     if (url === "/api/v1/types") return json({ types })
     if (url.startsWith("/api/v1/days?")) return json({ days: [] })
     if (url === "/api/v1/search") return json(opts.search?.(body) ?? { nodes: [], refs: {} })
