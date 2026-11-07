@@ -269,7 +269,9 @@ carries the wordmark, the search (⌘K) and a menu to the other views, and
 the writing line itself holds every power through completion menus:
 
 - `#` offers the tags, and creating one, plain or as a to-do tag;
-- `[[` or `@` offers nodes to reference, and creating one;
+- `[[` or `@` offers nodes to reference, never the row itself, and
+  creating one: `[[Dupont #person` creates Dupont tagged person in one
+  go, and plain "Create" asks which tag, or none, next;
 - `/` offers everything a row can become or do: the tags, To do (one
   entry per to-do tag, or creating `#task` as the first), Done or Reopen,
   Not a to-do, a date from a phrase (`/due friday 14h`), No date, Zoom in,

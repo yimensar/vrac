@@ -98,6 +98,22 @@ describe("app", () => {
     await waitFor(() => expect(server.tree()).toEqual(["call Marc #task"]))
   })
 
+  it("creates a reference with a tag in one go", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await userEvent.click(await screen.findByLabelText("New line"))
+    await screen.findByRole("textbox", { name: "New line" })
+    // user-event reads "[[" as an escaped bracket: four give two.
+    await userEvent.keyboard("lunch with [[[[Dupont")
+    // Create, then pick the tag.
+    await userEvent.click(await screen.findByRole("option", { name: /Create “Dupont”/ }))
+    await userEvent.click(await screen.findByRole("option", { name: /“Dupont” #person/ }))
+    await userEvent.keyboard("{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["lunch with [[Dupont]]"]))
+    const body = server.calls.find((c) => c.method === "POST" && c.url === "/api/v1/nodes")!.body
+    expect(body.create).toEqual([{ name: "Dupont", types: ["person"] }])
+  })
+
   it("completes a reference after @", async () => {
     const server = fakeServer()
     render(<App client={makeClient()} />)

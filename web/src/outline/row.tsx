@@ -35,6 +35,7 @@ function handlers(store: OutlineStore, k: string, navigate: (to: string) => void
     setFields: (f: Parameters<OutlineStore["setFields"]>[1]) => store.setFields(k, f),
     setTodo: (tag: string | null) => store.setTodo(k, tag),
     open: navigate,
+    self: e?.id,
     zoom: e?.id ? () => zoom(e.id!) : undefined,
     leave,
   }

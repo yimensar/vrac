@@ -44,7 +44,12 @@ export type LineHandlers = {
   open: (to: string) => void
   /** Moves the row to the trash; absent where a row cannot be removed. */
   remove?: () => void
+  /** The row's own node ID, which it never references. */
+  self?: string
 }
+
+/** A reference being created: its name, waiting for a tag. */
+type Pick = { name: string }
 
 type Menu = { trigger: Trigger; from: number; to: number; left: number; top: number }
 
@@ -75,6 +80,7 @@ export function LineEditor({ value, refs, caret, label, on }: { value: string; r
   const handlers = useRef(on)
   handlers.current = on
   const [menu, setMenu] = useState<Menu | null>(null)
+  const [pick, setPick] = useState<Pick | null>(null)
   const menuRef = useRef<{ menu: Menu | null; options: Option[]; active: number }>({ menu: null, options: [], active: 0 })
   const [active, setActive] = useState(0)
   const list = useRef<HTMLDivElement>(null)
@@ -131,6 +137,7 @@ export function LineEditor({ value, refs, caret, label, on }: { value: string; r
         }
         if (e.key === "Escape") {
           setMenu(null)
+          setPick(null)
           return true
         }
         return false
@@ -161,9 +168,13 @@ export function LineEditor({ value, refs, caret, label, on }: { value: string; r
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const options = useOptions(menu, on)
+  const options = useOptions(menu, on, pick, setPick)
   menuRef.current = { menu, options, active: Math.min(active, Math.max(options.length - 1, 0)) }
-  useEffect(() => setActive(0), [menu?.trigger.query, menu?.trigger.kind])
+  // Typing on moves away from a tag being picked.
+  useEffect(() => {
+    setActive(0)
+    setPick(null)
+  }, [menu?.trigger.query, menu?.trigger.kind])
   useEffect(() => {
     list.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" })
   }, [active, options.length])
@@ -238,15 +249,52 @@ function command(v: EditorView, m: Menu, run: () => void) {
 
 const matches = (name: string, query: string) => name.toLowerCase().startsWith(query.toLowerCase())
 
-function useOptions(menu: Menu | null, on: LineHandlers): Option[] {
+/** Splits a reference query into the name and the #tags written after
+ * it: "[[Dupont #person" creates Dupont tagged person. */
+function nameAndTags(query: string): { name: string; tags: string[] } {
+  const tags: string[] = []
+  const name = query
+    .replace(/(^|\s)#([\p{L}\p{N}_-]+)/gu, (_, sp, t) => {
+      tags.push(t.toLowerCase())
+      return sp
+    })
+    .replace(/\s+/g, " ")
+    .trim()
+  return { name, tags }
+}
+
+function useOptions(menu: Menu | null, on: LineHandlers, pick: Pick | null, setPick: (p: Pick | null) => void): Option[] {
   const types = useTypes()
   const query = menu?.trigger.query.trim() ?? ""
   const isRef = menu?.trigger.kind === "ref"
-  const { data } = useQuery({ queryKey: ["resolve", query], queryFn: () => api.resolve(query), enabled: isRef && query.length > 0, staleTime: 5_000 })
+  const { name, tags } = isRef ? nameAndTags(query) : { name: "", tags: [] }
+  const { data } = useQuery({ queryKey: ["resolve", name], queryFn: () => api.resolve(name), enabled: isRef && name.length > 0, staleTime: 5_000 })
   if (!menu) return []
   const options: Option[] = []
+  const create = (v: EditorView, m: Menu, tagged: string[]) => {
+    on.intend({ name, types: tagged })
+    insert(v, m, schema.nodes.ref.create({ name, label: name }))
+    setPick(null)
+  }
+  if (isRef && pick) {
+    // The second step of a creation: which tag the new node carries.
+    options.push({ key: "plain", content: <>“{pick.name}” without a tag</>, apply: (v, m) => create(v, m, []) })
+    for (const t of types.values()) {
+      options.push({
+        key: "as-" + t.name,
+        content: (
+          <>
+            “{pick.name}” <span className={cn("font-medium", typeClass(t.color))}>#{t.name}</span>
+          </>
+        ),
+        apply: (v, m) => create(v, m, [t.name]),
+      })
+    }
+    return options
+  }
   if (isRef) {
-    const found = data?.candidates ?? []
+    // The row never references itself.
+    const found = (data?.candidates ?? []).filter((c) => c.id !== on.self)
     for (const c of found) {
       options.push({
         key: c.id,
@@ -255,15 +303,31 @@ function useOptions(menu: Menu | null, on: LineHandlers): Option[] {
         apply: (v, m) => insert(v, m, schema.nodes.ref.create({ id: c.id, name: c.name, label: c.label || c.name })),
       })
     }
-    if (query && !found.some((c) => c.name.toLowerCase() === query.toLowerCase())) {
-      options.push({
-        key: "create",
-        content: <>Create “{query}”</>,
-        apply: (v, m) => {
-          on.intend({ name: query })
-          insert(v, m, schema.nodes.ref.create({ name: query, label: query }))
-        },
-      })
+    if (name && !found.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+      if (tags.length > 0) {
+        options.push({
+          key: "create-tagged",
+          content: (
+            <>
+              Create “{name}”{" "}
+              {tags.map((t) => (
+                <span key={t} className={cn("font-medium", typeClass(types.get(t)?.color))}>
+                  #{t}
+                </span>
+              ))}
+            </>
+          ),
+          hint: tags.every((t) => types.has(t)) ? undefined : "unknown tag",
+          apply: (v, m) => tags.every((t) => types.has(t)) && create(v, m, tags),
+        })
+      } else {
+        options.push({
+          key: "create",
+          content: <>Create “{name}”…</>,
+          hint: "then a tag",
+          apply: () => setPick({ name }),
+        })
+      }
     }
     return options
   }
