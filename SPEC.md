@@ -221,6 +221,9 @@ One query engine serves the UI and MCP. A query combines:
 - a date range over the node's date (due date for tasks, start for meetings
   and events, journal date otherwise);
 - actor or source;
+- optionally, for each result, the typed nodes it concerns, most specific
+  first, so a client can group results by project without repeating the
+  context on each node;
 - sort (date, recency of update) and an opaque cursor for pagination.
 
 Examples:
@@ -241,11 +244,16 @@ repository, the binary and the API keep the name `vrac`.
 **One page to write.** The home is the journal: today at the top, then the
 previous days as you scroll. On a keyboard it opens with the caret in
 today's new line, and typing anywhere on the page lands there. Above
-today's outline, a head shows the week as one line of days (today selected,
-each with its count), the selected day's scheduled meetings and events and
-due tasks (overdue ones under today), and every open task folded into one
-line; the head disappears when nothing is scheduled and nothing is open.
-Every row there is edited in place. There is no permanent navigation: a
+today's outline, a head keeps in mind what matters: the week's meetings,
+events and deadlines as one flat list, then every open task grouped by the
+project it concerns (through inherited context, so a task written under a
+meeting about Northwind sits under Northwind), tasks without a project
+first, deadlines first within a group and overdue ones counted in red.
+Groups fold, and the fold is remembered on the device. Tasks are not
+sorted by day: a task is written in today's journal whatever its horizon,
+and a date on it is a real deadline. The head disappears when nothing is
+scheduled and nothing is open. Every row there is edited in place. There
+is no permanent navigation: a
 thin bar carries the wordmark, the search (⌘K) and a menu to the other
 views, and the writing line itself holds every power through completion
 menus:
@@ -270,8 +278,8 @@ as a system-wide quick-capture shortcut, it would wrap the same UI and
 authenticate through the built-in OAuth server with PKCE. Offline editing is a
 non-goal; it would require synchronization and a different model.
 
-- **Journal** (home): the week and the open tasks, then the days in
-  sequence, outline editor.
+- **Journal** (home): the week and the open tasks by project, then the
+  days in sequence, outline editor.
 - **Node zoom**: breadcrumb from the journal (Escape goes up one level),
   authored outline, then the generated sections (scenario 5).
 - **Type views**: a table per type (`#project` with open tasks and last

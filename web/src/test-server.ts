@@ -8,7 +8,7 @@ export type Call = { method: string; url: string; body: any }
 
 type Row = Node & { position: number }
 
-export function fakeServer(opts: { authenticated?: boolean; today?: string } = {}) {
+export function fakeServer(opts: { authenticated?: boolean; today?: string; search?: (body: any) => unknown } = {}) {
   const today = opts.today ?? "2026-11-05"
   const calls: Call[] = []
   const rows = new Map<string, Row>()
@@ -56,7 +56,7 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string } = {
     if (url === "/api/v1/today") return json({ today, day: { day: today, exists: true, children: page(dayId) }, agenda: { nodes: [], refs: {} }, due: { nodes: [], refs: {} } })
     if (url === "/api/v1/types") return json({ types })
     if (url.startsWith("/api/v1/days?")) return json({ days: [] })
-    if (url === "/api/v1/search") return json({ nodes: [], refs: {} })
+    if (url === "/api/v1/search") return json(opts.search?.(body) ?? { nodes: [], refs: {} })
     if (url === "/api/v1/preferences") return json({ fold: "default", theme: "system", parse_dates: true })
     if (url.startsWith("/api/v1/resolve")) return json({ candidates: [northwind] })
     if ((m = url.match(/^\/api\/v1\/days\/(.+)$/))) return json({ day: m[1], exists: true, node: { id: dayId }, children: page(dayId) })

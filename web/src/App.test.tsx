@@ -49,6 +49,38 @@ describe("app", () => {
     await waitFor(() => expect(server.tree()).toEqual(["hello"]))
   })
 
+  it("keeps open tasks in mind by project above the journal", async () => {
+    const today = "2026-11-05"
+    const task = (id: string, text: string, due?: string) => ({
+      id, kind: "node", text, types: ["task"], status: "open", due, aliases: [], day: today, revision: 1, created_at: "", updated_at: "",
+      created_by: "owner", updated_by: "owner", source: "web", child_count: 0, ref_ids: [],
+    })
+    const northwind = "northwindaaaaaaaaaaaaaaaaa"
+    fakeServer({
+      today,
+      search: (body) =>
+        body.types?.includes("task")
+          ? {
+              nodes: [task("taskaaaaaaaaaaaaaaaaaaaaaa", "Buy milk #task"), task("taskbbbbbbbbbbbbbbbbbbbbbb", "Send the plan #task", "2026-11-01")],
+              refs: { [northwind]: { id: northwind, name: "Northwind", label: "Northwind", types: ["project"] } },
+              subjects: { taskbbbbbbbbbbbbbbbbbbbbbb: [northwind] },
+            }
+          : { nodes: [], refs: {} },
+    })
+    render(<App client={makeClient()} />)
+    // The task under the meeting about Northwind lands in Northwind's group;
+    // the other has no project. The overdue one is counted.
+    const group = await screen.findByRole("link", { name: "Northwind" })
+    expect(group.closest("div")!.parentElement).toHaveTextContent("1 late")
+    expect(screen.getByText("No project")).toBeInTheDocument()
+    expect(screen.getByText("Send the plan")).toBeInTheDocument()
+    // Folding a project is remembered on this device.
+    await userEvent.click(screen.getAllByRole("button", { name: "Collapse" })[1])
+    expect(screen.queryByText("Send the plan")).toBeNull()
+    expect(JSON.parse(localStorage.getItem("vrac.folded-projects")!)).toEqual([northwind])
+    localStorage.clear()
+  })
+
   it("offers types and commands after a slash", async () => {
     const server = fakeServer()
     render(<App client={makeClient()} />)

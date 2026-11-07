@@ -1,16 +1,30 @@
 import { useMemo, useState } from "react"
+import { Link } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { ChevronRightIcon } from "lucide-react"
-import { api, type Node, type Page } from "@/lib/api"
-import { addDays, formatDay } from "@/lib/syntax"
+import { api, type Node, type Page, type Refs } from "@/lib/api"
+import { addDays } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
+import { Content } from "@/outline/content"
 import { NodeList } from "@/outline/views"
 
-// What the coming week holds and what is left to do, above today's
-// journal. It stays one quiet line of days unless something is there, and
-// disappears entirely when nothing is scheduled and nothing is open.
+// What to keep in mind, above today's journal: the week's meetings,
+// events and deadlines, then every open task by project. Tasks are
+// written in the journal, so the project comes from their context, not
+// from where they were written. The head disappears when nothing is
+// scheduled and nothing is open.
 
-const dayOf = (n: Node) => (n.start ?? n.day).slice(0, 10)
+type Group = { id: string; page: Page }
+
+const FOLDED = "vrac.folded-projects"
+
+function loadFolded(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(FOLDED) ?? "[]"))
+  } catch {
+    return new Set()
+  }
+}
 
 export function JournalHead({ today }: { today: string }) {
   const to = addDays(today, 6)
@@ -18,93 +32,100 @@ export function JournalHead({ today }: { today: string }) {
     queryKey: ["week-agenda", today],
     queryFn: () => api.search({ types: ["meeting", "event"], from: today, to, scheduled: true, sort: "date_asc", limit: 200 }),
   })
-  // Every open task, dated or not: the week's chips count the dated ones,
-  // the disclosure below lists them all.
   const { data: tasks } = useQuery({
     queryKey: ["open-tasks"],
-    queryFn: () => api.search({ types: ["task"], status: "open", sort: "date_asc", limit: 200 }),
+    queryFn: () => api.search({ types: ["task"], status: "open", sort: "date_asc", with_subjects: true, limit: 200 }),
   })
-  const [selected, setSelected] = useState(today)
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(today, i)), [today])
   // Pages are built once per server answer so the lists keep their state.
-  const byDay = useMemo(() => {
-    const refs = { ...agenda?.refs, ...tasks?.refs }
-    const m = new Map<string, { scheduled: Page; due: Page }>(days.map((d) => [d, { scheduled: { nodes: [], refs }, due: { nodes: [], refs } }]))
-    for (const n of agenda?.nodes ?? []) m.get(dayOf(n))?.scheduled.nodes.push(n)
-    // Overdue tasks are today's business.
-    for (const n of tasks?.nodes ?? []) if (n.due) m.get(n.due < today ? today : n.due)?.due.nodes.push(n)
-    return m
-  }, [agenda, tasks, days, today])
+  const { week, groups } = useMemo(() => {
+    const refs: Refs = { ...agenda?.refs, ...tasks?.refs }
+    const dated = (tasks?.nodes ?? []).filter((n) => n.due && n.due >= today && n.due <= to)
+    const week: Page = { nodes: [...(agenda?.nodes ?? []), ...dated].sort((a, b) => dateOf(a).localeCompare(dateOf(b))), refs }
+    const byProject = new Map<string, Node[]>()
+    for (const n of tasks?.nodes ?? []) {
+      const project = (tasks?.subjects?.[n.id] ?? []).find((id) => refs[id]?.types.includes("project")) ?? ""
+      if (!byProject.has(project)) byProject.set(project, [])
+      byProject.get(project)!.push(n)
+    }
+    // Deadlines first, overdue ones at the very top; then the rest as the
+    // server orders them, oldest first.
+    const groups: Group[] = [...byProject.entries()]
+      .map(([id, nodes]) => ({ id, page: { nodes: nodes.map((n, i) => [n, i] as const).sort(([a, i], [b, j]) => (a.due ?? "~").localeCompare(b.due ?? "~") || i - j).map(([n]) => n), refs } }))
+      .sort((a, b) => (a.id === "" ? -1 : b.id === "" ? 1 : (refs[a.id]?.name ?? "").localeCompare(refs[b.id]?.name ?? "")))
+    return { week, groups }
+  }, [agenda, tasks, today, to])
+  const [folded, setFolded] = useState(loadFolded)
   if (!agenda || !tasks) return null
-  const open = tasks.nodes.length
-  if (agenda.nodes.length === 0 && open === 0) return null
-  const day = byDay.get(selected)!
-  const list = (label: string, page: Page, id: string) =>
-    page.nodes.length > 0 && (
-      <div>
-        <div className="mb-1 pl-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-        <NodeList id={id} page={page} />
-      </div>
-    )
+  if (week.nodes.length === 0 && tasks.nodes.length === 0) return null
+  const toggle = (id: string) => {
+    const next = new Set(folded)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setFolded(next)
+    try {
+      localStorage.setItem(FOLDED, JSON.stringify([...next]))
+    } catch {
+      // A private window forgets; the page still works.
+    }
+  }
   return (
-    <div className="mb-6 space-y-4 border-b pb-4">
-      <div className="-mx-1 flex gap-0.5 overflow-x-auto text-sm" role="tablist" aria-label="Week">
-        {days.map((d) => {
-          const n = byDay.get(d)!.scheduled.nodes.length + byDay.get(d)!.due.nodes.length
-          return (
-            <button
-              key={d}
-              type="button"
-              role="tab"
-              aria-selected={selected === d}
-              onClick={() => setSelected(d)}
-              className={cn(
-                "flex shrink-0 items-baseline gap-1 rounded-md px-2 py-1 whitespace-nowrap",
-                selected === d ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
-                n === 0 && selected !== d && "opacity-60",
-              )}
-            >
-              {d === today ? "Today" : formatDay(d, { weekday: "short", day: "numeric" })}
-              {n > 0 && <span className="text-xs tabular-nums">{n}</span>}
-            </button>
-          )
-        })}
-      </div>
-      {list("Scheduled", day.scheduled, `week-${selected}-scheduled`)}
-      {list("Due", day.due, `week-${selected}-due`)}
-      {open > 0 && <OpenTasks page={tasks} today={today} />}
+    <div className="mb-6 space-y-5 border-b pb-5">
+      {week.nodes.length > 0 && (
+        <div>
+          <Label>This week</Label>
+          <NodeList id="week" page={week} context={false} />
+        </div>
+      )}
+      {tasks.nodes.length > 0 && (
+        <div>
+          <Label>
+            Open tasks <span className="tabular-nums">{tasks.nodes.length}</span>
+          </Label>
+          <div className="space-y-2">
+            {groups.map((g) => (
+              <TaskGroup key={g.id || "none"} group={g} refs={week.refs} today={today} folded={folded.has(g.id)} onToggle={() => toggle(g.id)} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-/** Every open task, folded into one line until asked for. */
-function OpenTasks({ page, today }: { page: Page; today: string }) {
-  const [open, setOpen] = useState(false)
-  const groups = useMemo(() => {
-    const pick = (f: (due?: string) => boolean): Page => ({ nodes: page.nodes.filter((n) => f(n.due)), refs: page.refs })
-    return [
-      ["Overdue", pick((d) => Boolean(d && d < today))],
-      ["Today", pick((d) => d === today)],
-      ["Upcoming", pick((d) => Boolean(d && d > today))],
-      ["No date", pick((d) => !d)],
-    ] as const
-  }, [page, today])
+const dateOf = (n: Node) => n.due ?? n.start ?? n.day
+
+function Label({ children }: { children: React.ReactNode }) {
+  return <div className="mb-1 flex items-center gap-2 pl-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">{children}</div>
+}
+
+/** The open tasks of one project, folded or not; the fold is remembered on
+ * this device. */
+function TaskGroup({ group, refs, today, folded, onToggle }: { group: Group; refs: Refs; today: string; folded: boolean; onToggle: () => void }) {
+  const ref = refs[group.id]
+  const late = group.page.nodes.filter((n) => n.due && n.due < today).length
   return (
     <div>
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} />
-        {page.nodes.length} open {page.nodes.length === 1 ? "task" : "tasks"}
-      </button>
-      {open && (
-        <div className="mt-3 space-y-4">
-          {groups
-            .filter(([, p]) => p.nodes.length > 0)
-            .map(([label, p]) => (
-              <div key={label}>
-                <div className="mb-1 pl-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-                <NodeList id={`open-${label}`} page={p} />
-              </div>
-            ))}
+      <div className="flex h-6 items-center text-sm">
+        <button type="button" aria-expanded={!folded} aria-label={folded ? "Expand" : "Collapse"} onClick={onToggle} className="flex h-6 w-5 shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground">
+          <ChevronRightIcon className={cn("size-3.5 transition-transform", !folded && "rotate-90")} />
+        </button>
+        <span className="flex min-w-0 items-baseline gap-2 pl-4">
+          {ref ? (
+            <Link to={`/node/${ref.id}`} className="truncate font-medium hover:underline">
+              <Content input={ref.label || ref.name} />
+            </Link>
+          ) : (
+            <span className="font-medium text-muted-foreground">No project</span>
+          )}
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {group.page.nodes.length}
+            {late > 0 && <span className="ml-1 text-destructive">{late} late</span>}
+          </span>
+        </span>
+      </div>
+      {!folded && (
+        <div className="ml-7 border-l border-border/70">
+          <NodeList id={`tasks-${group.id || "none"}`} page={group.page} context={false} />
         </div>
       )}
     </div>

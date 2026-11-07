@@ -27,7 +27,8 @@ export type Node = {
 /** name is plain; label keeps the #types written inside the sentence. */
 export type Ref = { id: string; name: string; label: string; types: string[]; trashed?: boolean }
 export type Refs = Record<string, Ref>
-export type Page = { nodes: Node[]; refs: Refs; next_cursor?: string }
+/** subjects, when asked for, lists the typed nodes each result concerns, most specific first. */
+export type Page = { nodes: Node[]; refs: Refs; subjects?: Record<string, string[]>; next_cursor?: string }
 export type Brief = { id: string; name: string; label?: string; types: string[]; path?: string[] }
 export type Type = { name: string; builtin: boolean; color: string; count: number }
 export type Creation = { name: string; types?: string[] }
@@ -60,6 +61,7 @@ export type Query = {
   from?: string
   to?: string
   scheduled?: boolean
+  with_subjects?: boolean
   sort?: "date_desc" | "date_asc" | "updated"
   limit?: number
   cursor?: string

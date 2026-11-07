@@ -30,6 +30,10 @@ type Query struct {
 	To   string `json:"to,omitempty"`
 	// Scheduled keeps nodes with an explicit due date or start.
 	Scheduled bool `json:"scheduled,omitempty"`
+	// Subjects adds, for every result, the typed nodes it concerns (see
+	// Concerns), most specific first, so a client can group results by
+	// project or person without repeating the context on each node.
+	Subjects bool `json:"with_subjects,omitempty"`
 	// Sort is "date_desc" (default), "date_asc" or "updated".
 	Sort   string `json:"sort,omitempty"`
 	Limit  int    `json:"limit,omitempty"`
@@ -197,12 +201,69 @@ func (e *Engine) Search(ctx context.Context, q Query) (Page, error) {
 		}
 	}
 	parents, err := e.refMap(ctx, e.db, ids)
+	if err != nil {
+		return Page{}, err
+	}
 	for id, r := range parents {
 		if _, ok := page.Refs[id]; !ok {
 			page.Refs[id] = r
 		}
 	}
-	return page, err
+	if q.Subjects {
+		if page.Subjects, err = e.subjectsOf(ctx, page.Nodes, page.Refs); err != nil {
+			return Page{}, err
+		}
+	}
+	return page, nil
+}
+
+// subjectsOf lists, for each node, the typed nodes it concerns other than
+// itself, most specific first: a subject whose own context is larger sits
+// deeper in the tree. Their display entries are added to refs.
+func (e *Engine) subjectsOf(ctx context.Context, nodes []Node, refs map[string]Ref) (map[string][]string, error) {
+	out := map[string][]string{}
+	if len(nodes) == 0 {
+		return out, nil
+	}
+	seqs := make([]any, len(nodes))
+	byseq := map[int64]string{}
+	for i, n := range nodes {
+		seqs[i] = n.seq
+		byseq[n.seq] = n.ID
+	}
+	rows, err := e.db.QueryContext(ctx, `SELECT c.node_seq, s.seq, s.id, (SELECT count(*) FROM concerns o WHERE o.node_seq = s.seq)
+		FROM concerns c JOIN nodes s ON s.seq = c.subject_seq
+		WHERE c.node_seq IN (`+placeholders(len(seqs))+`) AND c.subject_seq != c.node_seq AND s.trashed_at IS NULL
+		AND EXISTS (SELECT 1 FROM node_types nt WHERE nt.node_seq = s.seq)
+		ORDER BY c.node_seq, 4 DESC, s.seq`, seqs...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var node, seq int64
+		var id string
+		var depth int
+		if err := rows.Scan(&node, &seq, &id, &depth); err != nil {
+			return nil, err
+		}
+		out[byseq[node]] = append(out[byseq[node]], id)
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	more, err := e.refMap(ctx, e.db, ids)
+	if err != nil {
+		return nil, err
+	}
+	for id, r := range more {
+		if _, ok := refs[id]; !ok {
+			refs[id] = r
+		}
+	}
+	return out, nil
 }
 
 // ftsQuery turns free text into an FTS5 query of quoted word prefixes.

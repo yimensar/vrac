@@ -253,6 +253,37 @@ func TestContextIsInherited(t *testing.T) {
 	}
 }
 
+func TestSearchListsSubjects(t *testing.T) {
+	e := newEngine(t)
+	northwind := write(t, e, "Northwind #project", "Marc #person")[0]
+	lot := create(t, e, CreateRequest{Placement: Placement{ParentID: northwind.ID}, Nodes: []Draft{{Input: "Lot 2 #project"}}}).Nodes[0]
+	meeting := create(t, e, CreateRequest{Nodes: []Draft{{
+		Input:    "Point [[Lot 2]] with [[Marc]] #meeting",
+		Children: []Draft{{Input: "Send the plan #task"}},
+	}}}).Nodes
+	loose := write(t, e, "Buy milk #task")[0]
+	p, err := e.Search(ctx, Query{Types: []string{"task"}, Status: StatusOpen, Subjects: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The task inherits its meeting's context, most specific first: the
+	// meeting, then Lot 2 before its parent Northwind, and Marc; never
+	// itself.
+	got := p.Subjects[meeting[1].ID]
+	if len(got) != 4 || got[0] != meeting[0].ID || slices.Index(got, lot.ID) > slices.Index(got, northwind.ID) {
+		t.Fatalf("subjects = %v (meeting %s, lot %s, northwind %s)", got, meeting[0].ID, lot.ID, northwind.ID)
+	}
+	if len(p.Subjects[loose.ID]) != 0 {
+		t.Fatalf("loose task concerns %v", p.Subjects[loose.ID])
+	}
+	if r, ok := p.Refs[lot.ID]; !ok || r.Name != "Lot 2" || !slices.Contains(r.Types, "project") {
+		t.Fatalf("subjects are not described: %+v", p.Refs[lot.ID])
+	}
+	if p, _ := e.Search(ctx, Query{Types: []string{"task"}}); p.Subjects != nil {
+		t.Fatal("subjects listed without being asked")
+	}
+}
+
 // Regression: types were removed from the text, so "#meeting with Alice
 // about Globex" became "with Alice about Globex".
 func TestTypesStayWhereWritten(t *testing.T) {

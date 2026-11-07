@@ -210,7 +210,7 @@ func (s *Server) tools(srv *mcp.Server) {
 			return nil, map[string]any{"today": v.Today, "weekday": weekday(v.Today), "next_days": nextDays(v.Today), "timezone": s.opts.Timezone, "journal": aiPageOf(v.Day.Children),
 				"agenda": aiPageOf(v.Agenda), "due_or_overdue": aiPageOf(v.Due), "types": types}, nil
 		})
-	mcp.AddTool(srv, tool("vrac_search", "Search current nodes. Combine text (word prefixes), types (any of), concerns (node IDs, all required, with inherited context), mentions (direct references to an ID), status, from/to (node date: due for tasks, start for meetings/events, journal day otherwise) and sort.", true),
+	mcp.AddTool(srv, tool("vrac_search", "Search current nodes. Combine text (word prefixes), types (any of), concerns (node IDs, all required, with inherited context), mentions (direct references to an ID), status, from/to (node date: due for tasks, start for meetings/events, journal day otherwise), with_subjects (list the projects, people and other typed nodes each result concerns, most specific first) and sort.", true),
 		func(ctx context.Context, req *mcp.CallToolRequest, q engine.Query) (*mcp.CallToolResult, any, error) {
 			p, err := e.Search(ctx, q)
 			if err != nil {

@@ -91,11 +91,13 @@ type Brief struct {
 	Path  []string `json:"path,omitempty"`
 }
 
-// Page is a bounded list of nodes with the references they use.
+// Page is a bounded list of nodes with the references they use. Subjects
+// is set by searches asking for it: the typed nodes each result concerns.
 type Page struct {
-	Nodes      []Node         `json:"nodes"`
-	Refs       map[string]Ref `json:"refs"`
-	NextCursor string         `json:"next_cursor,omitempty"`
+	Nodes      []Node              `json:"nodes"`
+	Refs       map[string]Ref      `json:"refs"`
+	Subjects   map[string][]string `json:"subjects,omitempty"`
+	NextCursor string              `json:"next_cursor,omitempty"`
 }
 
 // Draft describes a node to create. Input uses the Vrac syntax: #type marks
