@@ -105,7 +105,7 @@ export function Row({ store, k, context, title }: { store: OutlineStore; k: stri
               role="textbox"
               tabIndex={0}
               aria-label="Edit"
-              className="min-h-6 cursor-text whitespace-pre-wrap break-words leading-6"
+              className="min-h-6 cursor-text whitespace-break-spaces break-words leading-6"
               onMouseDown={(ev) => {
                 if ((ev.target as HTMLElement).closest("a")) return
                 ev.preventDefault()

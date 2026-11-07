@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* The editor's own rules: break-spaces keeps the caret on its line after a
+   trailing space, and its hack nodes stay invisible. */
+@import "prosemirror-view/style/prosemirror.css";
 
 @custom-variant dark (&:is(.dark *));
 

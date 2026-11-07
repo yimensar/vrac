@@ -109,7 +109,7 @@ export function LineEditor({ value, refs, caret, label, on }: { value: string; r
     })
     const v = new EditorView(host.current!, {
       state,
-      attributes: { role: "textbox", "aria-label": label ?? "Edit", class: "outline-none whitespace-pre-wrap break-words min-h-6 leading-6" },
+      attributes: { role: "textbox", "aria-label": label ?? "Edit", class: "outline-none whitespace-break-spaces break-words min-h-6 leading-6" },
       dispatchTransaction(tr) {
         const next = v.state.apply(tr)
         v.updateState(next)
