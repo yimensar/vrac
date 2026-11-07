@@ -4,7 +4,7 @@ import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react"
 import { api, current, type Page, type Placement } from "@/lib/api"
 import { reportError } from "@/lib/hooks"
 import { NewRow, Row } from "./row"
-import { OutlineStore } from "./store"
+import { GHOST, OutlineStore } from "./store"
 import { TouchBar } from "./touch-bar"
 
 export type Source = { day: string } | { node: string }
@@ -31,8 +31,11 @@ function useStore(mode: "tree" | "list", id: string, placement: Placement, reloa
   return store
 }
 
-/** An editable outline of a journal day or of a node's children. */
-export function Outline({ source, compose = true }: { source: Source; compose?: boolean }) {
+/** An editable outline of a journal day or of a node's children. With
+ * capture, the outline is where the page writes: it opens with the caret
+ * in its new line on keyboards, and typing anywhere on the page lands
+ * there, so there is nothing to click before writing. */
+export function Outline({ source, compose = true, capture = false }: { source: Source; compose?: boolean; capture?: boolean }) {
   const id = "day" in source ? "day:" + source.day : "node:" + source.node
   const query = useQuery({
     queryKey: ["outline", id],
@@ -49,6 +52,25 @@ export function Outline({ source, compose = true }: { source: Source; compose?: 
   useEffect(() => {
     if (query.data) store.load(query.data.page, query.data.rootId)
   }, [query.data, store])
+  const loaded = Boolean(query.data)
+  useEffect(() => {
+    // A pointer that hovers has a keyboard; a touch screen would pop its
+    // keyboard up, so it waits for a tap.
+    if (capture && loaded && !store.editing && window.matchMedia?.("(hover: hover)").matches) store.focus(GHOST)
+  }, [capture, loaded, store])
+  useEffect(() => {
+    if (!capture) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return
+      const t = e.target as HTMLElement
+      if (t !== document.body && (t.isContentEditable || t.closest("input, textarea, select, [role=textbox], [role=dialog], [role=menu]"))) return
+      e.preventDefault()
+      store.setText(GHOST, store.ghost.text + e.key)
+      store.focus(GHOST)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [capture, store])
   if (!query.data) return null
   return (
     <div data-testid="outline" className="group/outline relative">

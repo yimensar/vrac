@@ -5,7 +5,6 @@ import {
   ActivityIcon,
   BookOpenIcon,
   CalendarDaysIcon,
-  CheckSquareIcon,
   EllipsisIcon,
   FolderKanbanIcon,
   SearchIcon,
@@ -27,7 +26,6 @@ import { usePreferences } from "@/lib/preferences"
 // There is one place to write: the journal. The other views are a search
 // or a menu away and never stay on screen.
 const views = [
-  { to: "/tasks", label: "Tasks", icon: CheckSquareIcon },
   { to: "/agenda", label: "Agenda", icon: CalendarDaysIcon },
   { to: "/type/project", label: "Projects", icon: FolderKanbanIcon },
   { to: "/type/person", label: "People", icon: UsersIcon },

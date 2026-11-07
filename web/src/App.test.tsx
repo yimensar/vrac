@@ -38,6 +38,17 @@ describe("app", () => {
     expect((await screen.findByRole("textbox", { name: "Edit" })).getAttribute("contenteditable")).toBe("true")
   })
 
+  it("writes what is typed on the page into today's new line", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await screen.findByLabelText("New line")
+    // Nothing is focused: the first key opens the new line with it.
+    await userEvent.keyboard("hello")
+    expect(await screen.findByRole("textbox", { name: "New line" })).toHaveTextContent("hello")
+    await userEvent.keyboard("{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["hello"]))
+  })
+
   it("offers types and commands after a slash", async () => {
     const server = fakeServer()
     render(<App client={makeClient()} />)

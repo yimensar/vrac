@@ -238,12 +238,17 @@ the public HTTP API, the same one any other client would use. Usable on
 mobile browsers. On screen the product is called `vrac.`, with the dot; the
 repository, the binary and the API keep the name `vrac`.
 
-**One page to write.** The home is the journal: today at the top, with what
-the day already holds (scheduled meetings and events, due and overdue
-tasks) above the day's outline, then the previous days as you scroll. There
-is no permanent navigation: a thin bar carries the wordmark, the search
-(⌘K) and a menu to the other views, and the writing line itself holds every
-power through completion menus:
+**One page to write.** The home is the journal: today at the top, then the
+previous days as you scroll. On a keyboard it opens with the caret in
+today's new line, and typing anywhere on the page lands there. Above
+today's outline, a head shows the week as one line of days (today selected,
+each with its count), the selected day's scheduled meetings and events and
+due tasks (overdue ones under today), and every open task folded into one
+line; the head disappears when nothing is scheduled and nothing is open.
+Every row there is edited in place. There is no permanent navigation: a
+thin bar carries the wordmark, the search (⌘K) and a menu to the other
+views, and the writing line itself holds every power through completion
+menus:
 
 - `#` offers the types, and creating a free type;
 - `[[` or `@` offers nodes to reference, and creating one as project, person
@@ -265,12 +270,12 @@ as a system-wide quick-capture shortcut, it would wrap the same UI and
 authenticate through the built-in OAuth server with PKCE. Offline editing is a
 non-goal; it would require synchronization and a different model.
 
-- **Journal** (home): today's agenda and due tasks, then the days in
+- **Journal** (home): the week and the open tasks, then the days in
   sequence, outline editor.
-- **Node zoom**: authored outline, then the generated sections (scenario 5).
+- **Node zoom**: breadcrumb from the journal (Escape goes up one level),
+  authored outline, then the generated sections (scenario 5).
 - **Type views**: a table per type (`#project` with open tasks and last
   activity; `#person`; `#meeting`…).
-- **Tasks**: open tasks grouped by due date, filterable by context.
 - **Agenda**: local calendar, week and month, from meetings and events.
 - **Search and command palette**: query chips (type, context, status, date),
   jump to any node.

@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Link, useParams } from "react-router"
+import { useEffect, useState } from "react"
+import { Link, useNavigate, useParams } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { ChevronRightIcon } from "lucide-react"
 import { api, type Node, type Page } from "@/lib/api"
@@ -10,14 +10,25 @@ import { Loading, PageTitle, Section } from "@/components/page"
 import { Content } from "@/outline/content"
 import { NodeList, Outline } from "@/outline/views"
 
+/** A node zoomed in: its page is the same page, one level deeper. The
+ * breadcrumb leads back to the journal and Escape goes up one level. */
 export function NodePage() {
   const { id = "" } = useParams()
+  const navigate = useNavigate()
   const { data, error } = useQuery({ queryKey: ["node", id], queryFn: () => api.node(id) })
   const { data: sections } = useQuery({ queryKey: ["sections", id], queryFn: () => api.sections(id), enabled: data?.node.kind === "node" })
+  const crumbs = data?.path.filter((p) => p.name !== "Journal") ?? []
+  const up = crumbs.length > 0 ? crumbLink(crumbs[crumbs.length - 1]) : "/"
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && e.target === document.body) navigate(up)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [navigate, up])
   if (error) return <p className="text-muted-foreground">This node does not exist.</p>
   if (!data) return <Loading />
   const n = data.node
-  const crumbs = data.path.filter((p) => p.name !== "Journal")
   const self: Page = { nodes: [n], refs: data.refs }
   const section = (title: string, nodes: Node[]) =>
     nodes.length > 0 && (
@@ -27,10 +38,14 @@ export function NodePage() {
     )
   return (
     <>
-      <nav className="mb-3 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+      <nav className="mb-3 flex flex-wrap items-center gap-1 text-sm text-muted-foreground" aria-label="Breadcrumb">
+        <Link to="/" className="hover:text-foreground">
+          Journal
+        </Link>
+        <ChevronRightIcon className="size-3" />
         {crumbs.map((p) => (
           <span key={p.id} className="flex items-center gap-1">
-            <Link to={isDay(p.name) ? `/day/${p.name}` : `/node/${p.id}`} className="hover:text-foreground">
+            <Link to={crumbLink(p)} className="hover:text-foreground">
               {isDay(p.name) ? formatDay(p.name) : <Content input={p.label || p.name} />}
             </Link>
             <ChevronRightIcon className="size-3" />
@@ -64,6 +79,8 @@ export function NodePage() {
     </>
   )
 }
+
+const crumbLink = (p: { id: string; name: string }) => (isDay(p.name) ? `/day/${p.name}` : `/node/${p.id}`)
 
 /** Dates, aliases and authorship of a zoomed node. */
 function NodeFields({ node }: { node: Node }) {

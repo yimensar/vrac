@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import { Link, useNavigate, useParams } from "react-router"
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
+import { useInfiniteQuery } from "@tanstack/react-query"
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 import { api } from "@/lib/api"
 import { addDays, formatDay, localDate } from "@/lib/syntax"
@@ -8,13 +8,15 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PageTitle } from "@/components/page"
-import { NodeList, Outline } from "@/outline/views"
+import { Outline } from "@/outline/views"
+import { JournalHead } from "./journal-head"
 
 const long: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long" }
 const full: Intl.DateTimeFormatOptions = { ...long, year: "numeric" }
 
 /** The home: today's journal, then the days before it as you scroll. This
- * is the one place to write; everything else is a search away. */
+ * is the one place to write; everything else is a search away. Typing
+ * anywhere on it writes in today's new line. */
 export function JournalPage() {
   const today = localDate()
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
@@ -42,8 +44,8 @@ export function JournalPage() {
             </Link>
             {d === today && <span className="text-sm text-muted-foreground">{formatDay(d, long)}</span>}
           </h2>
-          {d === today && <TodayStrip />}
-          <Outline source={{ day: d }} compose={d === today} />
+          {d === today && <JournalHead today={today} />}
+          <Outline source={{ day: d }} compose={d === today} capture={d === today} />
         </section>
       ))}
       <div ref={sentinel} />
@@ -53,26 +55,6 @@ export function JournalPage() {
         </Button>
       )}
     </>
-  )
-}
-
-/** What the day holds before anything is written: scheduled meetings and
- * events, due and overdue tasks. Each row is edited in place. */
-function TodayStrip() {
-  const { data } = useQuery({ queryKey: ["today"], queryFn: api.today })
-  if (!data || (data.agenda.nodes.length === 0 && data.due.nodes.length === 0)) return null
-  const group = (label: string, page: typeof data.agenda, id: string) =>
-    page.nodes.length > 0 && (
-      <div>
-        <div className="mb-1 pl-9 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-        <NodeList id={id} page={page} />
-      </div>
-    )
-  return (
-    <div className="mb-6 space-y-4 border-b pb-5">
-      {group("Scheduled", data.agenda, "today-agenda")}
-      {group("Due", data.due, "today-due")}
-    </div>
   )
 }
 

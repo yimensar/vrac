@@ -12,7 +12,6 @@ import { NodePage } from "@/pages/node"
 import { SearchPage } from "@/pages/search"
 import { SettingsPage } from "@/pages/settings"
 import { SharePage } from "@/pages/share"
-import { TasksPage } from "@/pages/tasks"
 import { TypePage, TypesPage } from "@/pages/types"
 
 export function makeClient() {
@@ -31,7 +30,7 @@ function Gate() {
         <Route path="journal" element={<Navigate to="/" replace />} />
         <Route path="day/:day" element={<DayPage />} />
         <Route path="node/:id" element={<NodePage />} />
-        <Route path="tasks" element={<TasksPage />} />
+        <Route path="tasks" element={<Navigate to="/" replace />} />
         <Route path="agenda" element={<AgendaPage />} />
         <Route path="types" element={<TypesPage />} />
         <Route path="type/:name" element={<TypePage />} />
