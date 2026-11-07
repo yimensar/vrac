@@ -369,6 +369,11 @@ Tools (V1):
 
 Results show text with `[[Name|ID]]` references.
 
+`vrac_update` keeps a node's tags when its new text writes none, so a
+rewritten sentence does not lose its type, status or date by omission;
+with `keep_types: false` the node has exactly the tags its text writes,
+none if it writes none.
+
 Every mutation takes a request ID and a source (for example `outlook`); the
 actor comes from the authenticated client.
 

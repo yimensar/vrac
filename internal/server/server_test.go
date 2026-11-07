@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -279,6 +280,11 @@ func TestOAuthAndMCP(t *testing.T) {
 	if err != nil || len(tools.Tools) != 12 {
 		t.Fatalf("tools = %d, %v", len(tools.Tools), err)
 	}
+	for _, tool := range tools.Tools {
+		if tool.Name == "vrac_update" && !strings.Contains(fmt.Sprint(tool.InputSchema), "false removes every tag") {
+			t.Fatalf("vrac_update schema = %v", tool.InputSchema)
+		}
+	}
 	call := func(name string, args any) *mcp.CallToolResult {
 		t.Helper()
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
@@ -308,6 +314,25 @@ func TestOAuthAndMCP(t *testing.T) {
 	nodes := got.StructuredContent.(map[string]any)["nodes"].([]any)
 	if len(nodes) != 1 || nodes[0].(map[string]any)["updated_by"] != "Claude" || nodes[0].(map[string]any)["source"] != "outlook" {
 		t.Fatalf("search = %v", got.StructuredContent)
+	}
+	// A rewrite without a tag keeps it; keep_types false removes it.
+	task := nodes[0].(map[string]any)
+	update := func(rid string, revision float64, args map[string]any) map[string]any {
+		t.Helper()
+		args["request_id"], args["source"], args["id"], args["expected_revision"] = rid, "chat", task["id"], revision
+		r := call("vrac_update", args)
+		if r.IsError {
+			t.Fatalf("update = %+v", r.Content[0])
+		}
+		return r.StructuredContent.(map[string]any)["nodes"].([]any)[0].(map[string]any)
+	}
+	kept := update("u1", task["revision"].(float64), map[string]any{"input": "Send the revised estimate"})
+	if kept["text"] != "Send the revised estimate #task" {
+		t.Fatalf("kept = %v", kept)
+	}
+	plain := update("u2", kept["revision"].(float64), map[string]any{"input": "Send the revised estimate", "keep_types": false})
+	if plain["text"] != "Send the revised estimate" || plain["types"] != nil || plain["status"] != nil {
+		t.Fatalf("plain = %v", plain)
 	}
 }
 

@@ -85,7 +85,9 @@ work or life.
    "update the import documentation" and "update the import schema" are two
    to-dos. When unsure, write the new one and mention the possible overlap.
    A rewritten `input` without any `#tag` keeps the node's tags; write tags
-   only to change them.
+   only to change them. To remove every tag, rewrite with
+   `keep_types: false`. A `#word` in a sentence is a tag: to name a tag in
+   prose, write it without `#`.
 4. Write with `vrac_write`, by default into today's journal. Group a meeting:
    one node, its notes, decisions and to-dos as `children`. Children
    inherit the parent's references, so do not repeat `[[Project]]` on them.

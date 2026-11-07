@@ -140,7 +140,10 @@ type (
 	}
 	updateInput struct {
 		engine.UpdateRequest
-		Source string `json:"source" jsonschema:"where the information came from"`
+		// KeepTypes shadows the engine's flag: AI clients keep a node's
+		// tags unless they say otherwise.
+		KeepTypes *bool  `json:"keep_types,omitempty" jsonschema:"default true: an input without any #tag keeps the node's tags; false removes every tag the input does not write"`
+		Source    string `json:"source" jsonschema:"where the information came from"`
 	}
 	moveInput struct {
 		engine.MoveRequest
@@ -284,10 +287,11 @@ func (s *Server) tools(srv *mcp.Server) {
 		}
 		return nil, map[string]any{"nodes": aiNodes(res.Nodes, res.Refs), "created": res.Created}, nil
 	})
-	mcp.AddTool(srv, tool("vrac_update", "Change a node at expected_revision. input replaces its text (Vrac syntax); if it writes no #tag the node keeps its tags, otherwise the written tags replace them. status (done or open, for a node carrying a to-do tag), date, date_text, end and aliases change only those fields (empty string clears).", false),
+	mcp.AddTool(srv, tool("vrac_update", "Change a node at expected_revision. input replaces its text (Vrac syntax); if it writes no #tag the node keeps its tags, otherwise the written tags replace them; with keep_types false the node has exactly the tags input writes, none if it writes none. status (done or open, for a node carrying a to-do tag), date, date_text, end and aliases change only those fields (empty string clears).", false),
 		func(ctx context.Context, req *mcp.CallToolRequest, in updateInput) (*mcp.CallToolResult, any, error) {
-			// Rewriting a sentence must not drop its types by omission.
-			in.KeepTypes = true
+			// Rewriting a sentence must not drop its types by omission,
+			// only on request.
+			in.UpdateRequest.KeepTypes = in.KeepTypes == nil || *in.KeepTypes
 			res, err := e.Update(ctx, actorOf(req, in.Source), in.UpdateRequest)
 			if err != nil {
 				return toolError(err)
