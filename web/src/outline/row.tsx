@@ -128,7 +128,7 @@ export function Row({ store, k, context, title }: { store: OutlineStore; k: stri
         </div>
       </div>
       {!title && e.expanded && e.children && e.children.length > 0 && (
-        <div className="ml-7 border-l border-border/70">
+        <div className="ml-7 border-l border-border/60">
           {e.children.map((c) => (
             <Row key={c} store={store} k={c} />
           ))}
@@ -139,7 +139,7 @@ export function Row({ store, k, context, title }: { store: OutlineStore; k: stri
 }
 
 function Bullet({ id, color, folded }: { id?: string; color?: string; folded: boolean }) {
-  const dot = <span className={cn("rounded-full", color ? "size-2" : "size-1.5", dotClass(color), folded && "ring-[3px] ring-muted-foreground/25")} />
+  const dot = <span className={cn("rounded-full transition-shadow", color ? "size-2" : "size-1.5", dotClass(color), folded && "ring-[3px] ring-muted-foreground/20")} />
   const cls = "flex h-6 w-4 shrink-0 items-center justify-center"
   return id ? (
     <Link to={`/node/${id}`} tabIndex={-1} aria-label="Zoom in" className={cls}>
@@ -179,7 +179,7 @@ export function NewRow({ store }: { store: OutlineStore }) {
             }}
             onFocus={() => store.focus(GHOST)}
           >
-            {empty ? <span className="text-muted-foreground/60">{hint}</span> : <Content input={store.ghost.text} />}
+            {empty ? <span className="text-muted-foreground/50">{hint}</span> : <Content input={store.ghost.text} />}
           </div>
         )}
       </div>

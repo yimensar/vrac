@@ -102,3 +102,18 @@
     @apply bg-background text-foreground antialiased;
   }
 }
+
+/* One quiet reading column: the system face, slightly tighter headings,
+   dates and counts aligned. */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    font-feature-settings: "cv11", "ss01", "tnum";
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.015em;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--foreground) 14%, transparent);
+  }
+}

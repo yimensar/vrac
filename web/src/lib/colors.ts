@@ -35,5 +35,5 @@ const dots: Record<string, string> = {
 
 /** The bullet of a typed node. */
 export function dotClass(color: string | undefined): string {
-  return dots[color ?? ""] ?? "bg-foreground/70"
+  return dots[color ?? ""] ?? "bg-foreground/40"
 }

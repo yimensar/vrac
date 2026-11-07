@@ -37,12 +37,12 @@ export function JournalPage() {
   return (
     <>
       {days.map((d) => (
-        <section key={d} className="mb-14">
-          <h2 className="mb-4 flex flex-wrap items-baseline gap-x-3">
-            <Link to={`/day/${d}`} className={cn("tracking-tight hover:text-foreground", d === today ? "text-xl font-semibold" : "text-base font-medium text-muted-foreground")}>
+        <section key={d} className={cn("mb-16", d !== today && "border-t pt-8")}>
+          <h2 className="mb-5 flex flex-wrap items-baseline gap-x-3">
+            <Link to={`/day/${d}`} className={cn("tracking-tight hover:text-foreground", d === today ? "text-2xl font-semibold" : "text-base font-medium text-muted-foreground")}>
               {d === today ? "Today" : formatDay(d, long)}
             </Link>
-            {d === today && <span className="text-sm text-muted-foreground">{formatDay(d, long)}</span>}
+            {d === today && <span className="text-sm text-muted-foreground/80">{formatDay(d, long)}</span>}
           </h2>
           {d === today && <JournalHead today={today} />}
           <Outline source={{ day: d }} compose={d === today} capture={d === today} />
@@ -50,7 +50,7 @@ export function JournalPage() {
       ))}
       <div ref={sentinel} />
       {hasNextPage && (
-        <Button variant="ghost" className="text-muted-foreground" onClick={() => fetchNextPage()}>
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => fetchNextPage()}>
           Older days
         </Button>
       )}

@@ -56,21 +56,23 @@ export function Content({ input, refs = {}, extra = [], links = false }: { input
   )
 }
 
+const chip = "ml-2 inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-px align-[1px] text-xs text-muted-foreground"
+
 export function DateChip({ node }: { node: Node }) {
   const today = localDate()
   if (node.due) {
     const late = node.status === "open" && node.due < today
     return (
-      <span className={cn("ml-2 inline-flex items-center gap-1 align-baseline text-sm text-muted-foreground", late && "text-destructive", node.due === today && "text-foreground")}>
-        <CalendarIcon className="size-3.5 self-center" />
+      <span className={cn(chip, late && "bg-destructive/10 text-destructive", node.due === today && !late && "bg-foreground/10 text-foreground")}>
+        <CalendarIcon className="size-3" />
         {node.due === today ? "Today" : formatDay(node.due)}
       </span>
     )
   }
   if (node.start) {
     return (
-      <span className="ml-2 inline-flex items-center gap-1 align-baseline text-sm text-muted-foreground">
-        <ClockIcon className="size-3.5 self-center" />
+      <span className={chip}>
+        <ClockIcon className="size-3" />
         {formatMoment(node.start)}
         {node.end && ` → ${formatMoment(node.end)}`}
       </span>

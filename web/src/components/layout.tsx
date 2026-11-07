@@ -59,17 +59,17 @@ export function Layout() {
   return (
     <div className="min-h-svh">
       <header className="sticky top-0 z-30 bg-background/85 backdrop-blur">
-        <div className="mx-auto flex h-12 max-w-3xl items-center gap-0.5 px-3 md:px-5">
-          <Link to="/" className="rounded-md px-1 py-0.5 text-lg hover:bg-accent" aria-label="Journal">
+        <div className="mx-auto flex h-14 max-w-3xl items-center gap-0.5 px-3 md:px-5">
+          <Link to="/" className="rounded-md px-1.5 py-0.5 text-lg hover:bg-accent" aria-label="Journal">
             <Wordmark />
           </Link>
           <span className="flex-1" />
-          <Button variant="ghost" size="icon" aria-label="Find" title="Find (⌘K)" onClick={() => setPalette(true)}>
+          <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Find" title="Find (⌘K)" onClick={() => setPalette(true)}>
             <SearchIcon />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Menu">
+              <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Menu">
                 <EllipsisIcon />
               </Button>
             </DropdownMenuTrigger>
@@ -86,7 +86,7 @@ export function Layout() {
           </DropdownMenu>
         </div>
       </header>
-      <main key={preferences.fold} className="mx-auto w-full max-w-3xl px-4 pb-24 pt-4 pointer-coarse:pb-36 md:px-6">
+      <main key={preferences.fold} className="mx-auto w-full max-w-3xl px-4 pb-24 pt-6 pointer-coarse:pb-36 md:px-6 md:pt-8">
         <Outlet />
       </main>
       <Palette open={palette} onOpenChange={setPalette} />

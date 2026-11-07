@@ -73,10 +73,11 @@ describe("app", () => {
     const group = await screen.findByRole("link", { name: "Northwind" })
     expect(group.closest("div")!.parentElement).toHaveTextContent("1 late")
     expect(screen.getByText("No project")).toBeInTheDocument()
-    expect(screen.getByText("Send the plan")).toBeInTheDocument()
+    // The overdue task is also due: it shows in both lists.
+    expect(screen.getAllByText("Send the plan")).toHaveLength(2)
     // Folding a project is remembered on this device.
     await userEvent.click(screen.getAllByRole("button", { name: "Collapse" })[1])
-    expect(screen.queryByText("Send the plan")).toBeNull()
+    expect(screen.getAllByText("Send the plan")).toHaveLength(1)
     expect(JSON.parse(localStorage.getItem("vrac.folded-projects")!)).toEqual([northwind])
     localStorage.clear()
   })

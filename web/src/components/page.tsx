@@ -13,7 +13,7 @@ export function PageTitle({ children, actions }: { children: ReactNode; actions?
 export function Section({ title, children, count }: { title: string; children: ReactNode; count?: number }) {
   return (
     <section className="mb-8">
-      <h2 className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <h2 className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
         {title}
         {count !== undefined && <span className="tabular-nums">{count}</span>}
       </h2>
