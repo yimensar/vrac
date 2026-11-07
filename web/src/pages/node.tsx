@@ -22,7 +22,7 @@ export function NodePage() {
   const { data, error } = useQuery({ queryKey: ["node", id], queryFn: () => api.node(id) })
   const { data: lists } = useQuery({ queryKey: ["lists", id], queryFn: () => api.lists(id), enabled: data?.node.kind === "node" })
   const crumbs = data?.path.filter((p) => p.name !== "Journal") ?? []
-  const up = crumbs.length > 0 ? crumbLink(crumbs[crumbs.length - 1]) : "/"
+  const up = crumbs.length > 0 ? crumbLink(crumbs[crumbs.length - 1]) : "/journal"
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && e.target === document.body) navigate(up)
@@ -37,7 +37,7 @@ export function NodePage() {
   return (
     <>
       <nav className="mb-3 flex flex-wrap items-center gap-1 text-sm text-muted-foreground" aria-label="Breadcrumb">
-        <Link to="/" className="hover:text-foreground">
+        <Link to="/journal" className="hover:text-foreground">
           Journal
         </Link>
         <ChevronRightIcon className="size-3" />

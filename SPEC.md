@@ -217,8 +217,8 @@ from which it can be restored.
    and writes in today's journal: `Send the revised estimate to [[Marc]]
    [[Northwind]] #task` dated Friday, attributed to Claude, source Outlook.
    If nothing matches, it proposes a creation and asks the user.
-8. **No AI available.** The journal head lists every open to-do by subject;
-   ⌘K → "Northwind" opens its page with its lists. Or the `#project` page.
+8. **No AI available.** ⌘K → "Northwind" opens its page with its lists,
+   its open to-dos among them; ⌘K → `#task` lists every open to-do. Or the `#project` page.
    Or search with the chips `#decision` + `[[Globex]]`, sorted by date.
 9. **Rename.** Northwind becomes Northwind Traders; every reference follows.
 
@@ -255,20 +255,17 @@ the public HTTP API, the same one any other client would use. Usable on
 mobile browsers. On screen the product is called `vrac.`, with the dot; the
 repository, the binary and the API keep the name `vrac`.
 
-**One page to write.** The home is the journal: today at the top, then the
-previous days as you scroll. On a keyboard it opens with the caret in
-today's new line, and typing anywhere on the page lands there. Above
-today's outline, a head keeps in mind what matters: everything dated this
-week as one flat list, the open to-dos due by the end of it, then every
-open to-do grouped by the most specific subject it concerns (through
-inherited context, so a to-do written under a meeting about Northwind sits
-under Northwind), to-dos without a subject first, dated ones first within
-a group and overdue ones counted in red. Groups fold, and the fold is
-remembered on the device. To-dos are not sorted by day: one is written in
-today's journal whatever its horizon, and a date on it is a real deadline.
-The head disappears when nothing is dated and nothing is open. Every row
-there is edited in place; each of its sections folds, and the fold is
-remembered on the device. There is no permanent navigation: two quiet
+**One page to write.** The home is today's journal and nothing else: no
+lists above or below it, an empty page to write on. On a keyboard it opens
+with the caret in today's new line, and typing anywhere on the page lands
+there. The journal view shows today at the top, then the previous days as
+you scroll, today still written in place. To-dos are not gathered on the
+page: they are written in today's journal whatever their horizon (a date
+on one is a real deadline) and found again by search, on the `#task` tag
+page, or on the page of what they concern. A free outline cannot tell
+which of a to-do's contexts is its subject (a meeting, the project the
+meeting is about, a person it mentions), so no view guesses one. There is
+no permanent navigation: two quiet
 icons float at the top right, the search (⌘K) and a menu to the other
 views, and the writing line itself holds every power through completion
 menus:
@@ -306,8 +303,8 @@ as a system-wide quick-capture shortcut, it would wrap the same UI and
 authenticate through the built-in OAuth server with PKCE. Offline editing is a
 non-goal; it would require synchronization and a different model.
 
-- **Journal** (home): the week and the open to-dos by subject, then the
-  days in sequence, outline editor.
+- **Today** (home): today's journal alone, outline editor.
+- **Journal**: today, then the days in sequence as you scroll.
 - **Node zoom**: breadcrumb from the journal (Escape goes up one level),
   authored outline, then one list per tag of what concerns the node from
   elsewhere (scenario 5).
@@ -323,7 +320,7 @@ from the search. Settings is kept for security (passkeys, password, the
 connected AIs and tokens).
 
 **A row is the node itself.** Wherever a node appears with its bullet (a
-journal day, a page, today's lists, the agenda, tasks, a subject's sections,
+journal day, a page, the agenda, a tag page, a subject's sections,
 search results, a page title) it is edited in place, with its children, and
 reads exactly as it is written: references and types are atoms, rendered
 the same while reading and while editing (ProseMirror), and a click places
@@ -333,7 +330,7 @@ above, arrows move between rows, Alt+Shift+arrows reorder, Cmd+Enter
 toggles a to-do. A row is saved shortly after each pause in typing, so the
 same node is current in every list that shows it within a moment, and a
 save refreshes every view, which keeps its folds. In lists of unrelated
-nodes (the journal head, a node's lists, search results) the listed rows
+nodes (a node's lists, a tag page, search results) the listed rows
 stay in place: Enter saves and leaves a row rather than adding one.
 Tags and references are links to their pages, while reading and while
 editing.

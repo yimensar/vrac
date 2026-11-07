@@ -9,14 +9,24 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PageTitle } from "@/components/page"
 import { Outline } from "@/outline/views"
-import { JournalHead } from "./journal-head"
 
 const long: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long" }
 const full: Intl.DateTimeFormatOptions = { ...long, year: "numeric" }
 
-/** The home: today's journal, then the days before it as you scroll. This
- * is the one place to write; everything else is a search away. Typing
- * anywhere on it writes in today's new line. */
+/** The home: today's journal and nothing else, an empty page to write on.
+ * Typing anywhere on it writes in today's new line. */
+export function TodayPage() {
+  const today = localDate()
+  return (
+    <section>
+      <DayHeading day={today} today={today} />
+      <Outline source={{ day: today }} compose capture />
+    </section>
+  )
+}
+
+/** The journal: today, then the days before it as you scroll. Today is
+ * written in here too. */
 export function JournalPage() {
   const today = localDate()
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
@@ -38,13 +48,7 @@ export function JournalPage() {
     <>
       {days.map((d) => (
         <section key={d} className={cn("mb-16", d !== today && "border-t pt-8")}>
-          <h2 className="mb-5 flex flex-wrap items-baseline gap-x-3">
-            <Link to={`/day/${d}`} className={cn("tracking-tight hover:text-foreground", d === today ? "text-2xl font-semibold" : "text-base font-medium text-muted-foreground")}>
-              {d === today ? "Today" : formatDay(d, long)}
-            </Link>
-            {d === today && <span className="text-sm text-muted-foreground/80">{formatDay(d, long)}</span>}
-          </h2>
-          {d === today && <JournalHead today={today} />}
+          <DayHeading day={d} today={today} />
           <Outline source={{ day: d }} compose={d === today} capture={d === today} />
         </section>
       ))}
@@ -55,6 +59,19 @@ export function JournalPage() {
         </Button>
       )}
     </>
+  )
+}
+
+/** Today large with its date beside it; another day quieter, linking to
+ * its own page. */
+function DayHeading({ day, today }: { day: string; today: string }) {
+  return (
+    <h2 className="mb-5 flex flex-wrap items-baseline gap-x-3">
+      <Link to={day === today ? "/" : `/day/${day}`} className={cn("tracking-tight hover:text-foreground", day === today ? "text-2xl font-semibold" : "text-base font-medium text-muted-foreground")}>
+        {day === today ? "Today" : formatDay(day, long)}
+      </Link>
+      {day === today && <span className="text-sm text-muted-foreground/80">{formatDay(day, long)}</span>}
+    </h2>
   )
 }
 

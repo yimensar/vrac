@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link, Outlet, useNavigate } from "react-router"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
-import { ActivityIcon, BookOpenIcon, CalendarDaysIcon, CheckIcon, EllipsisIcon, SearchIcon, SettingsIcon, SlidersHorizontalIcon } from "lucide-react"
+import { ActivityIcon, BookOpenIcon, CalendarDaysIcon, CheckIcon, EllipsisIcon, NotebookPenIcon, SearchIcon, SettingsIcon, SlidersHorizontalIcon } from "lucide-react"
 import { api, type Preferences } from "@/lib/api"
 import { nodeInput } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
@@ -13,10 +13,12 @@ import { Content, TypeName } from "@/outline/content"
 import { setTypes } from "@/editor/schema"
 import { usePreferences, useSetPreferences } from "@/lib/preferences"
 
-// There is one place to write: the journal. The other views are a search
-// or a menu away and never stay on screen; tags and settings live in the
+// There is one place to write: today. The other views are a search or a
+// menu away and never stay on screen; tags and settings live in the
 // search too.
 const views = [
+  { to: "/", label: "Today", icon: NotebookPenIcon },
+  { to: "/journal", label: "Journal", icon: BookOpenIcon },
   { to: "/agenda", label: "Agenda", icon: CalendarDaysIcon },
   { to: "/search", label: "Search", icon: SearchIcon },
   { to: "/activity", label: "Activity", icon: ActivityIcon },
@@ -69,7 +71,7 @@ export function Layout() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-44">
-            {[{ to: "/", label: "Journal", icon: BookOpenIcon }, ...views].map((v) => (
+            {views.map((v) => (
               <DropdownMenuItem key={v.to} asChild>
                 <Link to={v.to}>
                   <v.icon />
@@ -124,7 +126,7 @@ function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bool
     placeholderData: keepPreviousData,
   })
   const waiting = remote && (asked !== query || resolving || searching)
-  const matching = [{ to: "/", label: "Journal", icon: BookOpenIcon }, ...views].filter((v) => v.label.toLowerCase().startsWith(lower))
+  const matching = views.filter((v) => v.label.toLowerCase().startsWith(lower))
   const tags = [...types.values()].filter((t) => t.name.startsWith(tagQuery) && (lower.startsWith("#") || query.length > 0))
   const matchingSettings = settings.filter((s) => query === "" || s.words.some((w) => w.startsWith(lower)) || s.options.some(([, o]) => o.toLowerCase().startsWith(lower)))
   if (setting) {

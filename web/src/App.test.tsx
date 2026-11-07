@@ -49,37 +49,19 @@ describe("app", () => {
     await waitFor(() => expect(server.tree()).toEqual(["hello"]))
   })
 
-  it("keeps open tasks in mind by project above the journal", async () => {
-    const today = "2026-11-05"
-    const task = (id: string, text: string, date?: string) => ({
-      id, kind: "node", text, types: ["task"], status: "open", date, aliases: [], day: today, revision: 1, created_at: "", updated_at: "",
-      created_by: "owner", updated_by: "owner", source: "web", child_count: 0, ref_ids: [],
-    })
-    const northwind = "northwindaaaaaaaaaaaaaaaaa"
-    fakeServer({
-      today,
-      search: (body) =>
-        body.status === "open"
-          ? {
-              nodes: [task("taskaaaaaaaaaaaaaaaaaaaaaa", "Buy milk #task"), task("taskbbbbbbbbbbbbbbbbbbbbbb", "Send the plan #task", "2026-11-01")],
-              refs: { [northwind]: { id: northwind, name: "Northwind", label: "Northwind", types: ["project"] } },
-              subjects: { taskbbbbbbbbbbbbbbbbbbbbbb: [northwind] },
-            }
-          : { nodes: [], refs: {} },
-    })
+  it("opens on today alone, and the journal scrolls through the days", async () => {
+    const server = fakeServer()
+    const { unmount } = render(<App client={makeClient()} />)
+    await screen.findByLabelText("New line")
+    expect(screen.getByRole("link", { name: "Today" })).toBeInTheDocument()
+    // Nothing above or below today: no open to-dos, no older days.
+    expect(server.calls.some((c) => c.url === "/api/v1/search" || c.url.startsWith("/api/v1/days?"))).toBe(false)
+    unmount()
+    window.history.pushState({}, "", "/journal")
     render(<App client={makeClient()} />)
-    // The to-do under the meeting about Northwind lands in Northwind's
-    // group; the other has no subject. The overdue one is counted.
-    const group = await screen.findByRole("link", { name: "Northwind" })
-    expect(group.closest("div")!.parentElement).toHaveTextContent("1 late")
-    expect(screen.getByText("No subject")).toBeInTheDocument()
-    // The overdue task is also due: it shows in both lists.
-    expect(screen.getAllByText("Send the plan")).toHaveLength(2)
-    // Folding a project is remembered on this device.
-    await userEvent.click(screen.getAllByRole("button", { name: "Collapse", expanded: true })[1])
-    expect(screen.getAllByText("Send the plan")).toHaveLength(1)
-    expect(JSON.parse(localStorage.getItem("vrac.folded-subjects")!)).toEqual([northwind])
-    localStorage.clear()
+    // Today is written in the journal too.
+    await screen.findByLabelText("New line")
+    await waitFor(() => expect(server.calls.some((c) => c.url.startsWith("/api/v1/days?"))).toBe(true))
   })
 
   it("offers types and commands after a slash", async () => {

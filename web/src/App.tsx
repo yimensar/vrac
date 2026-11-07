@@ -7,7 +7,7 @@ import { Layout } from "@/components/layout"
 import { ActivityPage } from "@/pages/activity"
 import { AgendaPage } from "@/pages/agenda"
 import { AuthorizePage, SignIn } from "@/pages/auth"
-import { DayPage, JournalPage } from "@/pages/journal"
+import { DayPage, JournalPage, TodayPage } from "@/pages/journal"
 import { NodePage } from "@/pages/node"
 import { SearchPage } from "@/pages/search"
 import { SettingsPage } from "@/pages/settings"
@@ -26,8 +26,8 @@ function Gate() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<JournalPage />} />
-        <Route path="journal" element={<Navigate to="/" replace />} />
+        <Route index element={<TodayPage />} />
+        <Route path="journal" element={<JournalPage />} />
         <Route path="day/:day" element={<DayPage />} />
         <Route path="node/:id" element={<NodePage />} />
         <Route path="tasks" element={<Navigate to="/" replace />} />
