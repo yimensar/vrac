@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link, Outlet, useNavigate } from "react-router"
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { ActivityIcon, BookOpenIcon, CalendarDaysIcon, CheckIcon, EllipsisIcon, SearchIcon, SettingsIcon, SlidersHorizontalIcon } from "lucide-react"
 import { api, type Preferences } from "@/lib/api"
 import { nodeInput } from "@/lib/syntax"
@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { useTypes } from "@/lib/hooks"
+import { useDebounced, useTypes } from "@/lib/hooks"
 import { Content, TypeName } from "@/outline/content"
 import { setTypes } from "@/editor/schema"
 import { usePreferences, useSetPreferences } from "@/lib/preferences"
@@ -111,8 +111,23 @@ function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bool
   const query = text.trim()
   const lower = query.toLowerCase()
   const tagQuery = lower.startsWith("#") ? lower.slice(1) : lower
-  const { data: names } = useQuery({ queryKey: ["resolve", query], queryFn: () => api.resolve(query), enabled: open && !setting && query.length > 0 && !lower.startsWith("#") })
-  const { data: found } = useQuery({ queryKey: ["palette", query], queryFn: () => api.search({ text: query, limit: 8 }), enabled: open && !setting && query.length > 1 && !lower.startsWith("#") })
+  // Local matches (views, tags, settings) follow every key; the server is
+  // asked once typing pauses, and its last answer stays until the next.
+  const asked = useDebounced(query)
+  const remote = open && !setting && !lower.startsWith("#")
+  const { data: names, isFetching: resolving } = useQuery({
+    queryKey: ["resolve", asked],
+    queryFn: () => api.resolve(asked),
+    enabled: remote && asked.length > 0,
+    placeholderData: keepPreviousData,
+  })
+  const { data: found, isFetching: searching } = useQuery({
+    queryKey: ["palette", asked],
+    queryFn: () => api.search({ text: asked, limit: 8 }),
+    enabled: remote && asked.length > 1,
+    placeholderData: keepPreviousData,
+  })
+  const waiting = remote && (asked !== query || resolving || searching)
   const matching = [{ to: "/", label: "Journal", icon: BookOpenIcon }, ...views].filter((v) => v.label.toLowerCase().startsWith(lower))
   const tags = [...types.values()].filter((t) => t.name.startsWith(tagQuery) && (lower.startsWith("#") || query.length > 0))
   const matchingSettings = settings.filter((s) => query === "" || s.words.some((w) => w.startsWith(lower)) || s.options.some(([, o]) => o.toLowerCase().startsWith(lower)))
@@ -147,7 +162,7 @@ function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bool
     <CommandDialog open={open} onOpenChange={(o) => (o ? onOpenChange(o) : close())} shouldFilter={false} title="Find" description="Jump to a node, a tag, a view or a setting">
       <CommandInput placeholder="Find a note, a tag, a view, a setting…" value={text} onValueChange={setText} />
       <CommandList>
-        <CommandEmpty>Nothing found.</CommandEmpty>
+        <CommandEmpty>{waiting ? "Searching…" : "Nothing found."}</CommandEmpty>
         {tags.length > 0 && (
           <CommandGroup heading="Tags">
             {tags.map((t) => (
@@ -158,7 +173,7 @@ function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bool
             ))}
           </CommandGroup>
         )}
-        {(names?.candidates.length ?? 0) > 0 && (
+        {query.length > 0 && (names?.candidates.length ?? 0) > 0 && (
           <CommandGroup heading="Go to">
             {names!.candidates.map((c) => (
               <CommandItem key={c.id} value={"n" + c.id} onSelect={() => go(`/node/${c.id}`)}>
@@ -170,7 +185,7 @@ function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bool
             ))}
           </CommandGroup>
         )}
-        {(found?.nodes.length ?? 0) > 0 && (
+        {query.length > 1 && (found?.nodes.length ?? 0) > 0 && (
           <CommandGroup heading="Mentions">
             {found!.nodes.map((n) => (
               <CommandItem key={n.id} value={"s" + n.id} onSelect={() => go(`/node/${n.id}`)}>

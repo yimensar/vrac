@@ -1,7 +1,18 @@
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { ApiError, api, type Type } from "./api"
+
+/** The value once it has stopped changing for a moment: what typing
+ * sends to the server, so results do not flicker at every key. */
+export function useDebounced<T>(value: T, delay = 150): T {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(value), delay)
+    return () => clearTimeout(t)
+  }, [value, delay])
+  return settled
+}
 
 /** The user's tags by name. */
 export function useTypes(): Map<string, Type> {

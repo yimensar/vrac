@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router"
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { XIcon } from "lucide-react"
 import { api, type Brief, type Page, type Query } from "@/lib/api"
-import { useTypes } from "@/lib/hooks"
+import { useDebounced, useTypes } from "@/lib/hooks"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,9 @@ export function SearchPage() {
   const types = useTypes()
   const [subjects, setSubjects] = useState<Brief[]>([])
   const [subjectText, setSubjectText] = useState("")
+  // Words reach the URL, and the server, once typing pauses.
+  const [words, setWords] = useState(params.get("text") ?? "")
+  const typed = useDebounced(words, 250)
   const query: Query = {
     text: params.get("text") ?? undefined,
     types: params.getAll("type"),
@@ -32,14 +35,20 @@ export function SearchPage() {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor,
     enabled: active,
+    placeholderData: keepPreviousData,
   })
-  const { data: found } = useQuery({ queryKey: ["resolve", subjectText], queryFn: () => api.resolve(subjectText), enabled: subjectText.length > 0 })
+  const askedSubject = useDebounced(subjectText)
+  const { data: found } = useQuery({ queryKey: ["resolve", askedSubject], queryFn: () => api.resolve(askedSubject), enabled: askedSubject.length > 0, placeholderData: keepPreviousData })
   const set = (key: string, value: string | null) => {
     const next = new URLSearchParams(params)
     if (value) next.set(key, value)
     else next.delete(key)
     setParams(next, { replace: true })
   }
+  useEffect(() => {
+    if (typed !== (params.get("text") ?? "")) set("text", typed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typed])
   const toggleType = (t: string) => {
     const next = new URLSearchParams(params)
     const list = next.getAll("type")
@@ -62,7 +71,7 @@ export function SearchPage() {
     <>
       <PageTitle>Search</PageTitle>
       <div className="mb-6 space-y-3">
-        <Input autoFocus placeholder="Words…" defaultValue={query.text} onChange={(e) => set("text", e.target.value)} />
+        <Input autoFocus placeholder="Words…" value={words} onChange={(e) => setWords(e.target.value)} />
         <div className="flex flex-wrap gap-1.5">
           {[...types.values()].map((t) => (
             <button

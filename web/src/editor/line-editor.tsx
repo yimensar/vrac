@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { baseKeymap } from "prosemirror-commands"
 import { history, redo, undo } from "prosemirror-history"
 import { InputRule, inputRules } from "prosemirror-inputrules"
@@ -10,7 +10,7 @@ import { EditorView } from "prosemirror-view"
 import { CalendarIcon, CalendarOffIcon, CheckIcon, Maximize2Icon, SquareIcon, Trash2Icon, XIcon } from "lucide-react"
 import { api, type Creation, type Fields, type Refs } from "@/lib/api"
 import { typeClass } from "@/lib/colors"
-import { reportError, useTypes } from "@/lib/hooks"
+import { reportError, useDebounced, useTypes } from "@/lib/hooks"
 import { trigger, type Trigger } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
 import { Content } from "@/outline/content"
@@ -268,7 +268,9 @@ function useOptions(menu: Menu | null, on: LineHandlers, pick: Pick | null, setP
   const query = menu?.trigger.query.trim() ?? ""
   const isRef = menu?.trigger.kind === "ref"
   const { name, tags } = isRef ? nameAndTags(query) : { name: "", tags: [] }
-  const { data } = useQuery({ queryKey: ["resolve", name], queryFn: () => api.resolve(name), enabled: isRef && name.length > 0, staleTime: 5_000 })
+  // The server is asked once typing pauses; its last answer stays shown.
+  const asked = useDebounced(name)
+  const { data } = useQuery({ queryKey: ["resolve", asked], queryFn: () => api.resolve(asked), enabled: isRef && asked.length > 0, staleTime: 5_000, placeholderData: keepPreviousData })
   if (!menu) return []
   const options: Option[] = []
   const create = (v: EditorView, m: Menu, tagged: string[]) => {
