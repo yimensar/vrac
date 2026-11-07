@@ -8,19 +8,19 @@ import { Button } from "@/components/ui/button"
 import { Loading, PageTitle } from "@/components/page"
 import { NodeList } from "@/outline/views"
 
-/** Meetings and events with an explicit date, day by day. */
+/** Everything with a date, day by day: meetings, events, deadlines. */
 export function AgendaPage() {
   const today = localDate()
   const [from, setFrom] = useState(addDays(today, -7))
   const to = addDays(from, 42)
   const { data } = useQuery({
     queryKey: ["agenda", from],
-    queryFn: () => api.search({ types: ["meeting", "event"], from, to, scheduled: true, sort: "date_asc", limit: 200 }),
+    queryFn: () => api.search({ from, to, dated: true, sort: "date_asc", limit: 200 }),
   })
   const days = useMemo(() => {
     const byDay = new Map<string, Page>()
     for (const n of data?.nodes ?? []) {
-      const d = (n.start ?? n.day).slice(0, 10)
+      const d = (n.date ?? n.day).slice(0, 10)
       if (!byDay.has(d)) byDay.set(d, { nodes: [], refs: data!.refs })
       byDay.get(d)!.nodes.push(n)
     }
@@ -52,7 +52,7 @@ export function AgendaPage() {
           <NodeList id={`agenda-${d}`} page={page} />
         </section>
       ))}
-      {data?.nodes.length === 0 && <p className="text-muted-foreground">Nothing scheduled between {formatDay(from)} and {formatDay(to)}.</p>}
+      {data?.nodes.length === 0 && <p className="text-muted-foreground">Nothing dated between {formatDay(from)} and {formatDay(to)}.</p>}
     </>
   )
 }

@@ -10,9 +10,12 @@ import (
 )
 
 // ExportFormat identifies Vrac exports.
+// Version 2 exports tags with their to-do trait and nodes with one generic
+// date; version 1 files, with built-in types and due or start dates, are
+// still imported.
 const (
 	ExportFormat  = "vrac"
-	ExportVersion = 1
+	ExportVersion = 2
 )
 
 // Export is the versioned, complete JSON representation of a workspace,
@@ -26,27 +29,30 @@ type Export struct {
 	Revisions  []ExportRevision `json:"revisions"`
 }
 
-// ExportType is a type in an export.
+// ExportType is a tag in an export. Builtin is read from version 1 files.
 type ExportType struct {
 	Name      string `json:"name"`
-	Builtin   bool   `json:"builtin"`
+	Todo      bool   `json:"todo,omitempty"`
 	Color     string `json:"color"`
 	CreatedAt string `json:"created_at"`
+	Builtin   bool   `json:"builtin,omitempty"`
 }
 
 // ExportNode is a node in an export. Parents precede their children.
 type ExportNode struct {
-	ID            string   `json:"id"`
-	Kind          string   `json:"kind"`
-	ParentID      string   `json:"parent_id,omitempty"`
-	Position      int64    `json:"position"`
-	Text          string   `json:"text"`
-	Types         []string `json:"types"`
-	Status        string   `json:"status,omitempty"`
+	ID       string   `json:"id"`
+	Kind     string   `json:"kind"`
+	ParentID string   `json:"parent_id,omitempty"`
+	Position int64    `json:"position"`
+	Text     string   `json:"text"`
+	Types    []string `json:"types"`
+	Status   string   `json:"status,omitempty"`
+	Date     string   `json:"date,omitempty"`
+	End      string   `json:"end,omitempty"`
+	Day      string   `json:"day"`
+	// Due and Start are read from version 1 files.
 	Due           string   `json:"due,omitempty"`
 	Start         string   `json:"start,omitempty"`
-	End           string   `json:"end,omitempty"`
-	Day           string   `json:"day"`
 	Aliases       []string `json:"aliases"`
 	Revision      int64    `json:"revision"`
 	CreatedAt     string   `json:"created_at"`
@@ -78,13 +84,13 @@ func (e *Engine) Export(ctx context.Context, w io.Writer) error {
 	}
 	defer tx.Rollback()
 	x := Export{Format: ExportFormat, Version: ExportVersion, ExportedAt: e.stamp(), Types: []ExportType{}, Nodes: []ExportNode{}, Revisions: []ExportRevision{}}
-	rows, err := tx.QueryContext(ctx, `SELECT name, builtin, color, created_at FROM types ORDER BY id`)
+	rows, err := tx.QueryContext(ctx, `SELECT name, todo, color, created_at FROM types ORDER BY id`)
 	if err != nil {
 		return err
 	}
 	for rows.Next() {
 		var t ExportType
-		if err := rows.Scan(&t.Name, &t.Builtin, &t.Color, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.Name, &t.Todo, &t.Color, &t.CreatedAt); err != nil {
 			rows.Close()
 			return err
 		}
@@ -95,7 +101,7 @@ func (e *Engine) Export(ctx context.Context, w io.Writer) error {
 	rows, err = tx.QueryContext(ctx, `WITH RECURSIVE tree(seq, path) AS (
 			SELECT seq, printf('%020d', seq) FROM nodes WHERE parent_seq IS NULL
 			UNION ALL SELECT n.seq, tree.path || '/' || printf('%020d', n.seq) FROM nodes n JOIN tree ON n.parent_seq = tree.seq)
-		SELECT n.id, n.kind, coalesce(p.id, ''), n.position, n.text, coalesce(n.status, ''), coalesce(n.due, ''), coalesce(n.start_at, ''), coalesce(n.end_at, ''),
+		SELECT n.id, n.kind, coalesce(p.id, ''), n.position, n.text, coalesce(n.status, ''), coalesce(n.start_at, ''), coalesce(n.end_at, ''),
 			n.day, n.revision, n.created_at, n.updated_at, n.created_by, n.created_source, n.updated_by, n.updated_source,
 			coalesce(n.trashed_at, ''), coalesce(r.id, ''),
 			coalesce((SELECT group_concat(t.name, ' ') FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE nt.node_seq = n.seq), ''),
@@ -108,7 +114,7 @@ func (e *Engine) Export(ctx context.Context, w io.Writer) error {
 	for rows.Next() {
 		var n ExportNode
 		var types, aliases string
-		if err := rows.Scan(&n.ID, &n.Kind, &n.ParentID, &n.Position, &n.Text, &n.Status, &n.Due, &n.Start, &n.End, &n.Day, &n.Revision,
+		if err := rows.Scan(&n.ID, &n.Kind, &n.ParentID, &n.Position, &n.Text, &n.Status, &n.Date, &n.End, &n.Day, &n.Revision,
 			&n.CreatedAt, &n.UpdatedAt, &n.CreatedBy, &n.CreatedSource, &n.UpdatedBy, &n.UpdatedSource, &n.TrashedAt, &n.TrashRoot, &types, &aliases); err != nil {
 			rows.Close()
 			return err
@@ -153,8 +159,23 @@ func (e *Engine) Import(ctx context.Context, r io.Reader) error {
 	if err := dec.Decode(&x); err != nil {
 		return invalid("malformed export: %v", err)
 	}
-	if x.Format != ExportFormat || x.Version != ExportVersion {
+	if x.Format != ExportFormat || x.Version < 1 || x.Version > ExportVersion {
 		return invalid("unsupported export %q version %d", x.Format, x.Version)
+	}
+	if x.Version == 1 {
+		// Version 1: the task type carried the checkbox; a date was a
+		// task's due date or a meeting's start.
+		for i := range x.Types {
+			x.Types[i].Todo = x.Types[i].Name == "task"
+		}
+		for i := range x.Nodes {
+			if x.Nodes[i].Date == "" {
+				x.Nodes[i].Date = x.Nodes[i].Start
+			}
+			if x.Nodes[i].Date == "" {
+				x.Nodes[i].Date = x.Nodes[i].Due
+			}
+		}
 	}
 	err := e.write(ctx, func(tx *sql.Tx) error {
 		var nodes, days int
@@ -174,16 +195,11 @@ func (e *Engine) Import(ctx context.Context, r io.Reader) error {
 			if err := validTypeName(t.Name); err != nil {
 				return err
 			}
-			r, err := tx.ExecContext(ctx, `INSERT INTO types(name, builtin, color, created_at) VALUES (?, ?, ?, ?)`, t.Name, t.Builtin, t.Color, t.CreatedAt)
+			r, err := tx.ExecContext(ctx, `INSERT INTO types(name, builtin, color, created_at, todo) VALUES (?, 0, ?, ?, ?)`, t.Name, t.Color, t.CreatedAt, t.Todo)
 			if err != nil {
 				return invalid("type %s: %v", t.Name, err)
 			}
 			s.typeIDs[t.Name], _ = r.LastInsertId()
-		}
-		for _, b := range builtinTypes {
-			if _, ok := s.typeIDs[b]; !ok {
-				return invalid("built-in type %s is missing", b)
-			}
 		}
 		seqs := map[string]int64{}
 		journals := 0
@@ -219,10 +235,10 @@ func (e *Engine) Import(ctx context.Context, r io.Reader) error {
 			default:
 				return invalid("node %s has unknown kind %q", n.ID, n.Kind)
 			}
-			r, err := tx.ExecContext(ctx, `INSERT INTO nodes(id, kind, parent_seq, position, text, name_key, status, due, start_at, end_at, day, revision,
+			r, err := tx.ExecContext(ctx, `INSERT INTO nodes(id, kind, parent_seq, position, text, name_key, status, start_at, end_at, day, revision,
 				created_at, updated_at, created_by, created_source, updated_by, updated_source, trashed_at)
-				VALUES (?, ?, ?, ?, ?, ?, nullif(?, ''), nullif(?, ''), nullif(?, ''), nullif(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, nullif(?, ''))`,
-				n.ID, n.Kind, parent, n.Position, n.Text, nameKeyOfKind(n.Kind, n.Text), n.Status, n.Due, n.Start, n.End, n.Day, n.Revision,
+				VALUES (?, ?, ?, ?, ?, ?, nullif(?, ''), nullif(?, ''), nullif(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, nullif(?, ''))`,
+				n.ID, n.Kind, parent, n.Position, n.Text, nameKeyOfKind(n.Kind, n.Text), n.Status, n.Date, n.End, n.Day, n.Revision,
 				n.CreatedAt, n.UpdatedAt, n.CreatedBy, n.CreatedSource, n.UpdatedBy, n.UpdatedSource, n.TrashedAt)
 			if err != nil {
 				return invalid("node %s: %v", n.ID, err)

@@ -76,11 +76,15 @@ func (e *Engine) Create(ctx context.Context, actor Actor, req CreateRequest) (Re
 				return 0, err
 			}
 			d := it.draft
-			f, text, err := normalizeFields(r.types, fields{d.Status, d.Due, d.Start, d.End}, r.text, req.ParseDates, day)
+			todo, err := s.anyTodo(r.typeIDs)
 			if err != nil {
 				return 0, err
 			}
-			seq, _, err := s.insert(parent, pos, text, r.typeIDs, f, d.Aliases, day)
+			f, err := normalizeFields(todo, fields{d.Status, d.Date, d.End}, d.DateText, day)
+			if err != nil {
+				return 0, err
+			}
+			seq, _, err := s.insert(parent, pos, r.text, r.typeIDs, f, d.Aliases, day)
 			if err != nil {
 				return 0, err
 			}
@@ -171,16 +175,28 @@ func (e *Engine) Update(ctx context.Context, actor Actor, req UpdateRequest) (Re
 				typeIDs = append(typeIDs, id)
 			}
 		}
-		f := fields{n.Status, n.Due, n.Start, n.End}
+		f := fields{n.Status, n.Date, n.End}
 		for _, p := range []struct {
 			src *string
 			dst *string
-		}{{req.Status, &f.Status}, {req.Due, &f.Due}, {req.Start, &f.Start}, {req.End, &f.End}} {
+		}{{req.Status, &f.Status}, {req.Date, &f.Date}, {req.End, &f.End}} {
 			if p.src != nil {
 				*p.dst = *p.src
 			}
 		}
-		f, text, err = normalizeFields(types, f, text, req.ParseDates, n.Day)
+		// A to-do tag gives a checkbox only when the node gains the tag,
+		// so unchecking a to-do never comes back by itself.
+		todo := false
+		if !slices.Equal(types, n.Types) {
+			if todo, err = s.anyTodo(typeIDs); err != nil {
+				return nil, err
+			}
+		}
+		dateText := ""
+		if req.DateText != nil {
+			dateText = *req.DateText
+		}
+		f, err = normalizeFields(todo, f, dateText, n.Day)
 		if err != nil {
 			return nil, err
 		}
@@ -188,11 +204,11 @@ func (e *Engine) Update(ctx context.Context, actor Actor, req UpdateRequest) (Re
 		if req.Aliases != nil {
 			aliases = *req.Aliases
 		}
-		if text == n.Text && slices.Equal(types, n.Types) && f == (fields{n.Status, n.Due, n.Start, n.End}) && slices.Equal(aliases, n.Aliases) {
+		if text == n.Text && slices.Equal(types, n.Types) && f == (fields{n.Status, n.Date, n.End}) && slices.Equal(aliases, n.Aliases) {
 			return []int64{n.seq}, nil
 		}
-		if _, err := s.tx.ExecContext(ctx, `UPDATE nodes SET text = ?, name_key = ?, status = nullif(?, ''), due = nullif(?, ''), start_at = nullif(?, ''), end_at = nullif(?, '') WHERE seq = ?`,
-			text, nameKeyOf(text), f.Status, f.Due, f.Start, f.End, n.seq); err != nil {
+		if _, err := s.tx.ExecContext(ctx, `UPDATE nodes SET text = ?, name_key = ?, status = nullif(?, ''), start_at = nullif(?, ''), end_at = nullif(?, '') WHERE seq = ?`,
+			text, nameKeyOf(text), f.Status, f.Date, f.End, n.seq); err != nil {
 			return nil, err
 		}
 		if err := s.setTypes(n.seq, typeIDs); err != nil {
@@ -209,7 +225,7 @@ func (e *Engine) Update(ctx context.Context, actor Actor, req UpdateRequest) (Re
 				return nil, err
 			}
 		}
-		if f.Due != n.Due || f.Start != n.Start {
+		if f.Date != n.Date {
 			if err := s.redate(n.seq); err != nil {
 				return nil, err
 			}
@@ -376,8 +392,8 @@ func (s *txState) apply(n Node, snap snapshot) error {
 		}
 		typeIDs = append(typeIDs, id)
 	}
-	if _, err := s.tx.ExecContext(s.ctx, `UPDATE nodes SET text = ?, name_key = ?, status = nullif(?, ''), due = nullif(?, ''), start_at = nullif(?, ''), end_at = nullif(?, '') WHERE seq = ?`,
-		snap.Text, nameKeyOf(snap.Text), snap.Status, snap.Due, snap.Start, snap.End, n.seq); err != nil {
+	if _, err := s.tx.ExecContext(s.ctx, `UPDATE nodes SET text = ?, name_key = ?, status = nullif(?, ''), start_at = nullif(?, ''), end_at = nullif(?, '') WHERE seq = ?`,
+		snap.Text, nameKeyOf(snap.Text), snap.Status, snap.date(), snap.End, n.seq); err != nil {
 		return err
 	}
 	if err := s.setTypes(n.seq, typeIDs); err != nil {
@@ -422,25 +438,75 @@ func (s *txState) apply(n Node, snap snapshot) error {
 	return s.bump(n.seq)
 }
 
-// CreateType creates a free type explicitly.
-func (e *Engine) CreateType(ctx context.Context, actor Actor, requestID, name string) (Type, error) {
+// CreateType creates a tag explicitly. With todo, its nodes get a checkbox.
+func (e *Engine) CreateType(ctx context.Context, actor Actor, requestID, name string, todo bool) (Type, error) {
 	name = strings.ToLower(strings.TrimSpace(name))
 	if err := validTypeName(name); err != nil {
 		return Type{}, err
 	}
-	_, err := e.mutate(ctx, actor, requestID, struct{ Type string }{name}, func(s *txState) ([]int64, error) {
+	_, err := e.mutate(ctx, actor, requestID, struct {
+		Type string
+		Todo bool
+	}{name, todo}, func(s *txState) ([]int64, error) {
 		s.allowTypes[name] = true
-		_, _, err := s.typeID(name, false)
+		id, _, err := s.typeID(name, false)
+		if err != nil || !todo {
+			return nil, err
+		}
+		_, err = s.tx.ExecContext(ctx, `UPDATE types SET todo = 1 WHERE id = ?`, id)
 		return nil, err
 	})
 	if err != nil {
 		return Type{}, err
 	}
+	return e.TypeNamed(ctx, name)
+}
+
+// SetTypeTodo gives or removes the to-do trait of a tag. Existing nodes
+// keep their checkbox state; new ones follow the trait.
+func (e *Engine) SetTypeTodo(ctx context.Context, name string, todo bool) (Type, error) {
+	name = strings.ToLower(strings.TrimSpace(name))
+	err := e.write(ctx, func(tx *sql.Tx) error {
+		r, err := tx.ExecContext(ctx, `UPDATE types SET todo = ? WHERE name = ?`, todo, name)
+		if err != nil {
+			return err
+		}
+		if n, _ := r.RowsAffected(); n == 0 {
+			return fmt.Errorf("%w: type %s", ErrNotFound, name)
+		}
+		return nil
+	})
+	if err != nil {
+		return Type{}, err
+	}
+	return e.TypeNamed(ctx, name)
+}
+
+// TypeNamed returns one tag.
+func (e *Engine) TypeNamed(ctx context.Context, name string) (Type, error) {
+	name = strings.ToLower(strings.TrimSpace(name))
 	types, err := e.Types(ctx)
+	if err != nil {
+		return Type{}, err
+	}
 	for _, t := range types {
 		if t.Name == name {
-			return t, err
+			return t, nil
 		}
 	}
-	return Type{}, err
+	return Type{}, fmt.Errorf("%w: type %s", ErrNotFound, name)
+}
+
+// anyTodo reports whether one of the types carries the to-do trait.
+func (s *txState) anyTodo(typeIDs []int64) (bool, error) {
+	for _, id := range typeIDs {
+		var todo bool
+		if err := s.tx.QueryRowContext(s.ctx, `SELECT todo FROM types WHERE id = ?`, id).Scan(&todo); err != nil {
+			return false, err
+		}
+		if todo {
+			return true, nil
+		}
+	}
+	return false, nil
 }

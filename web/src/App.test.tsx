@@ -51,15 +51,15 @@ describe("app", () => {
 
   it("keeps open tasks in mind by project above the journal", async () => {
     const today = "2026-11-05"
-    const task = (id: string, text: string, due?: string) => ({
-      id, kind: "node", text, types: ["task"], status: "open", due, aliases: [], day: today, revision: 1, created_at: "", updated_at: "",
+    const task = (id: string, text: string, date?: string) => ({
+      id, kind: "node", text, types: ["task"], status: "open", date, aliases: [], day: today, revision: 1, created_at: "", updated_at: "",
       created_by: "owner", updated_by: "owner", source: "web", child_count: 0, ref_ids: [],
     })
     const northwind = "northwindaaaaaaaaaaaaaaaaa"
     fakeServer({
       today,
       search: (body) =>
-        body.types?.includes("task")
+        body.status === "open"
           ? {
               nodes: [task("taskaaaaaaaaaaaaaaaaaaaaaa", "Buy milk #task"), task("taskbbbbbbbbbbbbbbbbbbbbbb", "Send the plan #task", "2026-11-01")],
               refs: { [northwind]: { id: northwind, name: "Northwind", label: "Northwind", types: ["project"] } },
@@ -68,17 +68,17 @@ describe("app", () => {
           : { nodes: [], refs: {} },
     })
     render(<App client={makeClient()} />)
-    // The task under the meeting about Northwind lands in Northwind's group;
-    // the other has no project. The overdue one is counted.
+    // The to-do under the meeting about Northwind lands in Northwind's
+    // group; the other has no subject. The overdue one is counted.
     const group = await screen.findByRole("link", { name: "Northwind" })
     expect(group.closest("div")!.parentElement).toHaveTextContent("1 late")
-    expect(screen.getByText("No project")).toBeInTheDocument()
+    expect(screen.getByText("No subject")).toBeInTheDocument()
     // The overdue task is also due: it shows in both lists.
     expect(screen.getAllByText("Send the plan")).toHaveLength(2)
     // Folding a project is remembered on this device.
-    await userEvent.click(screen.getAllByRole("button", { name: "Collapse" })[1])
+    await userEvent.click(screen.getAllByRole("button", { name: "Collapse", expanded: true })[1])
     expect(screen.getAllByText("Send the plan")).toHaveLength(1)
-    expect(JSON.parse(localStorage.getItem("vrac.folded-projects")!)).toEqual([northwind])
+    expect(JSON.parse(localStorage.getItem("vrac.folded-subjects")!)).toEqual([northwind])
     localStorage.clear()
   })
 
@@ -88,9 +88,9 @@ describe("app", () => {
     await userEvent.click(await screen.findByLabelText("New line"))
     await screen.findByRole("textbox", { name: "New line" })
     await userEvent.keyboard("call Marc /ta")
-    // The query narrows the menu to #task; Enter inserts the type.
+    // The query narrows the menu to #task; Enter inserts the tag.
     const option = await screen.findByRole("option", { name: /#task/ })
-    expect(screen.queryByRole("option", { name: /Tomorrow/ })).toBeNull()
+    expect(screen.queryByRole("option", { name: /Date/ })).toBeNull()
     expect(option).toHaveAttribute("aria-selected", "true")
     await userEvent.keyboard("{Enter}")
     expect(screen.queryByRole("listbox")).toBeNull()

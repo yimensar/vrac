@@ -232,8 +232,8 @@ var scenarios = []scenario{
 		prepare: func(w *world) map[string]any {
 			// The next one depends on the time of the run.
 			now := time.Now().In(paris).Format("2006-01-02T15:04")
-			for _, m := range w.search(engine.Query{Concerns: []string{w.one("Northwind")}, Types: []string{"meeting", "event"}, From: today().Format("2006-01-02"), Scheduled: true, Sort: "date_asc"}) {
-				if m.Start > now {
+			for _, m := range w.search(engine.Query{Concerns: []string{w.one("Northwind")}, Types: []string{"meeting", "event"}, From: today().Format("2006-01-02"), Dated: true, Sort: "date_asc"}) {
+				if m.Date > now {
 					return map[string]any{"meeting": m}
 				}
 			}
@@ -244,8 +244,8 @@ var scenarios = []scenario{
 			if !ok {
 				return []string{"the sample has no upcoming meeting"}
 			}
-			hour := strings.TrimLeft(m.Start[11:13], "0")
-			return append(noWrites(w), expect(mentions(w.answer, m.Text) && strings.Contains(w.answer, hour), "did not give %q at %s", refless(m.Text), m.Start)...)
+			hour := strings.TrimLeft(m.Date[11:13], "0")
+			return append(noWrites(w), expect(mentions(w.answer, m.Text) && strings.Contains(w.answer, hour), "did not give %q at %s", refless(m.Text), m.Date)...)
 		},
 	},
 	{
@@ -253,7 +253,7 @@ var scenarios = []scenario{
 		prompt: "Qu'est-ce que j'ai en retard ?",
 		prepare: func(w *world) map[string]any {
 			yesterday := today().AddDate(0, 0, -1).Format("2006-01-02")
-			return map[string]any{"late": w.search(engine.Query{Types: []string{"task"}, Status: "open", To: yesterday, Scheduled: true})}
+			return map[string]any{"late": w.search(engine.Query{Types: []string{"task"}, Status: "open", To: yesterday, Dated: true})}
 		},
 		check: func(w *world, b map[string]any) []string {
 			f := noWrites(w)
@@ -296,8 +296,8 @@ Merci, Bruno`, frenchDays[today().AddDate(0, 0, 3).Weekday()])
 			f := append(sourced(w), noNewEntities(w)...)
 			// "Before <day>": that day or the day before are fair readings.
 			deadline := today().AddDate(0, 0, 3)
-			f = append(f, expect(task.Due == deadline.Format("2006-01-02") || task.Due == deadline.AddDate(0, 0, -1).Format("2006-01-02"), "the existing task's due date is %q, not before %s", task.Due, deadline.Format("2006-01-02"))...)
-			f = append(f, expect(strings.HasSuffix(meeting.Start, "T14:00"), "the existing meeting starts at %q, not 14:00", meeting.Start)...)
+			f = append(f, expect(task.Date == deadline.Format("2006-01-02") || task.Date == deadline.AddDate(0, 0, -1).Format("2006-01-02"), "the existing task's due date is %q, not before %s", task.Date, deadline.Format("2006-01-02"))...)
+			f = append(f, expect(strings.HasSuffix(meeting.Date, "T14:00"), "the existing meeting starts at %q, not 14:00", meeting.Date)...)
 			for _, n := range w.created("task", "meeting") {
 				if mentions(n.Text, "synthese atelier") || mentions(n.Text, "comite pilotage") {
 					f = append(f, fmt.Sprintf("created a duplicate %q", refless(n.Text)))
@@ -311,7 +311,7 @@ Merci, Bruno`, frenchDays[today().AddDate(0, 0, 3).Weekday()])
 		prompt: `Compte rendu de ma réunion de ce matin avec Alice sur Globex : la bascule vers l'API v2 est repoussée d'une semaine. Alice prépare un plan de retour arrière. De mon côté je dois mettre à jour la doc d'import avant mercredi.`,
 		prepare: func(w *world) map[string]any {
 			cutover := w.find("bascule", engine.Query{Types: []string{"event"}})
-			return map[string]any{"cutover": cutover.ID, "start": cutover.Start, "alice": w.one("Alice"), "globex": w.one("Globex")}
+			return map[string]any{"cutover": cutover.ID, "start": cutover.Date, "alice": w.one("Alice"), "globex": w.one("Globex")}
 		},
 		check: func(w *world, b map[string]any) []string {
 			f := append(sourced(w), noNewEntities(w)...)
@@ -329,13 +329,13 @@ Merci, Bruno`, frenchDays[today().AddDate(0, 0, 3).Weekday()])
 			f = append(f, expect(decided, "no decision about the delay concerning Globex")...)
 			mine := false
 			for _, t := range w.created("task") {
-				mine = mine || (concerns(w, t, globex) && strings.Contains(fold(t.Text), "doc") && t.Due == next(time.Wednesday))
+				mine = mine || (concerns(w, t, globex) && strings.Contains(fold(t.Text), "doc") && t.Date == next(time.Wednesday))
 			}
 			f = append(f, expect(mine, "no task to update the import documentation due %s", next(time.Wednesday))...)
 			cutover := w.node(b["cutover"].(string))
 			old, _ := time.Parse("2006-01-02", b["start"].(string)[:10])
 			want := old.AddDate(0, 0, 7).Format("2006-01-02")
-			f = append(f, expect(strings.HasPrefix(cutover.Start, want), "the cutover event starts %q, not a week later (%s)", cutover.Start, want)...)
+			f = append(f, expect(strings.HasPrefix(cutover.Date, want), "the cutover event starts %q, not a week later (%s)", cutover.Date, want)...)
 			return f
 		},
 	},
@@ -378,7 +378,7 @@ Merci, Bruno`, frenchDays[today().AddDate(0, 0, 3).Weekday()])
 			tomorrow := today().AddDate(0, 0, 1).Format("2006-01-02")
 			call := false
 			for _, m := range w.created("meeting", "event") {
-				call = call || m.Start == tomorrow+"T11:00" && len(people) == 1 && concerns(w, m, people[0].ID)
+				call = call || m.Date == tomorrow+"T11:00" && len(people) == 1 && concerns(w, m, people[0].ID)
 			}
 			return append(f, expect(call, "no call tomorrow at 11:00 concerning Bertrand Martin")...)
 		},

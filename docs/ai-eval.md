@@ -25,6 +25,11 @@ The scenarios use the local `claude` CLI and its account: one session each.
 | write-decision-evolves | update the existing decision in place |
 | write-new-prospect | create the new person and company once, and the call tomorrow at 11:00 |
 
+The scenarios were written for version 1's built-in types; since the model
+became tags without fields (2026-11-07), the sample workspace creates the
+same tags itself and dates are one generic field, so the checks still apply
+but the results below predate that change.
+
 ## Results (2026-11-05)
 
 | model | runs | passed | tool calls | time | cost (API equivalent) |

@@ -7,10 +7,10 @@ import { keymap } from "prosemirror-keymap"
 import type { Node as PMNode } from "prosemirror-model"
 import { EditorState, TextSelection, type Command } from "prosemirror-state"
 import { EditorView } from "prosemirror-view"
-import { CalendarIcon, CheckIcon, Maximize2Icon, Trash2Icon } from "lucide-react"
-import { api, type Creation, type Refs } from "@/lib/api"
+import { CalendarIcon, CalendarOffIcon, CheckIcon, Maximize2Icon, SquareIcon, Trash2Icon, XIcon } from "lucide-react"
+import { api, type Creation, type Fields, type Refs } from "@/lib/api"
 import { typeClass } from "@/lib/colors"
-import { useTypes } from "@/lib/hooks"
+import { reportError, useTypes } from "@/lib/hooks"
 import { trigger, type Trigger } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
 import { Content } from "@/outline/content"
@@ -26,16 +26,20 @@ export type LineHandlers = {
   backspace: () => boolean
   step: (delta: -1 | 1, caret: number) => void
   shift: (delta: -1 | 1, caret: number) => void
-  /** Marks a task done or open. */
+  /** Cmd+Enter: gives a checkbox, checks it, or reopens it. */
   toggle: () => void
+  /** The row's checkbox as it will be saved. */
+  checkbox: () => "" | "open" | "done"
+  /** True when the row has a date. */
+  dated: () => boolean
+  /** Sets the checkbox or the date of the row. */
+  setFields: (f: Fields) => void
   intend: (create?: Creation, type?: string) => void
   leave: () => void
   /** Opens the row's own page; absent while the row has no ID. */
   zoom?: () => void
   /** Moves the row to the trash; absent where a row cannot be removed. */
   remove?: () => void
-  /** True when the row is a task; the / menu offers Done or Reopen. */
-  task?: "open" | "done"
 }
 
 type Menu = { trigger: Trigger; from: number; to: number; left: number; top: number }
@@ -44,8 +48,8 @@ type Option = { key: string; content: React.ReactNode; hint?: string; apply: (vi
 
 const caretOf = (s: EditorState) => posToOffset(s.doc, s.selection.from)
 
-// "#task " becomes a type atom and "[[Northwind]]" a reference atom as they are
-// typed; unknown types stay text, which the server then reports.
+// "#task " becomes a tag atom and "[[Northwind]]" a reference atom as they are
+// typed; unknown tags stay text, which the server then reports.
 const rules = inputRules({
   rules: [
     new InputRule(/(^|\s)#([\p{L}\p{N}_-]+)\s$/u, (state, match, start, end) => {
@@ -219,11 +223,6 @@ function command(v: EditorView, m: Menu, run: () => void) {
   run()
 }
 
-function insertText(v: EditorView, m: Menu, text: string) {
-  v.dispatch(v.state.tr.insertText(text + " ", m.from, m.to).scrollIntoView())
-  v.focus()
-}
-
 const matches = (name: string, query: string) => name.toLowerCase().startsWith(query.toLowerCase())
 
 function useOptions(menu: Menu | null, on: LineHandlers): Option[] {
@@ -244,87 +243,138 @@ function useOptions(menu: Menu | null, on: LineHandlers): Option[] {
       })
     }
     if (query && !found.some((c) => c.name.toLowerCase() === query.toLowerCase())) {
-      for (const as of ["project", "person", ""]) {
-        options.push({
-          key: "create-" + as,
-          content: (
-            <>
-              Create “{query}”{as && <span className={cn("ml-1", typeClass(types.get(as)?.color))}>#{as}</span>}
-            </>
-          ),
-          apply: (v, m) => {
-            on.intend({ name: query, types: as ? [as] : [] })
-            insert(v, m, schema.nodes.ref.create({ name: query, label: query }))
-          },
-        })
-      }
-    }
-    return options
-  }
-  const lower = query.toLowerCase()
-  const typeOptions = (hint?: string) => {
-    for (const t of types.values()) {
-      if (t.name.startsWith(lower)) {
-        options.push({
-          key: "type-" + t.name,
-          content: <span className={cn("font-medium", typeClass(t.color))}>#{t.name}</span>,
-          hint,
-          apply: (v, m) => insert(v, m, schema.nodes.type.create({ name: t.name })),
-        })
-      }
-    }
-  }
-  if (menu.trigger.kind === "type") {
-    typeOptions()
-    if (lower && !types.has(lower) && /^[\p{L}\p{N}_-]+$/u.test(lower)) {
       options.push({
-        key: "create-type",
-        content: <>Create type #{lower}</>,
+        key: "create",
+        content: <>Create “{query}”</>,
         apply: (v, m) => {
-          on.intend(undefined, lower)
-          insert(v, m, schema.nodes.type.create({ name: lower }))
+          on.intend({ name: query })
+          insert(v, m, schema.nodes.ref.create({ name: query, label: query }))
         },
       })
     }
     return options
   }
-  // The / menu: everything a row can become or do, filtered by the query.
-  typeOptions("type")
+  const lower = query.toLowerCase()
+  const tag = (t: { name: string; color: string }, hint?: string): Option => ({
+    key: "type-" + t.name,
+    content: <span className={cn("font-medium", typeClass(t.color))}>#{t.name}</span>,
+    hint,
+    apply: (v, m) => insert(v, m, schema.nodes.type.create({ name: t.name })),
+  })
+  if (menu.trigger.kind === "type") {
+    for (const t of types.values()) if (t.name.startsWith(lower)) options.push(tag(t))
+    if (lower && !types.has(lower) && /^[\p{L}\p{N}_-]+$/u.test(lower)) {
+      // A new tag: plain, or a to-do tag, created at once so the row
+      // shows its checkbox while it is still being written.
+      options.push({
+        key: "create-type",
+        content: <>Create #{lower}</>,
+        apply: (v, m) => {
+          on.intend(undefined, lower)
+          insert(v, m, schema.nodes.type.create({ name: lower }))
+        },
+      })
+      options.push({
+        key: "create-todo",
+        content: (
+          <>
+            <SquareIcon className="size-4 text-muted-foreground" />
+            Create #{lower} as a to-do tag
+          </>
+        ),
+        hint: "checkbox",
+        apply: (v, m) => {
+          api.createType(lower, true).then(
+            () => insert(v, m, schema.nodes.type.create({ name: lower })),
+            (err) => reportError(err),
+          )
+        },
+      })
+    }
+    return options
+  }
+  // The / menu: everything a row can become or do, filtered by the first
+  // word; the rest of the query feeds a date.
+  const [word, ...rest] = lower.split(/\s+/)
+  const phrase = rest.join(" ")
+  for (const t of types.values()) if (t.name.startsWith(word)) options.push(tag(t, "tag"))
   const icon = "size-4 text-muted-foreground"
-  const commands: Option[] = []
-  if (on.task) {
+  const commands: (Option & { names: string[] })[] = []
+  const checkbox = on.checkbox()
+  if (checkbox !== "open") {
     commands.push({
-      key: on.task === "done" ? "reopen" : "done",
+      key: "todo",
+      names: ["todo", "to do", "open"],
       content: (
         <>
-          <CheckIcon className={icon} />
-          {on.task === "done" ? "Reopen" : "Done"}
+          <SquareIcon className={icon} />
+          {checkbox === "done" ? "Reopen" : "To do"}
         </>
       ),
       hint: "⌘↵",
-      apply: (v, m) => command(v, m, on.toggle),
+      apply: (v, m) => command(v, m, () => on.setFields({ status: "open" })),
     })
   }
-  for (const [word, label] of [
-    ["today", "Today"],
-    ["tomorrow", "Tomorrow"],
-  ] as const) {
+  if (checkbox === "open") {
     commands.push({
-      key: word,
+      key: "done",
+      names: ["done"],
       content: (
         <>
-          <CalendarIcon className={icon} />
-          {label}
+          <CheckIcon className={icon} />
+          Done
         </>
       ),
-      hint: "date",
-      apply: (v, m) => insertText(v, m, word),
+      hint: "⌘↵",
+      apply: (v, m) => command(v, m, () => on.setFields({ status: "done" })),
+    })
+  }
+  if (checkbox) {
+    commands.push({
+      key: "nocheckbox",
+      names: ["no checkbox", "remove checkbox", "uncheck"],
+      content: (
+        <>
+          <XIcon className={icon} />
+          No checkbox
+        </>
+      ),
+      apply: (v, m) => command(v, m, () => on.setFields({ status: "" })),
+    })
+  }
+  commands.push({
+    key: "date",
+    names: ["date", "due", "when", "on"],
+    content: (
+      <>
+        <CalendarIcon className={icon} />
+        {phrase ? `Date: ${phrase}` : "Date…"}
+      </>
+    ),
+    hint: phrase ? undefined : "/due friday 14h",
+    apply: (v, m) => {
+      if (!phrase) return
+      command(v, m, () => on.setFields({ date_text: phrase }))
+    },
+  })
+  if (on.dated()) {
+    commands.push({
+      key: "nodate",
+      names: ["no date", "clear date", "undate"],
+      content: (
+        <>
+          <CalendarOffIcon className={icon} />
+          No date
+        </>
+      ),
+      apply: (v, m) => command(v, m, () => on.setFields({ date: "", end: "" })),
     })
   }
   if (on.zoom) {
     const zoom = on.zoom
     commands.push({
       key: "zoom",
+      names: ["zoom in", "open"],
       content: (
         <>
           <Maximize2Icon className={icon} />
@@ -338,6 +388,7 @@ function useOptions(menu: Menu | null, on: LineHandlers): Option[] {
     const remove = on.remove
     commands.push({
       key: "delete",
+      names: ["delete", "trash", "remove"],
       content: (
         <>
           <Trash2Icon className={icon} />
@@ -348,6 +399,6 @@ function useOptions(menu: Menu | null, on: LineHandlers): Option[] {
       apply: (v, m) => command(v, m, remove),
     })
   }
-  options.push(...commands.filter((c) => matches(c.key, lower)))
+  options.push(...commands.filter((c) => c.names.some((n) => matches(n, word))))
   return options
 }

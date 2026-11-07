@@ -16,10 +16,10 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string; sear
   const id = () => (++seq).toString(36).padStart(26, "a").replace(/[0-9]/g, (d) => "abcdefghij"[Number(d)])
   const dayId = "dayaaaaaaaaaaaaaaaaaaaaaaa"
   const types = [
-    { name: "task", builtin: true, color: "blue", count: 0 },
-    { name: "meeting", builtin: true, color: "violet", count: 0 },
-    { name: "project", builtin: true, color: "emerald", count: 1 },
-    { name: "person", builtin: true, color: "rose", count: 0 },
+    { name: "task", color: "blue", todo: true, count: 0 },
+    { name: "meeting", color: "violet", todo: false, count: 0 },
+    { name: "project", color: "emerald", todo: false, count: 1 },
+    { name: "person", color: "rose", todo: false, count: 0 },
   ]
   const northwind = { id: "northwindaaaaaaaaaaaaaaaaa", name: "Northwind", types: ["project"] }
 
@@ -57,7 +57,7 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string; sear
     if (url === "/api/v1/types") return json({ types })
     if (url.startsWith("/api/v1/days?")) return json({ days: [] })
     if (url === "/api/v1/search") return json(opts.search?.(body) ?? { nodes: [], refs: {} })
-    if (url === "/api/v1/preferences") return json({ fold: "default", theme: "system", parse_dates: true })
+    if (url === "/api/v1/preferences") return json({ fold: "default", theme: "system", scale: "default" })
     if (url.startsWith("/api/v1/resolve")) return json({ candidates: [northwind] })
     if ((m = url.match(/^\/api\/v1\/days\/(.+)$/))) return json({ day: m[1], exists: true, node: { id: dayId }, children: page(dayId) })
     if ((m = url.match(/^\/api\/v1\/nodes\/([a-z]+)\/children/))) return json(page(m[1]))
@@ -67,7 +67,8 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string; sear
         const { text, types } = parse(n.input)
         const r: Row = {
           id: id(), kind: "node", text, types, aliases: [], day: today, revision: 1, created_at: "", updated_at: "", created_by: "owner",
-          updated_by: "owner", source: "web", child_count: 0, ref_ids: [], position: 0, status: types.includes("task") ? "open" : undefined,
+          updated_by: "owner", source: "web", child_count: 0, ref_ids: [], position: 0, status: n.status ?? (types.includes("task") ? "open" : undefined),
+          date: n.date_text ? "2026-11-06" : n.date,
         }
         rows.set(r.id, r)
         place(r, body.placement ?? {})
@@ -83,7 +84,9 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string; sear
       else if (m[3] === "trash") r.trashed = true
       else {
         if (body.input !== undefined) Object.assign(r, parse(body.input))
-        if (body.status) r.status = body.status
+        if (body.status !== undefined) r.status = body.status || undefined
+        if (body.date_text) r.date = "2026-11-06"
+        if (body.date !== undefined) r.date = body.date || undefined
       }
       return json({ nodes: [view(r)], refs: {} })
     }

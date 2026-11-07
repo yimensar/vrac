@@ -48,7 +48,7 @@ export function tokens(input: string): Token[] {
   return out
 }
 
-/** What the caret follows: [[ or @ for a reference, # for a type, / for a
+/** What the caret follows: [[ or @ for a reference, # for a tag, / for a
  * command. length counts the trigger and its query. */
 export type Trigger = { kind: "ref" | "type" | "command"; query: string; length: number }
 
@@ -57,11 +57,13 @@ export function trigger(before: string): Trigger | null {
   const ref = /\[\[([^[\]]*)$/.exec(before)
   if (ref) return { kind: "ref", query: ref[1], length: ref[0].length }
   // @, # and / open a menu only at the start of a word, so emails, C# and
-  // paths stay text.
-  const word = /(^|\s)([@#/])([\p{L}\p{N}_-]*)$/u.exec(before)
-  if (!word) return null
-  const kind = word[2] === "@" ? "ref" : word[2] === "#" ? "type" : "command"
-  return { kind, query: word[3], length: word[3].length + 1 }
+  // paths stay text. A command takes words after its name: "/due friday
+  // 14h"; the menu closes by itself once nothing matches.
+  const word = /(^|\s)([@#])([\p{L}\p{N}_-]*)$/u.exec(before)
+  if (word) return { kind: word[2] === "@" ? "ref" : "type", query: word[3], length: word[3].length + 1 }
+  const command = /(^|\s)\/([\p{L}\p{N}_-]*(?: [^/]*)?)$/u.exec(before)
+  if (command) return { kind: "command", query: command[2], length: command[2].length + 1 }
+  return null
 }
 
 // Dates are local calendar values: never convert them through UTC.
@@ -82,7 +84,15 @@ export function formatDay(day: string, opts: Intl.DateTimeFormatOptions = { week
 
 export function formatMoment(m: string): string {
   const [day, time] = m.split("T")
-  return time ? `${formatDay(day)} ${time}` : formatDay(day)
+  const d = day === localDate() ? "Today" : formatDay(day)
+  return time ? `${d} ${time}` : d
+}
+
+/** The type tokens of input, in order, without duplicates. */
+export function typesOf(input: string): string[] {
+  const out: string[] = []
+  for (const t of tokens(input)) if (t.kind === "type" && !out.includes(t.name)) out.push(t.name)
+  return out
 }
 
 /** Formats an RFC 3339 timestamp in the browser's local time. */

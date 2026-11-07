@@ -30,7 +30,7 @@ export function TouchBar({ store }: { store: OutlineStore }) {
   if (!editing) return null
   const k = editing.key
   const e = k === GHOST ? undefined : store.entry(k)
-  const task = e?.node?.types.includes("task")
+  const checkbox = store.checkbox(k)
   const button = "flex size-10 shrink-0 items-center justify-center rounded-md text-foreground/80 active:bg-accent disabled:opacity-30"
   // pointerdown is prevented so the editor keeps its focus and the keyboard
   // stays open while a key is tapped.
@@ -47,11 +47,11 @@ export function TouchBar({ store }: { store: OutlineStore }) {
       )}
       style={{ top: "100%" }}
     >
-      {key("Outdent", <IndentDecreaseIcon className="size-5" />, () => store.outdent(k, END), !e)}
-      {key("Indent", <IndentIncreaseIcon className="size-5" />, () => store.indent(k, END), !e)}
+      {key("Outdent", <IndentDecreaseIcon className="size-5" />, () => store.outdent(k, END))}
+      {key("Indent", <IndentIncreaseIcon className="size-5" />, () => store.indent(k, END))}
       {key("Move up", <ArrowUpIcon className="size-5" />, () => store.shift(k, -1, END), !e)}
       {key("Move down", <ArrowDownIcon className="size-5" />, () => store.shift(k, 1, END), !e)}
-      {task && key("Done", <CheckIcon className="size-5" />, () => store.toggleDone(k))}
+      {key(checkbox === "open" ? "Done" : "To do", <CheckIcon className={cn("size-5", checkbox === "done" && "opacity-40")} />, () => store.toggleDone(k))}
       {e?.id && key("Zoom in", <Maximize2Icon className="size-5" />, () => navigate(`/node/${e.id}`))}
       <span className="flex-1" />
       {key("Hide keyboard", <ChevronDownIcon className="size-5" />, () => (document.activeElement as HTMLElement | null)?.blur())}

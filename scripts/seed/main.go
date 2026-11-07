@@ -38,15 +38,25 @@ var entities = map[string][]string{
 	"Thomas":          {"person"},
 }
 
-// item is a draft with an optional final status.
+// item is a draft with an optional final status and date phrase.
 type item struct {
 	in   string
+	when string
 	done bool
 	kids []item
 }
 
 func n(in string, kids ...item) item  { return item{in: in, kids: kids} }
 func ok(in string, kids ...item) item { return item{in: in, done: true, kids: kids} }
+
+// at dates an item with a phrase read relative to its day.
+func at(when, in string, kids ...item) item { return item{in: in, when: when, kids: kids} }
+func okat(when, in string, kids ...item) item {
+	return item{in: in, when: when, done: true, kids: kids}
+}
+
+// tags are created before anything is written: nothing is built in.
+var tags = map[string]bool{"task": true, "meeting": false, "event": false, "decision": false, "project": false, "person": false, "idea": false}
 
 // day is one journal day: offset from today, who wrote, and the content.
 type day struct {
@@ -67,23 +77,23 @@ var journal = []day{
 		n("Northwind #project"),
 		n("Globex #project"),
 		n("Kick-off du projet [[Northwind]] : refonte du portail client, livraison en deux lots"),
-		n("#meeting de lancement [[Northwind]] avec [[Bruno]] et [[Marc]] 9h30",
+		at("9h30", "#meeting de lancement [[Northwind]] avec [[Bruno]] et [[Marc]]",
 			n("Périmètre : portail client, espace documents, notifications"),
 			n("Le lot 1 couvre l'authentification et l'espace documents #decision"),
-			ok("Envoyer le planning prévisionnel à [[Bruno]] vendredi #task"),
+			okat("vendredi", "Envoyer le planning prévisionnel à [[Bruno]] #task"),
 			ok("Préparer l'estimation du lot 1 #task"),
 		),
 	}},
 	{-24, mail, []item{
 		n("[[Marc]] confirme les accès à l'environnement de recette [[Northwind]]"),
-		ok("Créer les comptes de test pour la recette [[Northwind]] demain #task"),
+		okat("demain", "Créer les comptes de test pour la recette [[Northwind]] #task"),
 	}},
 	{-23, me, []item{
 		n("Lecture de la doc API [[Globex]] : l'export CSV est limité à 10 000 lignes"),
 		n("#idea un mode hors ligne pour l'espace documents [[Northwind]]"),
 	}},
 	{-22, teams, []item{
-		n("#meeting point hebdo [[Globex]] avec [[Alice]] 14h",
+		at("14h", "#meeting point hebdo [[Globex]] avec [[Alice]]",
 			n("Les imports nocturnes échouent depuis lundi"),
 			ok("Analyser les logs d'import [[Globex]] #task"),
 			n("On ajoute une alerte sur l'échec des imports #decision"),
@@ -95,7 +105,7 @@ var journal = []day{
 		n("[[Helios]] : appel d'offres reçu, réponse attendue sous trois semaines"),
 	}},
 	{-18, meeting, []item{
-		n("#meeting avec [[Sophie Durand]] sur [[Helios]] 11h",
+		at("11h", "#meeting avec [[Sophie Durand]] sur [[Helios]]",
 			n("Besoin : outil de suivi des chantiers, 40 utilisateurs terrain"),
 			n("Application mobile indispensable, mode hors ligne souhaité"),
 			ok("Rédiger la note de cadrage [[Helios]] #task"),
@@ -112,7 +122,7 @@ var journal = []day{
 		n("#idea un tableau de bord unique pour les services du [[Homelab]]"),
 	}},
 	{-15, teams, []item{
-		n("#meeting point hebdo [[Globex]] avec [[Alice]] 14h",
+		at("14h", "#meeting point hebdo [[Globex]] avec [[Alice]]",
 			n("Cause des échecs : changement de format côté fournisseur"),
 			n("On passe à l'API v2 plutôt qu'à l'export CSV #decision"),
 			ok("Estimer la migration vers l'API v2 [[Globex]] #task"),
@@ -124,7 +134,7 @@ var journal = []day{
 		n("[[Umbrella]] : nouvelle demande d'évolution sur la recette, à chiffrer"),
 	}},
 	{-11, meeting, []item{
-		n("#meeting démo intermédiaire [[Northwind]] avec [[Bruno]] et [[Julie]] 10h",
+		at("10h", "#meeting démo intermédiaire [[Northwind]] avec [[Bruno]] et [[Julie]]",
 			n("Retours positifs sur l'espace documents"),
 			n("Le design des notifications est à revoir"),
 			n("Le lot 2 portera sur les notifications et le tableau de bord #decision"),
@@ -134,16 +144,16 @@ var journal = []day{
 	}},
 	{-10, mail, []item{
 		n("[[Sophie Durand]] valide la note de cadrage [[Helios]], demande un chiffrage détaillé"),
-		n("Chiffrer le développement mobile [[Helios]] vendredi #task"),
+		at("vendredi", "Chiffrer le développement mobile [[Helios]] #task"),
 	}},
 	{-9, me, []item{
 		n("Ateliers [[Northwind/Lot 2]] à organiser avec les utilisateurs"),
 		ok("Envoyer le nouveau zip de recette à [[Umbrella]] #task"),
 	}},
 	{-8, teams, []item{
-		n("#meeting point hebdo [[Globex]] avec [[Alice]] 14h",
+		at("14h", "#meeting point hebdo [[Globex]] avec [[Alice]]",
 			n("Migration API v2 démarrée, premiers appels concluants"),
-			n("Envoyer le cahier des charges des imports à [[Alice]] mardi #task"),
+			at("mardi", "Envoyer le cahier des charges des imports à [[Alice]] #task"),
 		),
 	}},
 	{-7, me, []item{
@@ -152,7 +162,7 @@ var journal = []day{
 		ok("Écrire la spec V1 de [[Vrac]] #task"),
 	}},
 	{-4, meeting, []item{
-		n("#meeting atelier utilisateurs [[Northwind/Lot 2]] avec [[Julie]] et [[Camille]] 14h",
+		at("14h", "#meeting atelier utilisateurs [[Northwind/Lot 2]] avec [[Julie]] et [[Camille]]",
 			n("Les gestionnaires veulent des notifications regroupées par jour"),
 			n("Les alertes urgentes restent immédiates #decision"),
 			n("Rédiger les user stories notifications [[Northwind/Lot 2]] #task"),
@@ -169,27 +179,27 @@ var journal = []day{
 		n("#idea réutiliser le moteur de notifications [[Northwind]] pour [[Helios]]"),
 	}},
 	{-1, teams, []item{
-		n("#meeting point hebdo [[Globex]] avec [[Alice]] 14h",
+		at("14h", "#meeting point hebdo [[Globex]] avec [[Alice]]",
 			n("Bascule sur l'API v2 prévue la semaine prochaine"),
 			n("On garde l'export CSV en secours pendant un mois #decision"),
-			n("Préparer le plan de bascule API v2 [[Globex]] jeudi #task"),
+			at("jeudi", "Préparer le plan de bascule API v2 [[Globex]] #task"),
 		),
 		n("Passage en revue des tâches [[Northwind]] avec [[Marc]], rien de bloquant"),
 	}},
 	{0, me, []item{
-		n("#meeting avec [[Bruno]] sur [[Northwind]] 16h",
+		at("16h", "#meeting avec [[Bruno]] sur [[Northwind]]",
 			n("Discussion sur le planning du lot 2"),
 		),
-		n("Finaliser le chiffrage [[Helios]] demain #task"),
+		at("demain", "Finaliser le chiffrage [[Helios]] #task"),
 	}},
 	{2, mail, []item{
-		n("Comité de pilotage [[Northwind]] 10h #meeting"),
+		at("10h", "Comité de pilotage [[Northwind]] #meeting"),
 	}},
 	{6, me, []item{
-		n("Déplacement à Lyon pour [[Helios]] #event"),
+		at("aujourd'hui", "Déplacement à Lyon pour [[Helios]] #event"),
 	}},
 	{9, mail, []item{
-		n("Bascule API v2 [[Globex]] 9h #event"),
+		at("9h", "Bascule API v2 [[Globex]] #event"),
 	}},
 }
 
@@ -221,8 +231,10 @@ func run(path, zone string) error {
 	if roots, _ := e.Roots(ctx, "", 1); len(roots.Nodes) > 0 {
 		return errors.New("the database is not empty; seed only fills a new one")
 	}
-	if _, err := e.CreateType(ctx, me, "seed-type-idea", "idea"); err != nil {
-		return err
+	for name, todo := range tags {
+		if _, err := e.CreateType(ctx, me, "seed-type-"+name, name, todo); err != nil {
+			return err
+		}
 	}
 	created := map[string]bool{}
 	today, _ := time.ParseInLocation("2006-01-02", e.Today(), loc)
@@ -248,7 +260,7 @@ func run(path, zone string) error {
 			}
 			req++
 			res, err := e.Create(ctx, d.actor, engine.CreateRequest{RequestID: fmt.Sprintf("seed-%d", req), Placement: engine.Placement{Day: date},
-				Nodes: []engine.Draft{drafts}, Create: creations, ParseDates: true})
+				Nodes: []engine.Draft{drafts}, Create: creations})
 			if err != nil {
 				return fmt.Errorf("%s %q: %w", date, it.in, err)
 			}
@@ -272,7 +284,7 @@ func run(path, zone string) error {
 
 // draft converts an item and returns, in creation order, which nodes are done.
 func draft(it item) (engine.Draft, []bool) {
-	d := engine.Draft{Input: it.in}
+	d := engine.Draft{Input: it.in, DateText: it.when}
 	done := []bool{it.done}
 	for _, k := range it.kids {
 		kd, kdone := draft(k)

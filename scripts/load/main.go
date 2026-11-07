@@ -1,4 +1,4 @@
-// Command load fills an empty Vrac database from a JSON plan: free types,
+// Command load fills an empty Vrac database from a JSON plan: tags,
 // entities (projects, people) with their notes, and journal days. It is
 // meant for one-off migrations whose mapping was prepared elsewhere, such
 // as an import from another tool.
@@ -9,7 +9,8 @@
 //
 //	{
 //	  "actor":    {"name": "Memos", "source": "memos"},
-//	  "types":    ["reference"],
+//	  "types":    ["reference", "task"],
+//	  "todo":     ["task"],
 //	  "entities": [{"name": "Northwind/Atlas", "types": ["project"], "aliases": [], "notes": [Draft]}],
 //	  "days":     [{"day": "2026-10-26", "nodes": [Draft]}]
 //	}
@@ -27,6 +28,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -36,6 +38,7 @@ import (
 type plan struct {
 	Actor    engine.Actor `json:"actor"`
 	Types    []string     `json:"types"`
+	Todo     []string     `json:"todo"`
 	Entities []struct {
 		Name    string         `json:"name"`
 		Types   []string       `json:"types"`
@@ -92,7 +95,7 @@ func run(path, zone, planPath string) error {
 	req := 0
 	rid := func() string { req++; return fmt.Sprintf("load-%d", req) }
 	for _, t := range p.Types {
-		if _, err := e.CreateType(ctx, p.Actor, rid(), t); err != nil {
+		if _, err := e.CreateType(ctx, p.Actor, rid(), t, slices.Contains(p.Todo, t)); err != nil {
 			return fmt.Errorf("type %s: %w", t, err)
 		}
 	}

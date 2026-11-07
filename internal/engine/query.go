@@ -2,9 +2,7 @@ package engine
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -22,14 +20,19 @@ type Query struct {
 	Concerns []string `json:"concerns,omitempty"`
 	// Mentions keeps nodes that directly reference this node ID.
 	Mentions string `json:"mentions,omitempty"`
-	// Status keeps tasks with this status.
+	// Untagged keeps nodes carrying no tag at all.
+	Untagged bool `json:"untagged,omitempty"`
+	// Outside drops the nodes inside the subtrees of Concerns: a node's
+	// page lists what refers to it from elsewhere, not its own outline.
+	Outside bool `json:"outside,omitempty"`
+	// Status keeps nodes whose checkbox is open or done.
 	Status string `json:"status,omitempty"`
-	// From and To bound the node date, inclusive: due date of tasks, start
-	// of meetings and events, journal date otherwise.
+	// From and To bound the node date, inclusive: its date when it has
+	// one, its journal day otherwise.
 	From string `json:"from,omitempty"`
 	To   string `json:"to,omitempty"`
-	// Scheduled keeps nodes with an explicit due date or start.
-	Scheduled bool `json:"scheduled,omitempty"`
+	// Dated keeps nodes with a date.
+	Dated bool `json:"dated,omitempty"`
 	// Subjects adds, for every result, the typed nodes it concerns (see
 	// Concerns), most specific first, so a client can group results by
 	// project or person without repeating the context on each node.
@@ -52,7 +55,7 @@ func (e *Engine) Search(ctx context.Context, q Query) (Page, error) {
 	var fargs []any
 	// Walking nodes in date order finds the latest of a huge set quickly,
 	// but only when nothing else makes matches rare.
-	sparse := q.From != "" || q.To != "" || q.Scheduled || q.Status != "" || ftsQuery(q.Text) != ""
+	sparse := q.From != "" || q.To != "" || q.Dated || q.Status != "" || ftsQuery(q.Text) != ""
 	if q.Mentions != "" {
 		n, err := e.nodeByID(ctx, e.db, q.Mentions)
 		if err != nil {
@@ -82,6 +85,9 @@ func (e *Engine) Search(ctx context.Context, q Query) (Page, error) {
 		filters = append(filters, `EXISTS (SELECT 1 FROM node_types nt WHERE nt.node_seq = n.seq AND nt.type_id IN (`+placeholders(len(ids))+`))`)
 		fargs = append(fargs, ids...)
 	}
+	if q.Untagged {
+		filters = append(filters, `NOT EXISTS (SELECT 1 FROM node_types nt WHERE nt.node_seq = n.seq)`)
+	}
 	if match := ftsQuery(q.Text); match != "" {
 		filters = append(filters, `n.seq IN (SELECT rowid FROM search WHERE search MATCH ?)`)
 		fargs = append(fargs, match)
@@ -105,8 +111,8 @@ func (e *Engine) Search(ctx context.Context, q Query) (Page, error) {
 			dates = append(dates, b)
 		}
 	}
-	if q.Scheduled {
-		filters = append(filters, `(n.due IS NOT NULL OR n.start_at IS NOT NULL)`)
+	if q.Dated {
+		filters = append(filters, `n.start_at IS NOT NULL`)
 	}
 	// Context drives the search through its index when given: the
 	// smallest subject is read in date order, the others checked per row.
@@ -127,6 +133,10 @@ func (e *Engine) Search(ctx context.Context, q Query) (Page, error) {
 			where = append(where, `EXISTS (SELECT 1 FROM concerns o WHERE o.subject_seq = ? AND o.node_seq = n.seq)`)
 		}
 		args = append(args, n.seq)
+		if q.Outside {
+			where = append(where, `n.seq NOT IN (WITH RECURSIVE sub(seq) AS (SELECT ? UNION ALL SELECT d.seq FROM nodes d JOIN sub ON d.parent_seq = sub.seq) SELECT seq FROM sub)`)
+			args = append(args, n.seq)
+		}
 	}
 	where = append(where, filters...)
 	args = append(args, fargs...)
@@ -169,7 +179,7 @@ func (e *Engine) Search(ctx context.Context, q Query) (Page, error) {
 	for rows.Next() {
 		var n Node
 		var k string
-		if err := rows.Scan(&n.seq, &n.ID, &n.Kind, &n.ParentID, &n.parentSeq, &n.Text, &n.Status, &n.Due, &n.Start, &n.End,
+		if err := rows.Scan(&n.seq, &n.ID, &n.Kind, &n.ParentID, &n.parentSeq, &n.Text, &n.Status, &n.Date, &n.End,
 			&n.Day, &n.Revision, &n.CreatedAt, &n.UpdatedAt, &n.CreatedBy, &n.UpdatedBy, &n.Source, &n.Trashed, &n.ChildCount, &n.position, &k); err != nil {
 			rows.Close()
 			return Page{}, err
@@ -276,157 +286,41 @@ func ftsQuery(text string) string {
 	return strings.Join(parts, " ")
 }
 
-// Sections are what Vrac gathers on a zoomed node.
-type Sections struct {
-	OpenTasks []Node         `json:"open_tasks"`
-	Upcoming  []Node         `json:"upcoming"`
-	Meetings  []Node         `json:"meetings"`
-	Decisions []Node         `json:"decisions"`
-	Mentions  Page           `json:"mentions"`
-	Refs      map[string]Ref `json:"refs"`
+// ListCount is one list gathered on a node's page: the nodes, outside its
+// own outline, that concern it and carry Type; Type is empty for the
+// untagged ones.
+type ListCount struct {
+	Type  string `json:"type"`
+	Count int    `json:"count"`
 }
 
-// NodeSections gathers open tasks, upcoming meetings and events, recent
-// meetings, recent decisions and direct mentions of a node.
-func (e *Engine) NodeSections(ctx context.Context, id string) (Sections, error) {
-	today := e.today()
-	s := Sections{Refs: map[string]Ref{}}
-	merge := func(p Page, err error) ([]Node, error) {
-		for k, v := range p.Refs {
-			s.Refs[k] = v
-		}
-		return p.Nodes, err
-	}
-	var err error
-	if s.OpenTasks, err = merge(e.Search(ctx, Query{Concerns: []string{id}, Types: []string{TypeTask}, Status: StatusOpen, Sort: "date_asc", Limit: 50})); err != nil {
-		return s, err
-	}
-	if s.Upcoming, err = merge(e.Search(ctx, Query{Concerns: []string{id}, Types: []string{TypeMeeting, TypeEvent}, From: today, Scheduled: true, Sort: "date_asc", Limit: 10})); err != nil {
-		return s, err
-	}
-	if s.Meetings, err = merge(e.Search(ctx, Query{Concerns: []string{id}, Types: []string{TypeMeeting}, To: today, Limit: 10})); err != nil {
-		return s, err
-	}
-	if s.Decisions, err = merge(e.Search(ctx, Query{Concerns: []string{id}, Types: []string{TypeDecision}, Limit: 20})); err != nil {
-		return s, err
-	}
-	s.Mentions, err = e.Search(ctx, Query{Mentions: id, Limit: 30})
-	for k, v := range s.Mentions.Refs {
-		s.Refs[k] = v
-	}
-	// The node itself is not one of its own sections, and a meeting shows
-	// once: upcoming when scheduled ahead, among meetings otherwise.
-	upcoming := map[string]bool{}
-	for _, n := range s.Upcoming {
-		upcoming[n.ID] = true
-	}
-	s.Meetings = slices.DeleteFunc(s.Meetings, func(n Node) bool { return upcoming[n.ID] })
-	for _, list := range []*[]Node{&s.OpenTasks, &s.Upcoming, &s.Meetings, &s.Decisions} {
-		*list = slices.DeleteFunc(*list, func(n Node) bool { return n.ID == id })
-	}
-	return s, err
-}
-
-// TypeRow is one line of a type view.
-type TypeRow struct {
-	Node         Node     `json:"node"`
-	Path         []string `json:"path"`
-	OpenTasks    int      `json:"open_tasks"`
-	LastActivity string   `json:"last_activity"`
-}
-
-// TypeView lists the nodes of a type with their open tasks and the day of
-// their last activity, most recently active first.
-type TypeView struct {
-	Type Type           `json:"type"`
-	Rows []TypeRow      `json:"rows"`
-	Refs map[string]Ref `json:"refs"`
-}
-
-const maxTypeRows = 500
-
-// TypeTable returns the view of a type.
-func (e *Engine) TypeTable(ctx context.Context, name string) (TypeView, error) {
-	name = strings.ToLower(name)
-	types, err := e.Types(ctx)
+// NodeLists counts, by tag, what concerns a node from outside its own
+// subtree: what refers to it, with the inherited context. The lists
+// themselves are read with Search (Concerns, Types or Untagged, Outside).
+// Largest first, the untagged list last.
+func (e *Engine) NodeLists(ctx context.Context, id string) ([]ListCount, error) {
+	n, err := e.nodeByID(ctx, e.db, id)
 	if err != nil {
-		return TypeView{}, err
+		return nil, err
 	}
-	v := TypeView{Rows: []TypeRow{}, Refs: map[string]Ref{}}
-	found := false
-	for _, t := range types {
-		if t.Name == name {
-			v.Type, found = t, true
-		}
-	}
-	if !found {
-		return v, fmt.Errorf("%w: type %s", ErrNotFound, name)
-	}
-	nodes, err := e.nodesWhere(ctx, e.db, `WHERE n.trashed_at IS NULL AND n.seq IN (SELECT nt.node_seq FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE t.name = ?) ORDER BY n.seq LIMIT ?`, name, maxTypeRows)
+	rows, err := e.db.QueryContext(ctx, `WITH RECURSIVE sub(seq) AS (SELECT ?1 UNION ALL SELECT d.seq FROM nodes d JOIN sub ON d.parent_seq = sub.seq),
+		outside(seq) AS (SELECT c.node_seq FROM concerns c JOIN nodes n ON n.seq = c.node_seq
+			WHERE c.subject_seq = ?1 AND n.trashed_at IS NULL AND n.seq NOT IN (SELECT seq FROM sub))
+		SELECT coalesce(t.name, ''), count(*) FROM outside o LEFT JOIN node_types nt ON nt.node_seq = o.seq LEFT JOIN types t ON t.id = nt.type_id
+		GROUP BY t.name ORDER BY t.name IS NULL, count(*) DESC, t.name`, n.seq)
 	if err != nil {
-		return v, err
+		return nil, err
 	}
-	if v.Refs, err = e.hydrate(ctx, e.db, nodes); err != nil {
-		return v, err
+	defer rows.Close()
+	lists := []ListCount{}
+	for rows.Next() {
+		var l ListCount
+		if err := rows.Scan(&l.Type, &l.Count); err != nil {
+			return nil, err
+		}
+		lists = append(lists, l)
 	}
-	// Open tasks per row, from the open tasks and the context index.
-	open := map[int64]int{}
-	last := map[int64]string{}
-	scan := func(query string, args []any, into func(seq int64, rows *sql.Rows) error) error {
-		rows, err := e.db.QueryContext(ctx, query, args...)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var seq int64
-			if err := into(seq, rows); err != nil {
-				return err
-			}
-		}
-		return rows.Err()
-	}
-	var seqs []any
-	for _, n := range nodes {
-		seqs = append(seqs, n.seq)
-	}
-	if len(seqs) > 0 {
-		in := placeholders(len(seqs))
-		err = scan(`SELECT c.subject_seq, count(*) FROM nodes n JOIN concerns c ON c.node_seq = n.seq
-			WHERE n.status = 'open' AND n.trashed_at IS NULL AND c.subject_seq IN (`+in+`) GROUP BY c.subject_seq`, seqs, func(_ int64, rows *sql.Rows) error {
-			var seq int64
-			var n int
-			err := rows.Scan(&seq, &n)
-			open[seq] = n
-			return err
-		})
-		if err != nil {
-			return v, err
-		}
-		// Last activity: the latest day up to today that something
-		// concerning the row was written or dated, one index seek each.
-		today := e.today()
-		for _, n := range nodes {
-			var day sql.NullString
-			if err := e.db.QueryRowContext(ctx, `SELECT max(date_key) FROM concerns WHERE subject_seq = ? AND date_key <= ?`, n.seq, today).Scan(&day); err != nil {
-				return v, err
-			}
-			last[n.seq] = day.String
-		}
-	}
-	for _, n := range nodes {
-		row := TypeRow{Node: n, Path: []string{}, OpenTasks: open[n.seq], LastActivity: last[n.seq]}
-		path, err := e.path(ctx, e.db, n.seq)
-		if err != nil {
-			return v, err
-		}
-		for _, p := range path {
-			row.Path = append(row.Path, p.Name)
-		}
-		v.Rows = append(v.Rows, row)
-	}
-	sort.SliceStable(v.Rows, func(i, j int) bool { return v.Rows[i].LastActivity > v.Rows[j].LastActivity })
-	return v, nil
+	return lists, rows.Err()
 }
 
 // Activity is one revision in the activity feed.

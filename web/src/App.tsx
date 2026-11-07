@@ -12,7 +12,7 @@ import { NodePage } from "@/pages/node"
 import { SearchPage } from "@/pages/search"
 import { SettingsPage } from "@/pages/settings"
 import { SharePage } from "@/pages/share"
-import { TypePage, TypesPage } from "@/pages/types"
+import { TagPage } from "@/pages/tag"
 
 export function makeClient() {
   return new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: true, retry: 1, staleTime: 2_000 } } })
@@ -32,8 +32,7 @@ function Gate() {
         <Route path="node/:id" element={<NodePage />} />
         <Route path="tasks" element={<Navigate to="/" replace />} />
         <Route path="agenda" element={<AgendaPage />} />
-        <Route path="types" element={<TypesPage />} />
-        <Route path="type/:name" element={<TypePage />} />
+        <Route path="tag/:name" element={<TagPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="activity" element={<ActivityPage />} />
         <Route path="settings" element={<SettingsPage />} />

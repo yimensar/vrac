@@ -38,7 +38,7 @@ func (s *txState) typeID(name string, check bool) (int64, bool, error) {
 	if err := s.tx.QueryRowContext(s.ctx, `SELECT count(*) FROM types`).Scan(&count); err != nil {
 		return 0, false, err
 	}
-	r, err := s.tx.ExecContext(s.ctx, `INSERT INTO types(name, builtin, color, created_at) VALUES (?, 0, ?, ?)`, name, palette[count%len(palette)], s.now)
+	r, err := s.tx.ExecContext(s.ctx, `INSERT INTO types(name, builtin, color, created_at, todo) VALUES (?, 0, ?, ?, 0)`, name, palette[count%len(palette)], s.now)
 	if err != nil {
 		return 0, false, err
 	}
@@ -236,7 +236,11 @@ func (s *txState) createNamed(c Creation, extraType string) (int64, error) {
 	for _, t := range names {
 		text += " #" + t
 	}
-	f, _, err := normalizeFields(names, fields{}, text, false, day)
+	todo, err := s.anyTodo(typeIDs)
+	if err != nil {
+		return 0, err
+	}
+	f, err := normalizeFields(todo, fields{}, "", day)
 	if err != nil {
 		return 0, err
 	}

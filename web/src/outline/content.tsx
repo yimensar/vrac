@@ -3,7 +3,7 @@ import { CalendarIcon, ClockIcon } from "lucide-react"
 import type { Node, Refs } from "@/lib/api"
 import { typeClass } from "@/lib/colors"
 import { useTypes } from "@/lib/hooks"
-import { formatDay, formatMoment, localDate, tokens } from "@/lib/syntax"
+import { formatMoment, localDate, tokens } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
 import { refClass } from "@/editor/schema"
 
@@ -58,27 +58,21 @@ export function Content({ input, refs = {}, extra = [], links = false }: { input
 
 const chip = "ml-2 inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-px align-[1px] text-xs text-muted-foreground"
 
-export function DateChip({ node }: { node: Node }) {
+/** The date of a node: red when an open to-do is past it, dark when it is
+ * today. A time shows a clock. */
+export function DateChip({ node }: { node: Pick<Node, "date" | "end" | "status"> }) {
+  if (!node.date) return null
   const today = localDate()
-  if (node.due) {
-    const late = node.status === "open" && node.due < today
-    return (
-      <span className={cn(chip, late && "bg-destructive/10 text-destructive", node.due === today && !late && "bg-foreground/10 text-foreground")}>
-        <CalendarIcon className="size-3" />
-        {node.due === today ? "Today" : formatDay(node.due)}
-      </span>
-    )
-  }
-  if (node.start) {
-    return (
-      <span className={chip}>
-        <ClockIcon className="size-3" />
-        {formatMoment(node.start)}
-        {node.end && ` → ${formatMoment(node.end)}`}
-      </span>
-    )
-  }
-  return null
+  const day = node.date.slice(0, 10)
+  const late = node.status === "open" && day < today
+  const timed = node.date.length > 10
+  return (
+    <span className={cn(chip, late && "bg-destructive/10 text-destructive", day === today && !late && "bg-foreground/10 text-foreground")}>
+      {timed ? <ClockIcon className="size-3" /> : <CalendarIcon className="size-3" />}
+      {day === today && !timed ? "Today" : formatMoment(node.date)}
+      {node.end && ` → ${formatMoment(node.end)}`}
+    </span>
+  )
 }
 
 /** The input offset under a click inside rendered content, if any. */

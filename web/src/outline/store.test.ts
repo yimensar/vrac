@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/lib/api"
 import { fakeServer } from "@/test-server"
+import { setTypes } from "@/editor/schema"
 import { GHOST, OutlineStore, ROOT } from "./store"
 
 // The outline's behavior against an in-memory server: what the user does
@@ -27,6 +28,7 @@ const keyOf = (s: OutlineStore, text: string) => s.visible().find((k) => s.text(
 
 beforeEach(() => {
   server = fakeServer()
+  setTypes([{ name: "task", color: "blue", todo: true }, { name: "project", color: "emerald", todo: false }])
   errors = []
 })
 afterEach(() => {
@@ -166,5 +168,65 @@ describe("outline store", () => {
     await list.settled()
     expect(server.tree()).toEqual(["a result", "  a note"])
     expect(list.childrenOf(ROOT)).toEqual([k])
+  })
+})
+
+describe("the new line", () => {
+  it("indents under the row above and writes there", async () => {
+    const s = await tree()
+    capture(s, "parent")
+    await s.settled()
+    s.focus(GHOST)
+    await s.indent(GHOST, 0)
+    expect(s.ghost.parent).toBe(keyOf(s, "parent"))
+    expect(s.visible(true)).toEqual([keyOf(s, "parent"), GHOST])
+    capture(s, "child")
+    await s.settled()
+    expect(server.tree()).toEqual(["parent", "  child"])
+    s.outdent(GHOST, 0)
+    expect(s.ghost.parent).toBe(ROOT)
+    capture(s, "sibling")
+    await s.settled()
+    expect(server.tree()).toEqual(["parent", "  child", "sibling"])
+  })
+
+  it("joins the row above on Backspace", async () => {
+    const s = await tree()
+    capture(s, "ab")
+    await s.settled()
+    s.focus(GHOST)
+    s.setText(GHOST, "cd")
+    expect(s.backspace(GHOST)).toBe(true)
+    expect(s.editing).toMatchObject({ key: keyOf(s, "abcd"), caret: 2 })
+    await s.settled()
+    expect(server.tree()).toEqual(["abcd"])
+    // Empty, it only leaves for the row above.
+    s.focus(GHOST)
+    expect(s.backspace(GHOST)).toBe(true)
+    expect(s.editing?.key).toBe(keyOf(s, "abcd"))
+  })
+
+  it("shows a checkbox as soon as a to-do tag is written", async () => {
+    const s = await tree()
+    s.focus(GHOST)
+    expect(s.checkbox(GHOST)).toBe("")
+    s.setText(GHOST, "Call Marc #task")
+    expect(s.checkbox(GHOST)).toBe("open")
+    expect(s.types(GHOST)).toEqual(["task"])
+    s.setFields(GHOST, { date_text: "friday" })
+    capture(s, "Call Marc #task")
+    await s.settled()
+    const k = keyOf(s, "Call Marc #task")
+    expect(s.entry(k).node).toMatchObject({ status: "open", date: "2026-11-06" })
+    // Any row can get a checkbox; Cmd+Enter cycles it.
+    capture(s, "a note")
+    await s.settled()
+    const note = keyOf(s, "a note")
+    s.toggleDone(note)
+    expect(s.checkbox(note)).toBe("open")
+    s.toggleDone(note)
+    expect(s.checkbox(note)).toBe("done")
+    await s.settled()
+    expect(server.calls.filter((c) => c.method === "PATCH").map((c) => c.body.status)).toEqual(["open", "done"])
   })
 })

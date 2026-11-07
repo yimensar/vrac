@@ -10,41 +10,41 @@ import { END, GHOST, type OutlineStore } from "./store"
 
 // Every row uses one grid: a 20px toggle, a 16px bullet, then the line, on
 // 24px lines. Children are indented so their guide falls under the bullet.
+// A row reads as it will be saved: a tag being typed colors the bullet and,
+// for a to-do tag, opens the checkbox at once.
 
 /** The keys of a row. title renders a page heading: keys that shape an
- * outline only leave it. The new line at the end has no node yet, so it
- * cannot be indented, moved or removed. */
+ * outline only leave it. The new line at the end has no node yet, but it
+ * indents, outdents and leaves like a row. */
 function handlers(store: OutlineStore, k: string, zoom: (id: string) => void, title = false): LineHandlers {
   const leave = () => {
     store.save(k)
     store.blur(k)
   }
+  const e = k === GHOST ? undefined : store.entry(k)
   const common = {
     change: (v: string) => store.setText(k, v),
     intend: (create?: Parameters<OutlineStore["intend"]>[1], type?: string) => store.intend(k, create, type),
     toggle: () => store.toggleDone(k),
+    checkbox: () => store.checkbox(k),
+    dated: () => Boolean(e?.node?.date || (k === GHOST ? store.ghost.fields : e?.fields)?.date_text),
+    setFields: (f: Parameters<OutlineStore["setFields"]>[1]) => store.setFields(k, f),
+    zoom: e?.id ? () => zoom(e.id!) : undefined,
     leave,
   }
   if (k === GHOST) {
     return {
       ...common,
       enter: (before, after) => store.enter(k, before, after),
-      tab: () => {},
-      backspace: () => false,
+      tab: (shift, caret) => (shift ? store.outdent(k, caret) : store.indent(k, caret)),
+      backspace: () => store.backspace(k),
       step: (delta, caret) => store.step(k, delta, caret),
       shift: () => {},
     }
   }
-  const e = store.entry(k)
-  const node = e.node
-  const own = {
-    task: node?.types.includes("task") ? node.status ?? "open" : undefined,
-    zoom: e.id ? () => zoom(e.id!) : undefined,
-  }
   if (title) {
     return {
       ...common,
-      ...own,
       enter: (before, after) => {
         store.setText(k, before + after)
         leave()
@@ -57,7 +57,6 @@ function handlers(store: OutlineStore, k: string, zoom: (id: string) => void, ti
   }
   return {
     ...common,
-    ...own,
     enter: (before, after) => store.enter(k, before, after),
     tab: (shift, caret) => (shift ? store.outdent(k, caret) : store.indent(k, caret)),
     backspace: () => store.backspace(k),
@@ -73,8 +72,9 @@ export function Row({ store, k, context, title }: { store: OutlineStore; k: stri
   const e = store.entry(k)
   const node = e.node
   const editing = store.editing?.key === k ? store.editing : null
-  const types = node?.types ?? []
+  const types = store.types(k)
   const color = useTypes().get(types[0])?.color
+  const checkbox = store.checkbox(k)
   const hasChildren = (e.children?.length ?? node?.child_count ?? 0) > 0
   const parent = context && node?.parent_id ? store.refs[node.parent_id] : undefined
   return (
@@ -92,12 +92,8 @@ export function Row({ store, k, context, title }: { store: OutlineStore; k: stri
           </button>
         )}
         {!title && <Bullet id={e.id} color={color} folded={hasChildren && !e.expanded} />}
-        {types.includes("task") && (
-          <span className="flex h-6 shrink-0 items-center pl-1.5">
-            <Checkbox checked={node?.status === "done"} onCheckedChange={() => store.toggleDone(k)} aria-label="Done" className="size-3.5" />
-          </span>
-        )}
-        <div className={cn("min-w-0 flex-1", !title && "pl-1.5", node?.status === "done" && !editing && "text-muted-foreground line-through")}>
+        {checkbox && <Check checked={checkbox === "done"} onToggle={() => store.toggleDone(k)} />}
+        <div className={cn("min-w-0 flex-1", !title && "pl-1.5", checkbox === "done" && !editing && "text-muted-foreground line-through")}>
           {editing ? (
             <LineEditor key={editing.seq} value={store.text(k)} refs={store.refs} caret={editing.caret} on={handlers(store, k, (id) => navigate(`/node/${id}`), title)} />
           ) : (
@@ -127,11 +123,12 @@ export function Row({ store, k, context, title }: { store: OutlineStore; k: stri
           )}
         </div>
       </div>
-      {!title && e.expanded && e.children && e.children.length > 0 && (
+      {!title && e.expanded && (store.ghost.parent === k || (e.children && e.children.length > 0)) && (
         <div className="ml-7 border-l border-border/60">
-          {e.children.map((c) => (
+          {e.children?.map((c) => (
             <Row key={c} store={store} k={c} />
           ))}
+          {store.ghost.parent === k && <NewRow store={store} />}
         </div>
       )}
     </div>
@@ -150,20 +147,33 @@ function Bullet({ id, color, folded }: { id?: string; color?: string; folded: bo
   )
 }
 
-export const hint = "Write here. / for commands, # for a type, @ or [[ for a reference."
+function Check({ checked, onToggle }: { checked: boolean; onToggle: () => void }) {
+  return (
+    <span className="flex h-6 shrink-0 items-center pl-1.5">
+      <Checkbox checked={checked} onCheckedChange={onToggle} aria-label="Done" className="size-3.5" />
+    </span>
+  )
+}
 
-/** The last line of an outline, where new rows are written. An empty
- * outline shows how to write. */
+export const hint = "Write here. / for commands, # for a tag, @ or [[ for a reference."
+
+/** The new line of an outline, where new rows are written: at the end,
+ * or under the row above it once indented. An empty outline shows how to
+ * write. */
 export function NewRow({ store }: { store: OutlineStore }) {
   const navigate = useNavigate()
   const editing = store.editing?.key === GHOST ? store.editing : null
   const empty = store.root.length === 0 && store.ghost.text === ""
+  const types = store.types(GHOST)
+  const color = useTypes().get(types[0])?.color
+  const checkbox = store.checkbox(GHOST)
   return (
     <div className="flex items-start">
       <span className="h-6 w-5 shrink-0" />
       <span className="flex h-6 w-4 shrink-0 items-center justify-center">
-        <span className="size-1.5 rounded-full bg-muted-foreground/25" />
+        <span className={cn("rounded-full", color ? "size-2" : "size-1.5", color ? dotClass(color) : "bg-muted-foreground/25")} />
       </span>
+      {checkbox && <Check checked={checkbox === "done"} onToggle={() => store.toggleDone(GHOST)} />}
       <div className="min-w-0 flex-1 pl-1.5">
         {editing ? (
           <LineEditor key={editing.seq} value={store.ghost.text} refs={store.refs} caret={editing.caret} label="New line" on={handlers(store, GHOST, (id) => navigate(`/node/${id}`))} />

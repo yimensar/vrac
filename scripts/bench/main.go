@@ -74,6 +74,11 @@ func rid() string { req++; return fmt.Sprintf("b%d", req) }
 func build(e *engine.Engine, r *rand.Rand, target int) (world, int, error) {
 	var w world
 	count := 0
+	for name, todo := range map[string]bool{"project": false, "person": false, "meeting": false, "task": true, "decision": false} {
+		if _, err := e.CreateType(ctx, actor, rid(), name, todo); err != nil {
+			return w, 0, err
+		}
+	}
 	roots := func(n int, typ, prefix string) ([]engine.Node, error) {
 		var drafts []engine.Draft
 		for i := range n {
@@ -116,7 +121,7 @@ func build(e *engine.Engine, r *rand.Rand, target int) (world, int, error) {
 					if r.IntN(10) == 0 {
 						status = "open"
 					}
-					m.Children = append(m.Children, engine.Draft{Input: fmt.Sprintf("Send the %s to %s #task", word(), ref(w.people)), Status: status, Due: day.AddDate(0, 0, r.IntN(20)).Format("2006-01-02")})
+					m.Children = append(m.Children, engine.Draft{Input: fmt.Sprintf("Send the %s to %s #task", word(), ref(w.people)), Status: status, Date: day.AddDate(0, 0, r.IntN(20)).Format("2006-01-02")})
 				case 1:
 					m.Children = append(m.Children, engine.Draft{Input: fmt.Sprintf("We keep the current %s #decision", word())})
 				default:
@@ -186,7 +191,7 @@ func measure(e *engine.Engine, r *rand.Rand, w world, runs int) {
 			_, err := e.Search(ctx, engine.Query{Concerns: []string{busiest, person}, Types: []string{"task"}, Limit: 50})
 			return err
 		}},
-		{"sections of the busiest project", func() error { _, err := e.NodeSections(ctx, busiest); return err }},
+		{"lists of the busiest project", func() error { _, err := e.NodeLists(ctx, busiest); return err }},
 		{"decisions of the busiest project", func() error {
 			_, err := e.Search(ctx, engine.Query{Concerns: []string{busiest}, Types: []string{"decision"}, Limit: 20})
 			return err
@@ -196,17 +201,20 @@ func measure(e *engine.Engine, r *rand.Rand, w world, runs int) {
 			return err
 		}},
 		{"upcoming of the busiest project", func() error {
-			_, err := e.Search(ctx, engine.Query{Concerns: []string{busiest}, Types: []string{"meeting", "event"}, From: recent, Scheduled: true, Sort: "date_asc", Limit: 10})
+			_, err := e.Search(ctx, engine.Query{Concerns: []string{busiest}, Types: []string{"meeting", "event"}, From: recent, Dated: true, Outside: true, Sort: "date_asc", Limit: 10})
 			return err
 		}},
 		{"mentions of the busiest project", func() error { _, err := e.Search(ctx, engine.Query{Mentions: busiest, Limit: 30}); return err }},
 		{"open tasks due this month", func() error {
-			_, err := e.Search(ctx, engine.Query{Types: []string{"task"}, Status: "open", From: recent[:8] + "01", To: recent, Scheduled: true, Limit: 100})
+			_, err := e.Search(ctx, engine.Query{Types: []string{"task"}, Status: "open", From: recent[:8] + "01", To: recent, Dated: true, Limit: 100})
 			return err
 		}},
 		{"complete a name", func() error { _, err := e.Resolve(ctx, "Project 1", 10); return err }},
 		{"complete words", func() error { _, err := e.Resolve(ctx, "budget portal", 10); return err }},
-		{"project table", func() error { _, err := e.TypeTable(ctx, "project"); return err }},
+		{"project list", func() error {
+			_, err := e.Search(ctx, engine.Query{Types: []string{"project"}, Limit: 200})
+			return err
+		}},
 		{"move the busiest project", func() error {
 			v, err := e.GetNode(ctx, busiest)
 			if err != nil {

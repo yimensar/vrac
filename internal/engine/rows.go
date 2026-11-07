@@ -8,10 +8,10 @@ import (
 
 func (s *txState) insert(parent sql.NullInt64, pos int64, text string, typeIDs []int64, f fields, aliases []string, day string) (int64, string, error) {
 	id := newID()
-	r, err := s.tx.ExecContext(s.ctx, `INSERT INTO nodes(id, kind, parent_seq, position, text, name_key, status, due, start_at, end_at, day, revision,
+	r, err := s.tx.ExecContext(s.ctx, `INSERT INTO nodes(id, kind, parent_seq, position, text, name_key, status, start_at, end_at, day, revision,
 		created_at, updated_at, created_by, created_source, updated_by, updated_source)
-		VALUES (?, 'node', ?, ?, ?, ?, nullif(?, ''), nullif(?, ''), nullif(?, ''), nullif(?, ''), ?, 1, ?, ?, ?, ?, ?, ?)`,
-		id, parent, pos, text, nameKeyOf(text), f.Status, f.Due, f.Start, f.End, day, s.now, s.now, s.actor.Name, s.actor.Source, s.actor.Name, s.actor.Source)
+		VALUES (?, 'node', ?, ?, ?, ?, nullif(?, ''), nullif(?, ''), nullif(?, ''), ?, 1, ?, ?, ?, ?, ?, ?)`,
+		id, parent, pos, text, nameKeyOf(text), f.Status, f.Date, f.End, day, s.now, s.now, s.actor.Name, s.actor.Source, s.actor.Name, s.actor.Source)
 	if err != nil {
 		return 0, "", err
 	}
@@ -120,17 +120,29 @@ func (s *txState) index(seq int64) error {
 	return err
 }
 
-// snapshot is the recorded state of a node after a revision.
+// snapshot is the recorded state of a node after a revision. Due and Start
+// are read from snapshots written before migration 7, where a date was a
+// task's due date or a meeting's start.
 type snapshot struct {
 	ParentID string   `json:"parent_id,omitempty"`
 	Text     string   `json:"text"`
 	Types    []string `json:"types"`
 	Status   string   `json:"status,omitempty"`
+	Date     string   `json:"date,omitempty"`
+	End      string   `json:"end,omitempty"`
 	Due      string   `json:"due,omitempty"`
 	Start    string   `json:"start,omitempty"`
-	End      string   `json:"end,omitempty"`
 	Aliases  []string `json:"aliases"`
 	Trashed  bool     `json:"trashed,omitempty"`
+}
+
+func (s snapshot) date() string {
+	for _, d := range []string{s.Date, s.Start, s.Due} {
+		if d != "" {
+			return d
+		}
+	}
+	return ""
 }
 
 func (s *txState) record(seq int64, action string) error {
@@ -143,7 +155,7 @@ func (s *txState) record(seq int64, action string) error {
 		return err
 	}
 	n = nodes[0]
-	snap, _ := json.Marshal(snapshot{ParentID: n.ParentID, Text: n.Text, Types: n.Types, Status: n.Status, Due: n.Due, Start: n.Start, End: n.End, Aliases: n.Aliases, Trashed: n.Trashed})
+	snap, _ := json.Marshal(snapshot{ParentID: n.ParentID, Text: n.Text, Types: n.Types, Status: n.Status, Date: n.Date, End: n.End, Aliases: n.Aliases, Trashed: n.Trashed})
 	_, err = s.tx.ExecContext(s.ctx, `INSERT INTO revisions(node_seq, revision, action, at, actor, source, snapshot) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		seq, n.Revision, action, s.now, s.actor.Name, s.actor.Source, string(snap))
 	return err
@@ -193,7 +205,7 @@ func (s *txState) syncTypeTokens(seq int64) error {
 	if err := s.tx.QueryRowContext(s.ctx, `SELECT text FROM nodes WHERE seq = ?`, seq).Scan(&text); err != nil {
 		return err
 	}
-	rows, err := s.tx.QueryContext(s.ctx, `SELECT t.name FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE nt.node_seq = ? ORDER BY t.builtin DESC, t.id`, seq)
+	rows, err := s.tx.QueryContext(s.ctx, `SELECT t.name FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE nt.node_seq = ? ORDER BY t.id`, seq)
 	if err != nil {
 		return err
 	}

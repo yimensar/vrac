@@ -25,6 +25,8 @@ describe("syntax", () => {
     expect(trigger("call @Ma")).toEqual({ kind: "ref", query: "Ma", length: 3 })
     expect(trigger("/")).toEqual({ kind: "command", query: "", length: 1 })
     expect(trigger("done /do")).toEqual({ kind: "command", query: "do", length: 3 })
+    expect(trigger("call /due friday 14h")).toEqual({ kind: "command", query: "due friday 14h", length: 15 })
+    expect(trigger("see /tmp/x")).toBeNull()
     expect(trigger("C#")).toBeNull()
     expect(trigger("yan@example")).toBeNull()
     expect(trigger("see a/b")).toBeNull()

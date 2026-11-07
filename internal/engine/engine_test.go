@@ -20,6 +20,8 @@ var me = Actor{Name: "owner", Source: "web"}
 // Thursday 5 November 2026, 10:00 in Paris.
 var clock = time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)
 
+// open opens a database with the tags most tests write: nothing is built
+// in, so a test workspace creates its own.
 func open(t *testing.T, path string) *Engine {
 	t.Helper()
 	paris, err := time.LoadLocation("Europe/Paris")
@@ -31,6 +33,11 @@ func open(t *testing.T, path string) *Engine {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { e.Close() })
+	for _, name := range []string{"task", "meeting", "event", "decision", "project", "person"} {
+		if _, err := e.CreateType(ctx, me, rid(), name, name == "task"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	return e
 }
 
@@ -189,14 +196,63 @@ func TestFreeTypesNeedExplicitCreation(t *testing.T) {
 		t.Fatal("unknown type accepted")
 	}
 	n := create(t, e, CreateRequest{Nodes: []Draft{{Input: "Dune #reading"}}, CreateTypes: []string{"reading"}}).Nodes[0]
-	if !slices.Equal(n.Types, []string{"reading"}) {
-		t.Fatalf("types = %v", n.Types)
+	if !slices.Equal(n.Types, []string{"reading"}) || n.Status != "" {
+		t.Fatalf("node = %+v", n)
 	}
-	v, err := e.TypeTable(ctx, "reading")
-	if err != nil || len(v.Rows) != 1 || v.Type.Builtin {
-		t.Fatalf("type view = %+v, %v", v, err)
+	types, _ := e.Types(ctx)
+	i := slices.IndexFunc(types, func(t Type) bool { return t.Name == "reading" })
+	if i < 0 || types[i].Count != 1 || types[i].Todo {
+		t.Fatalf("types = %+v", types)
 	}
 }
+
+// Tags carry no fields: any node may have a checkbox and a date, and a
+// to-do tag only gives new nodes an open checkbox.
+func TestCheckboxAndDateOnAnyNode(t *testing.T) {
+	e := newEngine(t)
+	book := create(t, e, CreateRequest{Nodes: []Draft{{Input: "Dune #book", DateText: "tomorrow 14h"}}, CreateTypes: []string{"book"}}).Nodes[0]
+	if book.Status != "" || book.Date != "2026-11-06T14:00" || book.Text != "Dune #book" {
+		t.Fatalf("book = %+v", book)
+	}
+	open := StatusOpen
+	up, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 1, Status: &open})
+	if err != nil || up.Nodes[0].Status != StatusOpen {
+		t.Fatalf("checkbox on a book = %+v, %v", up.Nodes, err)
+	}
+	none := ""
+	up, _ = e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 2, Status: &none, Date: &none})
+	if up.Nodes[0].Status != "" || up.Nodes[0].Date != "" {
+		t.Fatalf("cleared = %+v", up.Nodes[0])
+	}
+	// A to-do tag opens a checkbox; unchecking it does not reopen it.
+	task := write(t, e, "Call Marc #task")[0]
+	if task.Status != StatusOpen {
+		t.Fatalf("task = %+v", task)
+	}
+	up, _ = e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: task.ID, ExpectedRevision: 1, Status: &none})
+	in := "Call Marc now #task"
+	up, _ = e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: task.ID, ExpectedRevision: 2, Input: &in})
+	if up.Nodes[0].Status != "" {
+		t.Fatalf("checkbox came back: %+v", up.Nodes[0])
+	}
+	// The trait can be given later; nodes written from then on get it.
+	if _, err := e.SetTypeTodo(ctx, "book", true); err != nil {
+		t.Fatal(err)
+	}
+	if n := write(t, e, "Foundation #book")[0]; n.Status != StatusOpen {
+		t.Fatalf("book after trait = %+v", n)
+	}
+	if _, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 3, DateText: ptr("someday")}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("bad date phrase accepted: %v", err)
+	}
+	end := "2026-11-01"
+	date := "2026-11-02"
+	if _, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 3, Date: &date, End: &end}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("end before date accepted: %v", err)
+	}
+}
+
+func ptr(s string) *string { return &s }
 
 // Scenario 4 of the specification.
 func TestContextIsInherited(t *testing.T) {
@@ -204,23 +260,24 @@ func TestContextIsInherited(t *testing.T) {
 	write(t, e, "Northwind #project", "Globex #project", "Marc #person")
 	northwind := search(t, e, Query{Text: "northwind", Types: []string{"project"}})[0]
 	marc := search(t, e, Query{Text: "marc"})[0]
-	meeting := create(t, e, CreateRequest{ParseDates: true, Nodes: []Draft{{
-		Input: "Copil [[Northwind]] with [[Marc]] 14h #meeting",
+	meeting := create(t, e, CreateRequest{Nodes: []Draft{{
+		Input:    "Copil [[Northwind]] with [[Marc]] #meeting",
+		DateText: "14h",
 		Children: []Draft{
 			{Input: "Lot 2 is moved to January #decision"},
-			{Input: "Follow up with Marc on the schedule Friday #task"},
+			{Input: "Follow up with Marc on the schedule #task", DateText: "Friday"},
 		},
 	}}}).Nodes
-	if meeting[0].Start != "2026-11-05T14:00" || meeting[0].Text != "Copil [["+northwind.ID+"]] with [["+marc.ID+"]] #meeting" {
+	if meeting[0].Date != "2026-11-05T14:00" || meeting[0].Text != "Copil [["+northwind.ID+"]] with [["+marc.ID+"]] #meeting" {
 		t.Fatalf("meeting = %+v", meeting[0])
 	}
-	if meeting[2].Due != "2026-11-06" || meeting[2].Status != StatusOpen || meeting[2].Text != "Follow up with Marc on the schedule #task" {
+	if meeting[2].Date != "2026-11-06" || meeting[2].Status != StatusOpen || meeting[2].Text != "Follow up with Marc on the schedule #task" {
 		t.Fatalf("task = %+v", meeting[2])
 	}
 	write(t, e, "We use API v2 rather than CSV [[Globex]] #decision")
 
-	if due := search(t, e, Query{Types: []string{"task"}, To: "2026-11-10", Scheduled: true}); len(due) != 1 {
-		t.Fatalf("scheduled tasks = %v", ids(due))
+	if due := search(t, e, Query{Types: []string{"task"}, To: "2026-11-10", Dated: true}); len(due) != 1 {
+		t.Fatalf("dated tasks = %v", ids(due))
 	}
 	tasks := search(t, e, Query{Concerns: []string{northwind.ID}, Types: []string{"task"}, Status: StatusOpen})
 	if !slices.Equal(ids(tasks), []string{meeting[2].ID}) {
@@ -234,20 +291,31 @@ func TestContextIsInherited(t *testing.T) {
 	if len(both) != 1 {
 		t.Fatalf("Northwind and Marc = %v", ids(both))
 	}
-	sections, err := e.NodeSections(ctx, northwind.ID)
+	// A node's page gathers, by tag, what concerns it from outside its own
+	// outline: the meeting, its decision and its task.
+	lists, err := e.NodeLists(ctx, northwind.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sections.OpenTasks) != 1 || len(sections.Upcoming) != 1 || len(sections.Decisions) != 1 || len(sections.Mentions.Nodes) != 1 {
-		t.Fatalf("sections = %+v", sections)
+	if !slices.Equal(lists, []ListCount{{"decision", 1}, {"meeting", 1}, {"task", 1}}) {
+		t.Fatalf("lists = %+v", lists)
 	}
-	// Only explicit dates are upcoming: a meeting noted today is not.
 	write(t, e, "Lunch about [[Northwind]] #meeting")
-	if s, _ := e.NodeSections(ctx, northwind.ID); len(s.Upcoming) != 1 || len(s.Meetings) != 1 {
-		t.Fatalf("upcoming = %d, meetings = %d", len(s.Upcoming), len(s.Meetings))
+	create(t, e, CreateRequest{Placement: Placement{ParentID: northwind.ID}, Nodes: []Draft{{Input: "a note inside, not listed"}}})
+	if lists, _ = e.NodeLists(ctx, northwind.ID); !slices.Equal(lists, []ListCount{{"meeting", 2}, {"decision", 1}, {"task", 1}}) {
+		t.Fatalf("lists = %+v", lists)
+	}
+	if got := search(t, e, Query{Concerns: []string{northwind.ID}, Types: []string{"meeting"}, Outside: true}); len(got) != 2 {
+		t.Fatalf("meetings about Northwind = %v", ids(got))
+	}
+	if got := search(t, e, Query{Concerns: []string{northwind.ID}, Untagged: true}); len(got) != 1 || got[0].Text != "a note inside, not listed" {
+		t.Fatalf("untagged = %v", ids(got))
+	}
+	if got := search(t, e, Query{Concerns: []string{northwind.ID}, Untagged: true, Outside: true}); len(got) != 0 {
+		t.Fatalf("outside untagged = %v", ids(got))
 	}
 	// Types are not inherited: the task is not a meeting.
-	meetings := search(t, e, Query{Types: []string{"meeting"}, Scheduled: true})
+	meetings := search(t, e, Query{Types: []string{"meeting"}, Dated: true})
 	if len(meetings) != 1 {
 		t.Fatalf("meetings = %v", ids(meetings))
 	}
@@ -335,14 +403,14 @@ func TestCompletionFindsAnyNode(t *testing.T) {
 // into a plain note and lost its status and due date.
 func TestKeepTypesOnRewrite(t *testing.T) {
 	e := newEngine(t)
-	n := create(t, e, CreateRequest{ParseDates: true, Nodes: []Draft{{Input: "Send the estimate Friday #task"}}}).Nodes[0]
+	n := create(t, e, CreateRequest{Nodes: []Draft{{Input: "Send the estimate #task", DateText: "Friday"}}}).Nodes[0]
 	in := "Send the revised estimate"
 	up, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: n.ID, ExpectedRevision: 1, Input: &in, KeepTypes: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := up.Nodes[0]
-	if got.Text != "Send the revised estimate #task" || got.Due != "2026-11-06" || got.Status != StatusOpen {
+	if got.Text != "Send the revised estimate #task" || got.Date != "2026-11-06" || got.Status != StatusOpen {
 		t.Fatalf("rewritten task = %+v", got)
 	}
 	// Written types replace the old ones.
@@ -376,14 +444,15 @@ func TestSubProjectsAndRenames(t *testing.T) {
 	if _, err := e.Create(ctx, me, CreateRequest{RequestID: rid(), Nodes: []Draft{{Input: "see [[Northwind/Lot 2]]"}}}); err != nil {
 		t.Fatal(err)
 	}
-	table, _ := e.TypeTable(ctx, "project")
-	if len(table.Rows) != 2 {
-		t.Fatalf("project rows = %d", len(table.Rows))
+	if projects := search(t, e, Query{Types: []string{"project"}}); len(projects) != 2 {
+		t.Fatalf("projects = %v", ids(projects))
 	}
-	for _, r := range table.Rows {
-		if r.Node.ID == lot.ID && !slices.Equal(r.Path, []string{"Journal", "2026-11-05", "Northwind"}) {
-			t.Fatalf("path = %v", r.Path)
-		}
+	var path []string
+	for _, p := range v.Path {
+		path = append(path, p.Name)
+	}
+	if !slices.Equal(path, []string{"Journal", "2026-11-05", "Northwind"}) {
+		t.Fatalf("path = %v", path)
 	}
 	// Renaming keeps references and refreshes search.
 	n, _ := e.GetNode(ctx, northwind.ID)
@@ -528,7 +597,7 @@ func TestProtectedNodes(t *testing.T) {
 func TestExportImportRoundTrip(t *testing.T) {
 	e := newEngine(t)
 	write(t, e, "Northwind #project")
-	create(t, e, CreateRequest{Nodes: []Draft{{Input: "Call [[Northwind]] Friday #task", Children: []Draft{{Input: "child"}}}}, ParseDates: true})
+	create(t, e, CreateRequest{Nodes: []Draft{{Input: "Call [[Northwind]] #task", DateText: "Friday", Children: []Draft{{Input: "child"}}}}})
 	trashed := write(t, e, "gone")[0]
 	if _, err := e.Trash(ctx, me, TrashRequest{RequestID: rid(), ID: trashed.ID, ExpectedRevision: 1}); err != nil {
 		t.Fatal(err)
@@ -550,7 +619,7 @@ func TestExportImportRoundTrip(t *testing.T) {
 		t.Fatal("export after import differs")
 	}
 	northwind := search(t, f, Query{Text: "northwind", Types: []string{"project"}})[0]
-	if got := search(t, f, Query{Concerns: []string{northwind.ID}, Types: []string{"task"}}); len(got) != 1 || got[0].Due != "2026-11-06" {
+	if got := search(t, f, Query{Concerns: []string{northwind.ID}, Types: []string{"task"}}); len(got) != 1 || got[0].Date != "2026-11-06" {
 		t.Fatalf("imported context = %+v", got)
 	}
 	if err := f.Import(ctx, bytes.NewReader(buf.Bytes())); !errors.Is(err, ErrConflict) {
@@ -589,10 +658,14 @@ func TestMigrationWritesTypeTokens(t *testing.T) {
 	path := filepath.Join(dir, "vrac.sqlite")
 	e := open(t, path)
 	n := write(t, e, "#meeting with Bruno", "Northwind #project")
-	// Recreate the version 1 representation: types outside the text.
+	task := write(t, e, "Call Bruno #task")[0]
+	// Recreate the version 1 representation: types outside the text, a
+	// task's due date in its own column, the task type built in.
 	for _, stmt := range []string{
 		`UPDATE nodes SET text = 'with Bruno' WHERE id = '` + n[0].ID + `'`,
 		`UPDATE nodes SET text = 'Northwind' WHERE id = '` + n[1].ID + `'`,
+		`UPDATE nodes SET due = '2026-11-20', start_at = NULL WHERE id = '` + task.ID + `'`,
+		`UPDATE types SET builtin = 1, todo = 0 WHERE name = 'task'`,
 		`PRAGMA user_version = 1`,
 	} {
 		if _, err := e.db.Exec(stmt); err != nil {
@@ -609,6 +682,17 @@ func TestMigrationWritesTypeTokens(t *testing.T) {
 	}
 	if c, _ := e.Resolve(ctx, "northwind", 1); len(c) != 1 || c[0].Name != "Northwind" {
 		t.Fatalf("resolve after migration = %+v", c)
+	}
+	// Migration 7: the due date became the node's date, task is a to-do
+	// tag of the user's, unused types are gone.
+	if v, _ := e.GetNode(ctx, task.ID); v.Node.Date != "2026-11-20" {
+		t.Fatalf("migrated date = %+v", v.Node)
+	}
+	// (open recreates the test tags afterwards, with new IDs, so the
+	// survivors come first.)
+	types, _ := e.Types(ctx)
+	if types[0].Name != "task" || !types[0].Todo || types[1].Name != "meeting" || types[2].Name != "project" || types[3].Count != 0 {
+		t.Fatalf("types after migration = %+v", types)
 	}
 	backups, _ := filepath.Glob(path + ".v1-*.backup")
 	if len(backups) != 1 {
@@ -648,7 +732,7 @@ func TestPreferences(t *testing.T) {
 	if _, err := e.SetPreferences(ctx, Preferences{Fold: "sideways", Theme: "dark"}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("invalid fold accepted: %v", err)
 	}
-	want := Preferences{Fold: "collapsed", Theme: "dark", ParseDates: false}
+	want := Preferences{Fold: "collapsed", Theme: "dark", Scale: "large"}
 	if _, err := e.SetPreferences(ctx, want); err != nil {
 		t.Fatal(err)
 	}

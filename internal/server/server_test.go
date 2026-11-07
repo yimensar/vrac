@@ -167,16 +167,28 @@ func TestAPIWritesAndUnresolvedNames(t *testing.T) {
 	if out["error"] != "unresolved" {
 		t.Fatalf("out = %v", out)
 	}
-	h.call("POST", "/api/v1/nodes", map[string]any{"request_id": "2", "nodes": []any{map[string]string{"input": "Call [[Northwind]] #task"}},
-		"create": []any{map[string]any{"name": "Northwind", "types": []string{"project"}}}}, 200)
-	today := h.call("GET", "/api/v1/today", nil, 200)
-	due := today["due"].(map[string]any)["nodes"].([]any)
-	if len(due) != 0 {
-		t.Fatalf("a task without due date is not due: %v", due)
+	// Tags are the user's: task becomes a to-do tag, project a plain one.
+	h.call("POST", "/api/v1/types", map[string]any{"request_id": "t1", "name": "task", "todo": true}, 200)
+	out = h.call("POST", "/api/v1/nodes", map[string]any{"request_id": "2", "nodes": []any{map[string]string{"input": "Call [[Northwind]] #task"}},
+		"create": []any{map[string]any{"name": "Northwind", "types": []string{"project"}}}, "create_types": []string{"project"}}, 200)
+	task := out["nodes"].([]any)[0].(map[string]any)
+	if task["status"] != "open" {
+		t.Fatalf("a to-do tag opens a checkbox: %v", task)
 	}
-	types := h.call("GET", "/api/v1/types/project", nil, 200)
-	if rows := types["rows"].([]any); len(rows) != 1 || rows[0].(map[string]any)["open_tasks"].(float64) != 1 {
-		t.Fatalf("project view = %v", types)
+	today := h.call("GET", "/api/v1/today", nil, 200)
+	if open := today["open"].(map[string]any)["nodes"].([]any); len(open) != 1 || len(today["overdue"].(map[string]any)["nodes"].([]any)) != 0 {
+		t.Fatalf("today = %v", today)
+	}
+	if p := h.call("GET", "/api/v1/types/project", nil, 200); p["count"].(float64) != 1 || p["todo"] != false {
+		t.Fatalf("project tag = %v", p)
+	}
+	northwind := out["created"].([]any)[0].(map[string]any)["id"].(string)
+	lists := h.call("GET", "/api/v1/nodes/"+northwind+"/lists", nil, 200)["lists"].([]any)
+	if len(lists) != 1 || lists[0].(map[string]any)["type"] != "task" {
+		t.Fatalf("lists = %v", lists)
+	}
+	if p := h.call("PATCH", "/api/v1/types/project", map[string]any{"todo": true}, 200); p["todo"] != true {
+		t.Fatalf("trait = %v", p)
 	}
 }
 
@@ -279,11 +291,18 @@ func TestOAuthAndMCP(t *testing.T) {
 	if !rejected.IsError || !strings.Contains(rejected.Content[0].(*mcp.TextContent).Text, "Marc") {
 		t.Fatalf("unknown name accepted: %+v", rejected)
 	}
-	written := call("vrac_write", map[string]any{"request_id": "w2", "source": "outlook", "parse_dates": true,
-		"nodes":  []any{map[string]any{"input": "Copil [[Marc]] 14h #meeting", "children": []any{map[string]any{"input": "Send the estimate Friday #task"}}}},
-		"create": []any{map[string]any{"name": "Marc", "types": []string{"person"}}}})
+	if r := call("vrac_create_type", map[string]any{"request_id": "t1", "source": "chat", "name": "task", "todo": true}); r.IsError {
+		t.Fatalf("create type = %+v", r.Content[0])
+	}
+	written := call("vrac_write", map[string]any{"request_id": "w2", "source": "outlook",
+		"nodes":        []any{map[string]any{"input": "Copil [[Marc]] #meeting", "date_text": "14h", "children": []any{map[string]any{"input": "Send the estimate #task", "date_text": "Friday"}}}},
+		"create":       []any{map[string]any{"name": "Marc", "types": []string{"person"}}},
+		"create_types": []string{"meeting", "person"}})
 	if written.IsError {
 		t.Fatalf("write = %+v", written.Content[0])
+	}
+	if nodes := written.StructuredContent.(map[string]any)["nodes"].([]any); !strings.HasSuffix(nodes[0].(map[string]any)["date"].(string), "T14:00") || nodes[1].(map[string]any)["status"] != "open" {
+		t.Fatalf("written = %v", nodes)
 	}
 	got := call("vrac_search", map[string]any{"types": []string{"task"}, "concerns": []string{written.StructuredContent.(map[string]any)["created"].([]any)[0].(map[string]any)["id"].(string)}})
 	nodes := got.StructuredContent.(map[string]any)["nodes"].([]any)
@@ -361,12 +380,12 @@ func TestResetPasswordCreatesOwner(t *testing.T) {
 func TestPreferencesAPI(t *testing.T) {
 	h := newHarness(t)
 	h.setup()
-	if p := h.call("GET", "/api/v1/preferences", nil, 200); p["fold"] != "default" || p["parse_dates"] != true {
+	if p := h.call("GET", "/api/v1/preferences", nil, 200); p["fold"] != "default" || p["scale"] != "default" {
 		t.Fatalf("defaults = %v", p)
 	}
-	h.call("PUT", "/api/v1/preferences", map[string]any{"fold": "nope", "theme": "dark", "parse_dates": true}, http.StatusBadRequest)
-	h.call("PUT", "/api/v1/preferences", map[string]any{"fold": "collapsed", "theme": "dark", "parse_dates": false}, 200)
-	if p := h.call("GET", "/api/v1/preferences", nil, 200); p["fold"] != "collapsed" || p["theme"] != "dark" || p["parse_dates"] != false {
+	h.call("PUT", "/api/v1/preferences", map[string]any{"fold": "nope", "theme": "dark", "scale": "default"}, http.StatusBadRequest)
+	h.call("PUT", "/api/v1/preferences", map[string]any{"fold": "collapsed", "theme": "dark", "scale": "large"}, 200)
+	if p := h.call("GET", "/api/v1/preferences", nil, 200); p["fold"] != "collapsed" || p["theme"] != "dark" || p["scale"] != "large" {
 		t.Fatalf("stored = %v", p)
 	}
 }

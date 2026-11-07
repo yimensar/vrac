@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { ApiError, api, type Type } from "./api"
 
+/** The user's tags by name. */
 export function useTypes(): Map<string, Type> {
   const { data } = useQuery({ queryKey: ["types"], queryFn: api.types, staleTime: 60_000 })
   return useMemo(() => new Map((data?.types ?? []).map((t) => [t.name, t])), [data])

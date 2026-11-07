@@ -1,21 +1,9 @@
 package engine
 
-// Built-in types have fixed meaning and fields. Order is stable: it decides
-// their default colors.
-const (
-	TypeTask     = "task"
-	TypeMeeting  = "meeting"
-	TypeEvent    = "event"
-	TypeDecision = "decision"
-	TypeProject  = "project"
-	TypePerson   = "person"
-)
-
-var builtinTypes = []string{TypeTask, TypeMeeting, TypeEvent, TypeDecision, TypeProject, TypePerson}
-
+// Tag colors, given in order of creation.
 var palette = []string{"blue", "violet", "amber", "emerald", "rose", "cyan", "lime", "orange", "fuchsia", "teal", "sky", "pink"}
 
-// Task statuses.
+// Checkbox states. A node without a checkbox has an empty status.
 const (
 	StatusOpen = "open"
 	StatusDone = "done"
@@ -36,25 +24,29 @@ type Actor struct {
 	Source string
 }
 
-// Type is a built-in or free type.
+// Type is a tag: a name, a color, and one optional trait, Todo, which
+// gives the nodes carrying it a checkbox. Tags have no other fields; they
+// are the user's own.
 type Type struct {
-	Name    string `json:"name"`
-	Builtin bool   `json:"builtin"`
-	Color   string `json:"color"`
-	Count   int    `json:"count"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
+	Todo  bool   `json:"todo"`
+	Count int    `json:"count"`
 }
 
 // Node is the public representation of a node. Text is canonical: references
 // are encoded as [[ID]] and resolved through the Refs map of the response.
 type Node struct {
-	ID         string   `json:"id"`
-	Kind       string   `json:"kind"`
-	ParentID   string   `json:"parent_id,omitempty"`
-	Text       string   `json:"text"`
-	Types      []string `json:"types"`
-	Status     string   `json:"status,omitempty"`
-	Due        string   `json:"due,omitempty"`
-	Start      string   `json:"start,omitempty"`
+	ID       string   `json:"id"`
+	Kind     string   `json:"kind"`
+	ParentID string   `json:"parent_id,omitempty"`
+	Text     string   `json:"text"`
+	Types    []string `json:"types"`
+	// Status is the checkbox: empty for none, open or done.
+	Status string `json:"status,omitempty"`
+	// Date is a day or a day and time (YYYY-MM-DD or YYYY-MM-DDTHH:MM); End
+	// closes a range. Any node may carry them.
+	Date       string   `json:"date,omitempty"`
 	End        string   `json:"end,omitempty"`
 	Aliases    []string `json:"aliases"`
 	Day        string   `json:"day"`
@@ -100,15 +92,17 @@ type Page struct {
 	NextCursor string              `json:"next_cursor,omitempty"`
 }
 
-// Draft describes a node to create. Input uses the Vrac syntax: #type marks
-// a type, [[Name]] or [[ID]] references a node, [[Parent/Child]] a child of
-// a named node, and #type/Name references Name, which carries that type.
+// Draft describes a node to create. Input uses the Vrac syntax: #tag marks
+// a tag, [[Name]] or [[ID]] references a node, [[Parent/Child]] a child of
+// a named node, and #tag/Name references Name, which carries that tag.
+// DateText is a phrase such as "Friday 14h" read relative to the day
+// written, an alternative to Date.
 type Draft struct {
 	Input    string   `json:"input"`
 	Status   string   `json:"status,omitempty"`
-	Due      string   `json:"due,omitempty"`
-	Start    string   `json:"start,omitempty"`
+	Date     string   `json:"date,omitempty"`
 	End      string   `json:"end,omitempty"`
+	DateText string   `json:"date_text,omitempty"`
 	Aliases  []string `json:"aliases,omitempty"`
 	Children []Draft  `json:"children,omitempty"`
 }
@@ -140,9 +134,6 @@ type CreateRequest struct {
 	Nodes       []Draft    `json:"nodes"`
 	Create      []Creation `json:"create,omitempty"`
 	CreateTypes []string   `json:"create_types,omitempty"`
-	// ParseDates converts date and time phrases of tasks, meetings and
-	// events into fields when the fields are not given explicitly.
-	ParseDates bool `json:"parse_dates,omitempty"`
 }
 
 // UpdateRequest changes one node. Nil fields are left unchanged; an empty
@@ -154,13 +145,12 @@ type UpdateRequest struct {
 	ExpectedRevision int64      `json:"expected_revision"`
 	Input            *string    `json:"input,omitempty"`
 	Status           *string    `json:"status,omitempty"`
-	Due              *string    `json:"due,omitempty"`
-	Start            *string    `json:"start,omitempty"`
+	Date             *string    `json:"date,omitempty"`
 	End              *string    `json:"end,omitempty"`
+	DateText         *string    `json:"date_text,omitempty"`
 	Aliases          *[]string  `json:"aliases,omitempty"`
 	Create           []Creation `json:"create,omitempty"`
 	CreateTypes      []string   `json:"create_types,omitempty"`
-	ParseDates       bool       `json:"parse_dates,omitempty"`
 	// KeepTypes keeps the node's types when Input writes none, appending
 	// their tokens. AI clients rewriting a sentence then cannot drop a type,
 	// and its fields, by omission.

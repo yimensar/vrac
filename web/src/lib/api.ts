@@ -7,9 +7,10 @@ export type Node = {
   parent_id?: string
   text: string
   types: string[]
+  /** The checkbox: absent, open or done. Any node may have one. */
   status?: "open" | "done"
-  due?: string
-  start?: string
+  /** A day or a day and time, with an optional end. Any node may have one. */
+  date?: string
   end?: string
   aliases: string[]
   day: string
@@ -24,43 +25,46 @@ export type Node = {
   ref_ids: string[]
 }
 
-/** name is plain; label keeps the #types written inside the sentence. */
+/** name is plain; label keeps the #tags written inside the sentence. */
 export type Ref = { id: string; name: string; label: string; types: string[]; trashed?: boolean }
 export type Refs = Record<string, Ref>
-/** subjects, when asked for, lists the typed nodes each result concerns, most specific first. */
+/** subjects, when asked for, lists the tagged nodes each result concerns, most specific first. */
 export type Page = { nodes: Node[]; refs: Refs; subjects?: Record<string, string[]>; next_cursor?: string }
 export type Brief = { id: string; name: string; label?: string; types: string[]; path?: string[] }
-export type Type = { name: string; builtin: boolean; color: string; count: number }
+/** A tag: a name, a color, and whether its nodes are to-dos. */
+export type Type = { name: string; color: string; todo: boolean; count: number }
 export type Creation = { name: string; types?: string[] }
 export type Unresolved = { kind: "type" | "node"; name: string; candidates: Brief[] }
+/** One list on a node's page: what concerns it from elsewhere, by tag ("" for untagged). */
+export type ListCount = { type: string; count: number }
 
 export type Session = { owner: boolean; authenticated: boolean; today: string; timezone: string; version: string; mcp_url: string; provider: string }
 export type Ceremony = { flow: string; mode: "create" | "get"; options: { publicKey: Record<string, any> } }
 export type Passkey = { id: string; name: string; created_at: string; last_used_at?: string }
 export type DayView = { day: string; exists: boolean; node?: Node; children: Page }
 export type NodeView = { node: Node; path: Brief[]; children: Page; refs: Refs }
-export type Sections = { open_tasks: Node[]; upcoming: Node[]; meetings: Node[]; decisions: Node[]; mentions: Page; refs: Refs }
-export type TodayView = { today: string; day: DayView; agenda: Page; due: Page }
-export type TypeRow = { node: Node; path: string[]; open_tasks: number; last_activity: string }
-export type TypeView = { type: Type; rows: TypeRow[]; refs: Refs }
 export type Activity = { node: Brief; revision: number; action: string; at: string; actor: string; source: string; latest: boolean }
 export type Connection = { id: string; kind: "token" | "client"; name: string; created_at: string; last_used_at?: string }
 export type Result = { nodes: Node[]; refs: Refs; created?: Brief[] }
 export type Fold = "default" | "expanded" | "collapsed"
-export type Preferences = { fold: Fold; theme: "system" | "light" | "dark"; parse_dates: boolean }
+export type Scale = "small" | "default" | "large" | "larger"
+export type Preferences = { fold: Fold; theme: "system" | "light" | "dark"; scale: Scale }
 
 /** The preferences in effect, kept current by the app (see preferences.ts). */
-export const current: Preferences = { fold: "default", theme: "system", parse_dates: true }
+export const current: Preferences = { fold: "default", theme: "system", scale: "default" }
 
 export type Query = {
   text?: string
   types?: string[]
+  untagged?: boolean
   concerns?: string[]
+  /** Drops the subjects' own outlines: what refers to them from elsewhere. */
+  outside?: boolean
   mentions?: string
   status?: "open" | "done"
   from?: string
   to?: string
-  scheduled?: boolean
+  dated?: boolean
   with_subjects?: boolean
   sort?: "date_desc" | "date_asc" | "updated"
   limit?: number
@@ -68,6 +72,12 @@ export type Query = {
 }
 
 export type Placement = { parent_id?: string; day?: string; root?: boolean; after_id?: string; first?: boolean }
+
+/** The properties of a node besides its text; date_text is a phrase such
+ * as "Friday 14h", and an empty string clears a field. */
+export type Fields = { status?: "" | "open" | "done"; date?: string; end?: string; date_text?: string }
+export type Draft = Fields & { input: string }
+export type Change = Fields & { input?: string; aliases?: string[]; create?: Creation[]; create_types?: string[] }
 
 export class ApiError extends Error {
   status: number
@@ -116,26 +126,24 @@ export const api = {
   logout: () => request("POST", "/api/v1/logout"),
   changePassword: (current: string, password: string) => request("POST", "/api/v1/password", { current, password }),
 
-  today: () => request<TodayView>("GET", "/api/v1/today"),
   days: (before?: string) => request<{ days: string[] }>("GET", "/api/v1/days" + q({ before, limit: 10 })),
   day: (day: string) => request<DayView>("GET", `/api/v1/days/${day}`),
   node: (id: string) => request<NodeView>("GET", `/api/v1/nodes/${id}`),
   children: (id: string, cursor?: string) => request<Page>("GET", `/api/v1/nodes/${id}/children` + q({ cursor })),
-  sections: (id: string) => request<Sections>("GET", `/api/v1/nodes/${id}/sections`),
+  lists: (id: string) => request<{ lists: ListCount[] }>("GET", `/api/v1/nodes/${id}/lists`),
   roots: () => request<Page>("GET", "/api/v1/roots"),
   search: (query: Query) => request<Page>("POST", "/api/v1/search", query),
   resolve: (name: string) => request<{ candidates: Brief[] }>("GET", "/api/v1/resolve" + q({ name, limit: 8 })),
   types: () => request<{ types: Type[] }>("GET", "/api/v1/types"),
-  type: (name: string) => request<TypeView>("GET", `/api/v1/types/${encodeURIComponent(name)}`),
-  createType: (name: string) => request<Type>("POST", "/api/v1/types", { request_id: requestId(), name }),
+  type: (name: string) => request<Type>("GET", `/api/v1/types/${encodeURIComponent(name)}`),
+  createType: (name: string, todo = false) => request<Type>("POST", "/api/v1/types", { request_id: requestId(), name, todo }),
+  setTypeTodo: (name: string, todo: boolean) => request<Type>("PATCH", `/api/v1/types/${encodeURIComponent(name)}`, { todo }),
   activity: (cursor?: string) => request<{ items: Activity[]; next_cursor?: string }>("GET", "/api/v1/activity" + q({ cursor })),
 
-  create: (body: { placement?: Placement; nodes: { input: string; due?: string; start?: string }[]; create?: Creation[]; create_types?: string[]; parse_dates?: boolean; source?: string }) =>
-    request<Result>("POST", "/api/v1/nodes", { request_id: requestId(), parse_dates: current.parse_dates, ...body }),
-  update: (
-    node: Node,
-    change: { input?: string; status?: string; due?: string; start?: string; end?: string; aliases?: string[]; create?: Creation[]; create_types?: string[] },
-  ) => request<Result>("PATCH", `/api/v1/nodes/${node.id}`, { request_id: requestId(), expected_revision: node.revision, parse_dates: current.parse_dates, ...change }),
+  create: (body: { placement?: Placement; nodes: Draft[]; create?: Creation[]; create_types?: string[]; source?: string }) =>
+    request<Result>("POST", "/api/v1/nodes", { request_id: requestId(), ...body }),
+  update: (node: Node, change: Change) =>
+    request<Result>("PATCH", `/api/v1/nodes/${node.id}`, { request_id: requestId(), expected_revision: node.revision, ...change }),
   move: (node: Node, placement: Placement) =>
     request<Result>("POST", `/api/v1/nodes/${node.id}/move`, { request_id: requestId(), expected_revision: node.revision, placement }),
   trash: (node: Node) => request<Result>("POST", `/api/v1/nodes/${node.id}/trash`, { request_id: requestId(), expected_revision: node.revision }),

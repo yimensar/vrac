@@ -1,12 +1,16 @@
 import { useEffect } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { api, current, type Preferences } from "./api"
+import { api, current, type Preferences, type Scale } from "./api"
 import { reportError } from "./hooks"
 
 // The page background of each theme, for the browser and system bars.
 const bars = { light: "#ffffff", dark: "#0a0a0a" }
 
-/** Loads the preferences, keeps them in effect and applies the theme. */
+// The root font size of each interface size; everything is in rem.
+const sizes: Record<Scale, string> = { small: "14px", default: "16px", large: "18px", larger: "20px" }
+
+/** Loads the preferences, keeps them in effect and applies the theme and
+ * the interface size. */
 export function usePreferences(): Preferences {
   const { data } = useQuery({ queryKey: ["preferences"], queryFn: api.preferences, staleTime: 60_000 })
   const p = data ?? current
@@ -19,7 +23,8 @@ export function usePreferences(): Preferences {
       const own = meta.media.includes("dark") ? bars.dark : bars.light
       meta.content = p.theme === "system" ? own : bars[p.theme]
     }
-  }, [p.theme])
+    root.style.fontSize = sizes[p.scale] ?? sizes.default
+  }, [p.theme, p.scale])
   return p
 }
 

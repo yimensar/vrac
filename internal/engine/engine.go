@@ -34,6 +34,9 @@ var schemaV5 string
 //go:embed schema_v6.sql
 var schemaV6 string
 
+//go:embed schema_v7.sql
+var schemaV7 string
+
 // applicationID marks a SQLite file as a Vrac database ("VRAC").
 const applicationID = 0x56524143
 
@@ -62,6 +65,7 @@ var migrations = []func(*Engine, *sql.Tx) error{
 		return err
 	},
 	migrateOwner,
+	migrateTags,
 }
 
 // Errors returned by the engine. Callers compare with errors.Is.
@@ -178,9 +182,11 @@ func (e *Engine) migrate(path string) error {
 	})
 }
 
+// seed is part of migration 1, which is published and stays as it was: it
+// wrote the six types of version 1, which migration 7 removes when unused.
 func (e *Engine) seed(tx *sql.Tx) error {
 	now := e.stamp()
-	for i, t := range builtinTypes {
+	for i, t := range []string{"task", "meeting", "event", "decision", "project", "person"} {
 		if _, err := tx.Exec(`INSERT INTO types(name, builtin, color, created_at) VALUES (?, 1, ?, ?)`, t, palette[i%len(palette)], now); err != nil {
 			return err
 		}

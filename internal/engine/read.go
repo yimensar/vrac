@@ -13,7 +13,7 @@ type queryer interface {
 }
 
 const nodeColumns = `n.seq, n.id, n.kind, coalesce(p.id, ''), coalesce(n.parent_seq, 0), n.text,
-	coalesce(n.status, ''), coalesce(n.due, ''), coalesce(n.start_at, ''), coalesce(n.end_at, ''),
+	coalesce(n.status, ''), coalesce(n.start_at, ''), coalesce(n.end_at, ''),
 	n.day, n.revision, n.created_at, n.updated_at, n.created_by, n.updated_by, n.updated_source,
 	n.trashed_at IS NOT NULL,
 	(SELECT count(*) FROM nodes c WHERE c.parent_seq = n.seq AND c.trashed_at IS NULL), n.position`
@@ -25,7 +25,7 @@ func scanNodes(rows *sql.Rows) ([]Node, error) {
 	var out []Node
 	for rows.Next() {
 		var n Node
-		if err := rows.Scan(&n.seq, &n.ID, &n.Kind, &n.ParentID, &n.parentSeq, &n.Text, &n.Status, &n.Due, &n.Start, &n.End,
+		if err := rows.Scan(&n.seq, &n.ID, &n.Kind, &n.ParentID, &n.parentSeq, &n.Text, &n.Status, &n.Date, &n.End,
 			&n.Day, &n.Revision, &n.CreatedAt, &n.UpdatedAt, &n.CreatedBy, &n.UpdatedBy, &n.Source, &n.Trashed, &n.ChildCount, &n.position); err != nil {
 			return nil, err
 		}
@@ -81,7 +81,7 @@ func (e *Engine) hydrate(ctx context.Context, q queryer, nodes []Node) (map[stri
 		nodes[i].RefIDs = []string{}
 	}
 	in := placeholders(len(seqs))
-	rows, err := q.QueryContext(ctx, `SELECT nt.node_seq, t.name FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE nt.node_seq IN (`+in+`) ORDER BY t.builtin DESC, t.id`, seqs...)
+	rows, err := q.QueryContext(ctx, `SELECT nt.node_seq, t.name FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE nt.node_seq IN (`+in+`) ORDER BY t.id`, seqs...)
 	if err != nil {
 		return nil, err
 	}
@@ -287,11 +287,11 @@ func (e *Engine) Roots(ctx context.Context, cursor string, limit int) (Page, err
 	return e.siblings(ctx, sql.NullInt64{}, cursor, limit)
 }
 
-// Types lists built-in and free types with the number of nodes carrying them.
+// Types lists the tags, oldest first, with the number of nodes carrying them.
 func (e *Engine) Types(ctx context.Context) ([]Type, error) {
-	rows, err := e.db.QueryContext(ctx, `SELECT t.name, t.builtin, t.color,
+	rows, err := e.db.QueryContext(ctx, `SELECT t.name, t.color, t.todo,
 		(SELECT count(*) FROM node_types nt JOIN nodes n ON n.seq = nt.node_seq WHERE nt.type_id = t.id AND n.trashed_at IS NULL)
-		FROM types t ORDER BY t.builtin DESC, t.id`)
+		FROM types t ORDER BY t.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +299,7 @@ func (e *Engine) Types(ctx context.Context) ([]Type, error) {
 	types := []Type{}
 	for rows.Next() {
 		var t Type
-		if err := rows.Scan(&t.Name, &t.Builtin, &t.Color, &t.Count); err != nil {
+		if err := rows.Scan(&t.Name, &t.Color, &t.Todo, &t.Count); err != nil {
 			return nil, err
 		}
 		types = append(types, t)

@@ -15,13 +15,13 @@ type Preferences struct {
 	Fold string `json:"fold"`
 	// Theme is "system", "light" or "dark".
 	Theme string `json:"theme"`
-	// ParseDates turns phrases such as "Friday" or "14h" typed in the
-	// interface into due dates and start times.
-	ParseDates bool `json:"parse_dates"`
+	// Scale is the size of the interface: "small", "default", "large" or
+	// "larger", so the browser's own zoom is never needed.
+	Scale string `json:"scale"`
 }
 
 // DefaultPreferences apply until the owner changes them.
-var DefaultPreferences = Preferences{Fold: "default", Theme: "system", ParseDates: true}
+var DefaultPreferences = Preferences{Fold: "default", Theme: "system", Scale: "default"}
 
 // Preferences returns the stored preferences over the defaults.
 func (e *Engine) Preferences(ctx context.Context) (Preferences, error) {
@@ -52,6 +52,11 @@ func (e *Engine) SetPreferences(ctx context.Context, p Preferences) (Preferences
 	case "system", "light", "dark":
 	default:
 		return p, invalid("theme is system, light or dark")
+	}
+	switch p.Scale {
+	case "small", "default", "large", "larger":
+	default:
+		return p, invalid("scale is small, default, large or larger")
 	}
 	b, _ := json.Marshal(p)
 	return p, e.write(ctx, func(tx *sql.Tx) error {

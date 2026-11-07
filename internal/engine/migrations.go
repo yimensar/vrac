@@ -37,20 +37,10 @@ func migrateTypeTokens(e *Engine, tx *sql.Tx) error {
 // migrateOwner is migration 6: a username and a WebAuthn handle for the
 // owner, and the passkeys table.
 func migrateOwner(e *Engine, tx *sql.Tx) error {
-	columns := map[string]bool{}
-	rows, err := tx.Query(`SELECT name FROM pragma_table_info('owner')`)
+	columns, err := tableColumns(tx, "owner")
 	if err != nil {
 		return err
 	}
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			rows.Close()
-			return err
-		}
-		columns[name] = true
-	}
-	rows.Close()
 	for name, ddl := range map[string]string{
 		"username":    `ALTER TABLE owner ADD COLUMN username TEXT NOT NULL DEFAULT 'owner'`,
 		"user_handle": `ALTER TABLE owner ADD COLUMN user_handle BLOB`,
@@ -63,4 +53,37 @@ func migrateOwner(e *Engine, tx *sql.Tx) error {
 	}
 	_, err = tx.Exec(schemaV6)
 	return err
+}
+
+// migrateTags is migration 7: tags lose their built-in meaning and gain
+// the to-do trait, and every node's date becomes one generic field.
+func migrateTags(e *Engine, tx *sql.Tx) error {
+	columns, err := tableColumns(tx, "types")
+	if err != nil {
+		return err
+	}
+	if !columns["todo"] {
+		if _, err := tx.Exec(`ALTER TABLE types ADD COLUMN todo INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+	_, err = tx.Exec(schemaV7)
+	return err
+}
+
+func tableColumns(tx *sql.Tx, table string) (map[string]bool, error) {
+	columns := map[string]bool{}
+	rows, err := tx.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		columns[name] = true
+	}
+	return columns, rows.Err()
 }

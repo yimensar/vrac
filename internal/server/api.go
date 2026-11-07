@@ -22,12 +22,15 @@ func respond(w http.ResponseWriter, v any, err error) {
 	writeJSON(w, http.StatusOK, v)
 }
 
-// TodayView is the home screen: today's journal, agenda and due tasks.
+// TodayView is the day at a glance: today's journal, what is dated today,
+// the open to-dos dated before today, and every open to-do with the
+// subjects it concerns.
 type TodayView struct {
-	Today  string         `json:"today"`
-	Day    engine.DayView `json:"day"`
-	Agenda engine.Page    `json:"agenda"`
-	Due    engine.Page    `json:"due"`
+	Today   string         `json:"today"`
+	Day     engine.DayView `json:"day"`
+	Dated   engine.Page    `json:"dated"`
+	Overdue engine.Page    `json:"overdue"`
+	Open    engine.Page    `json:"open"`
 }
 
 func (s *Server) todayView(r *http.Request) (TodayView, error) {
@@ -38,10 +41,14 @@ func (s *Server) todayView(r *http.Request) (TodayView, error) {
 	if v.Day, err = s.engine.Day(ctx, today, "", 0); err != nil {
 		return v, err
 	}
-	if v.Agenda, err = s.engine.Search(ctx, engine.Query{Types: []string{engine.TypeMeeting, engine.TypeEvent}, From: today, To: today, Scheduled: true, Sort: "date_asc", Limit: 50}); err != nil {
+	if v.Dated, err = s.engine.Search(ctx, engine.Query{From: today, To: today, Dated: true, Sort: "date_asc", Limit: 50}); err != nil {
 		return v, err
 	}
-	v.Due, err = s.engine.Search(ctx, engine.Query{Types: []string{engine.TypeTask}, Status: engine.StatusOpen, To: today, Scheduled: true, Sort: "date_asc", Limit: 100})
+	yesterday, _ := time.Parse("2006-01-02", today)
+	if v.Overdue, err = s.engine.Search(ctx, engine.Query{Status: engine.StatusOpen, To: yesterday.AddDate(0, 0, -1).Format("2006-01-02"), Dated: true, Sort: "date_asc", Limit: 100}); err != nil {
+		return v, err
+	}
+	v.Open, err = s.engine.Search(ctx, engine.Query{Status: engine.StatusOpen, Sort: "date_asc", Subjects: true, Limit: 200})
 	return v, err
 }
 
@@ -75,9 +82,9 @@ func (s *Server) children(w http.ResponseWriter, r *http.Request, p principal) {
 	respond(w, v, err)
 }
 
-func (s *Server) sections(w http.ResponseWriter, r *http.Request, p principal) {
-	v, err := s.engine.NodeSections(r.Context(), r.PathValue("id"))
-	respond(w, v, err)
+func (s *Server) lists(w http.ResponseWriter, r *http.Request, p principal) {
+	v, err := s.engine.NodeLists(r.Context(), r.PathValue("id"))
+	respond(w, map[string]any{"lists": v}, err)
 }
 
 // Mutation bodies carry an optional source next to the engine request.
@@ -176,17 +183,29 @@ func (s *Server) createType(w http.ResponseWriter, r *http.Request, p principal)
 	var b struct {
 		RequestID string `json:"request_id"`
 		Name      string `json:"name"`
+		Todo      bool   `json:"todo"`
 		Source    string `json:"source,omitempty"`
 	}
 	if !decode(w, r, &b) {
 		return
 	}
-	v, err := s.engine.CreateType(r.Context(), p.actor(b.Source), b.RequestID, b.Name)
+	v, err := s.engine.CreateType(r.Context(), p.actor(b.Source), b.RequestID, b.Name, b.Todo)
 	respond(w, v, err)
 }
 
-func (s *Server) typeView(w http.ResponseWriter, r *http.Request, p principal) {
-	v, err := s.engine.TypeTable(r.Context(), r.PathValue("name"))
+func (s *Server) typeNamed(w http.ResponseWriter, r *http.Request, p principal) {
+	v, err := s.engine.TypeNamed(r.Context(), r.PathValue("name"))
+	respond(w, v, err)
+}
+
+func (s *Server) setTypeTodo(w http.ResponseWriter, r *http.Request, p principal) {
+	var b struct {
+		Todo bool `json:"todo"`
+	}
+	if !decode(w, r, &b) {
+		return
+	}
+	v, err := s.engine.SetTypeTodo(r.Context(), r.PathValue("name"), b.Todo)
 	respond(w, v, err)
 }
 

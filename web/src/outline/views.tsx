@@ -4,7 +4,7 @@ import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react"
 import { api, current, type Page, type Placement } from "@/lib/api"
 import { reportError } from "@/lib/hooks"
 import { NewRow, Row } from "./row"
-import { GHOST, OutlineStore } from "./store"
+import { GHOST, OutlineStore, ROOT } from "./store"
 import { TouchBar } from "./touch-bar"
 
 export type Source = { day: string } | { node: string }
@@ -78,7 +78,7 @@ export function Outline({ source, compose = true, capture = false }: { source: S
       {store.root.map((k) => (
         <Row key={k} store={store} k={k} />
       ))}
-      {compose && <NewRow store={store} />}
+      {compose && store.ghost.parent === ROOT && <NewRow store={store} />}
       <TouchBar store={store} />
     </div>
   )
