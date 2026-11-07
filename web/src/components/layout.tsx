@@ -58,7 +58,7 @@ export function Layout() {
   }, [])
   return (
     <div className="min-h-svh">
-      <header className="sticky top-0 z-30 bg-background/85 backdrop-blur">
+      <header className="sticky top-0 z-30 bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex h-14 max-w-3xl items-center gap-0.5 px-3 md:px-5">
           <Link to="/" className="rounded-md px-1.5 py-0.5 text-lg hover:bg-accent" aria-label="Journal">
             <Wordmark />
@@ -86,7 +86,7 @@ export function Layout() {
           </DropdownMenu>
         </div>
       </header>
-      <main key={preferences.fold} className="mx-auto w-full max-w-3xl px-4 pb-24 pt-6 pointer-coarse:pb-36 md:px-6 md:pt-8">
+      <main key={preferences.fold} className="mx-auto w-full max-w-3xl px-[max(1rem,env(safe-area-inset-left))] pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 pointer-coarse:pb-36 md:px-6 md:pt-8">
         <Outlet />
       </main>
       <Palette open={palette} onOpenChange={setPalette} />

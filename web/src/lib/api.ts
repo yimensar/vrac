@@ -130,7 +130,7 @@ export const api = {
   createType: (name: string) => request<Type>("POST", "/api/v1/types", { request_id: requestId(), name }),
   activity: (cursor?: string) => request<{ items: Activity[]; next_cursor?: string }>("GET", "/api/v1/activity" + q({ cursor })),
 
-  create: (body: { placement?: Placement; nodes: { input: string; due?: string; start?: string }[]; create?: Creation[]; create_types?: string[]; parse_dates?: boolean }) =>
+  create: (body: { placement?: Placement; nodes: { input: string; due?: string; start?: string }[]; create?: Creation[]; create_types?: string[]; parse_dates?: boolean; source?: string }) =>
     request<Result>("POST", "/api/v1/nodes", { request_id: requestId(), parse_dates: current.parse_dates, ...body }),
   update: (
     node: Node,

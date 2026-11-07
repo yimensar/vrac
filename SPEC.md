@@ -269,9 +269,13 @@ the keyboard offers indent, outdent, move up and down, done and zoom while
 a row is edited.
 
 The app on phones and computers is a Progressive Web App: installable from the
-browser, with its own window and icon, no store and no separate codebase. The
-manifest declares a share target so that, where the platform supports it,
-text and links can be shared to Vrac and land in today's journal.
+browser, with its own window and icon, no store and no separate codebase. It
+fills the screen around the notch and the home indicator, colors the system
+bars with the current theme, and ships a full-bleed icon for Android masks.
+The manifest declares a share target so that, where the platform supports
+it, text and links can be shared to Vrac: the shared title, text and link
+become one line, without repeating a part another one contains, which one
+tap or Enter adds to today's journal with the source `share`.
 
 A native shell is not planned. If a need appears that a PWA cannot meet, such
 as a system-wide quick-capture shortcut, it would wrap the same UI and
