@@ -191,6 +191,15 @@ export class OutlineStore {
     const pending = key === GHOST ? this.ghost.fields : this.entry(key).fields
     return pending.status || node?.status || "open"
   }
+  /** The date of a row: saved, or the phrase waiting to be saved. */
+  dateOf(key: string): { date?: string; pending?: string } | null {
+    const node = key === GHOST ? undefined : this.entry(key).node
+    const pending = key === GHOST ? this.ghost.fields : this.entry(key).fields
+    if (pending.date_text) return { pending: pending.date_text }
+    if (pending.date === "") return null
+    if (pending.date) return { date: pending.date }
+    return node?.date ? { date: node.date } : null
+  }
   /** True for top rows of a list, which belong to other outlines. */
   private fixed(key: string) {
     return this.mode === "list" && this.entry(key).parent === ROOT
@@ -336,6 +345,15 @@ export class OutlineStore {
           this.accept(e, res.nodes[0], res.refs)
           this.callbacks.onError(err)
           this.focus(key)
+          return
+        }
+        if (err instanceof ApiError && err.code === "invalid" && Object.keys(f).length > 0) {
+          // A property was refused (a date phrase not understood): the
+          // text is kept, the property dropped and the reason shown.
+          const res = await api.create({ placement: this.placementOf(key), nodes: [{ input: sent.trim() }], create: c, create_types: ct })
+          this.accept(e, res.nodes[0], res.refs)
+          if (e.draft === sent) e.draft = undefined
+          this.callbacks.onError(err)
           return
         }
         throw err

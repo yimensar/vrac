@@ -98,6 +98,20 @@ describe("app", () => {
     await waitFor(() => expect(server.tree()).toEqual(["call Marc #task"]))
   })
 
+  it("dates a line from a phrase with /due", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await userEvent.click(await screen.findByLabelText("New line"))
+    await screen.findByRole("textbox", { name: "New line" })
+    await userEvent.keyboard("call Marc /due friday")
+    await userEvent.click(await screen.findByRole("option", { name: /Date: friday/ }))
+    // The phrase shows at once, and leaves with the line.
+    expect(screen.getByText("friday…")).toBeInTheDocument()
+    await userEvent.keyboard("{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["call Marc"]))
+    expect(server.calls.find((c) => c.method === "POST" && c.url === "/api/v1/nodes")!.body.nodes).toEqual([{ input: "call Marc", date_text: "friday" }])
+  })
+
   it("creates a reference with a tag in one go", async () => {
     const server = fakeServer()
     render(<App client={makeClient()} />)

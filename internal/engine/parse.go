@@ -139,8 +139,54 @@ var (
 	relDayRe  = regexp.MustCompile(`(?i)(^|[\s(])(today|tomorrow|aujourd['’]hui|apr[eè]s-demain|demain)($|[\s),.;!?])`)
 	weekdayRe = regexp.MustCompile(`(?i)(^|[\s(])((?:(?:next|this|ce|cette)\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?:\s+prochain)?)($|[\s),.;!?])`)
 	clockRe   = regexp.MustCompile(`(?i)(^|[\s(])((?:at\s+|à\s+)?(\d{1,2})(?:h(\d{2})?|:(\d{2})|\s?(am|pm)))($|[\s),.;!?])`)
+	// "12 novembre", "12 nov", "november 12", "nov 12": the next such day.
+	monthNames = `janv(?:ier)?|f[ée]v(?:rier)?|mars|avr(?:il)?|mai|juin|juil(?:let)?|ao[uû]t|sept(?:embre)?|oct(?:obre)?|nov(?:embre)?|d[ée]c(?:embre)?|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:tember)?|october|november|december`
+	dayMonthRe = regexp.MustCompile(`(?i)(^|[\s(])((\d{1,2})(?:er|st|nd|rd|th)?\s+(` + monthNames + `)\.?)($|[\s),.;!?])`)
+	monthDayRe = regexp.MustCompile(`(?i)(^|[\s(])((` + monthNames + `)\.?\s+(\d{1,2})(?:st|nd|rd|th)?)($|[\s),.;!?])`)
+	// "12/11", "12/11/2026": day first, as the user writes it.
+	numericRe = regexp.MustCompile(`(^|[\s(])((\d{1,2})/(\d{1,2})(?:/(\d{4}))?)($|[\s),.;!?])`)
 	leadWords = map[string]bool{"on": true, "by": true, "before": true, "for": true, "due": true, "le": true, "pour": true, "avant": true, "d'ici": true}
 )
+
+// monthOf reads a month name, French or English, full or abbreviated.
+func monthOf(name string) time.Month {
+	name = strings.ToLower(name)
+	name = strings.NewReplacer("é", "e", "û", "u").Replace(name)
+	for i, prefixes := range [][]string{
+		{"janv", "jan"}, {"fev", "feb"}, {"mars", "mar"}, {"avr", "apr"}, {"mai", "may"}, {"juin", "jun"},
+		{"juil", "jul"}, {"aout", "aug"}, {"sept", "sep"}, {"oct"}, {"nov"}, {"dec"},
+	} {
+		for _, p := range prefixes {
+			if strings.HasPrefix(name, p) {
+				return time.Month(i + 1)
+			}
+		}
+	}
+	return 0
+}
+
+// nextDate returns day/month in the reference year, or the year after
+// when that day is already past: dates in text look ahead.
+func nextDate(ref time.Time, day int, month time.Month, year int) (string, bool) {
+	if month == 0 || day < 1 || day > 31 {
+		return "", false
+	}
+	if year == 0 {
+		year = ref.Year()
+	}
+	d := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	if d.Day() != day {
+		return "", false
+	}
+	if year == ref.Year() && d.Before(ref) && !sameDay(d, ref) {
+		d = d.AddDate(1, 0, 0)
+	}
+	return d.Format(dateLayout), true
+}
+
+func sameDay(a, b time.Time) bool {
+	return a.Year() == b.Year() && a.YearDay() == b.YearDay()
+}
 
 var weekdays = map[string]time.Weekday{
 	"sunday": time.Sunday, "monday": time.Monday, "tuesday": time.Tuesday, "wednesday": time.Wednesday,
@@ -172,6 +218,38 @@ func parseDates(text string, ref time.Time, withClock bool) (rest, date, clock s
 			}
 			date = ref.AddDate(0, 0, offset).Format(dateLayout)
 			rest = cut(rest, m[4], m[5])
+		}
+	}
+	if date == "" {
+		if m := dayMonthRe.FindStringSubmatchIndex(rest); m != nil {
+			day, _ := strconv.Atoi(rest[m[6]:m[7]])
+			if d, ok := nextDate(ref, day, monthOf(rest[m[8]:m[9]]), 0); ok {
+				date = d
+				rest = cut(rest, m[4], m[5])
+			}
+		}
+	}
+	if date == "" {
+		if m := monthDayRe.FindStringSubmatchIndex(rest); m != nil {
+			day, _ := strconv.Atoi(rest[m[8]:m[9]])
+			if d, ok := nextDate(ref, day, monthOf(rest[m[6]:m[7]]), 0); ok {
+				date = d
+				rest = cut(rest, m[4], m[5])
+			}
+		}
+	}
+	if date == "" {
+		if m := numericRe.FindStringSubmatchIndex(rest); m != nil {
+			day, _ := strconv.Atoi(rest[m[6]:m[7]])
+			month, _ := strconv.Atoi(rest[m[8]:m[9]])
+			year := 0
+			if m[10] >= 0 {
+				year, _ = strconv.Atoi(rest[m[10]:m[11]])
+			}
+			if d, ok := nextDate(ref, day, time.Month(month), year); ok {
+				date = d
+				rest = cut(rest, m[4], m[5])
+			}
 		}
 	}
 	if date == "" {

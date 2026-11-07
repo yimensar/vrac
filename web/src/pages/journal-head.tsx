@@ -16,14 +16,33 @@ import { NodeList } from "@/outline/views"
 
 type Group = { id: string; page: Page }
 
+// Folds live on the device: the subjects folded in To do, and the head's
+// own sections.
 const FOLDED = "vrac.folded-subjects"
+const SECTIONS = "vrac.folded-sections"
 
-function loadFolded(): Set<string> {
+function loadSet(key: string): Set<string> {
   try {
-    return new Set(JSON.parse(localStorage.getItem(FOLDED) ?? "[]"))
+    return new Set(JSON.parse(localStorage.getItem(key) ?? "[]"))
   } catch {
     return new Set()
   }
+}
+
+function useFolds(key: string): [Set<string>, (id: string) => void] {
+  const [folded, setFolded] = useState(() => loadSet(key))
+  const toggle = (id: string) => {
+    const next = new Set(folded)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setFolded(next)
+    try {
+      localStorage.setItem(key, JSON.stringify([...next]))
+    } catch {
+      // A private window forgets; the page still works.
+    }
+  }
+  return [folded, toggle]
 }
 
 const day = (n: Node) => (n.date ?? "").slice(0, 10)
@@ -55,52 +74,52 @@ export function JournalHead({ today }: { today: string }) {
       .sort((a, b) => (a.id === "" ? -1 : b.id === "" ? 1 : (refs[a.id]?.name ?? "").localeCompare(refs[b.id]?.name ?? "")))
     return { due, groups, refs }
   }, [week, open, to])
-  const [folded, setFolded] = useState(loadFolded)
+  const [folded, toggle] = useFolds(FOLDED)
+  const [sections, toggleSection] = useFolds(SECTIONS)
   if (!week || !open) return null
   if (week.nodes.length === 0 && open.nodes.length === 0) return null
-  const toggle = (id: string) => {
-    const next = new Set(folded)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    setFolded(next)
-    try {
-      localStorage.setItem(FOLDED, JSON.stringify([...next]))
-    } catch {
-      // A private window forgets; the page still works.
-    }
-  }
   return (
-    <div className="mb-10 space-y-7">
+    <div className="mb-10 space-y-6">
       {week.nodes.length > 0 && (
-        <div>
-          <Label>This week</Label>
+        <Section id="week" label="This week" count={week.nodes.length} folded={sections.has("week")} onToggle={toggleSection}>
           <NodeList id="week" page={week} context={false} />
-        </div>
+        </Section>
       )}
       {due.nodes.length > 0 && (
-        <div>
-          <Label>Due</Label>
+        <Section id="due" label="Due" count={due.nodes.length} folded={sections.has("due")} onToggle={toggleSection}>
           <NodeList id="due" page={due} context={false} />
-        </div>
+        </Section>
       )}
       {open.nodes.length > 0 && (
-        <div>
-          <Label>
-            To do <span className="tabular-nums">{open.nodes.length}</span>
-          </Label>
+        <Section id="todo" label="To do" count={open.nodes.length} folded={sections.has("todo")} onToggle={toggleSection}>
           <div className="space-y-1">
             {groups.map((g) => (
               <SubjectGroup key={g.id || "none"} group={g} refs={refs} today={today} folded={folded.has(g.id)} onToggle={() => toggle(g.id)} />
             ))}
           </div>
-        </div>
+        </Section>
       )}
     </div>
   )
 }
 
-function Label({ children }: { children: React.ReactNode }) {
-  return <div className="mb-1.5 flex items-center gap-2 pl-9 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">{children}</div>
+/** One section of the head, folded to its label on demand. */
+function Section({ id, label, count, folded, onToggle, children }: { id: string; label: string; count: number; folded: boolean; onToggle: (id: string) => void; children: React.ReactNode }) {
+  return (
+    <div>
+      <button
+        type="button"
+        aria-expanded={!folded}
+        onClick={() => onToggle(id)}
+        className="mb-1.5 flex h-5 items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80 hover:text-foreground"
+      >
+        <ChevronRightIcon className={cn("size-3.5 transition-transform", !folded && "rotate-90")} />
+        <span className="pl-3.5">{label}</span>
+        <span className="tabular-nums">{count}</span>
+      </button>
+      {!folded && children}
+    </div>
+  )
 }
 
 /** The open to-dos of one subject, folded or not; the fold is remembered

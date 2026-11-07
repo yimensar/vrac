@@ -31,7 +31,7 @@ function handlers(store: OutlineStore, k: string, navigate: (to: string) => void
       if (!store.toggleDone(k)) toast("No to-do tag yet", { description: "Type / and create one, such as #task." })
     },
     checkbox: () => store.checkbox(k),
-    dated: () => Boolean(e?.node?.date || (k === GHOST ? store.ghost.fields : e?.fields)?.date_text),
+    dated: () => Boolean(store.dateOf(k)),
     setFields: (f: Parameters<OutlineStore["setFields"]>[1]) => store.setFields(k, f),
     setTodo: (tag: string | null) => store.setTodo(k, tag),
     open: navigate,
@@ -102,7 +102,12 @@ export function Row({ store, k, context, title }: { store: OutlineStore; k: stri
         {checkbox && <Check checked={checkbox === "done"} onToggle={() => store.toggleDone(k)} />}
         <div className={cn("min-w-0 flex-1", !title && "pl-1.5", checkbox === "done" && !editing && "text-muted-foreground line-through")}>
           {editing ? (
-            <LineEditor key={editing.seq} value={store.text(k)} refs={store.refs} caret={editing.caret} on={handlers(store, k, navigate, title)} />
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <LineEditor key={editing.seq} value={store.text(k)} refs={store.refs} caret={editing.caret} on={handlers(store, k, navigate, title)} />
+              </div>
+              <PendingDate store={store} k={k} />
+            </div>
           ) : (
             <div
               role="textbox"
@@ -139,6 +144,20 @@ export function Row({ store, k, context, title }: { store: OutlineStore; k: stri
         </div>
       )}
     </div>
+  )
+}
+
+/** The date of a row being edited: the saved one, or the phrase just
+ * given, until the server answers. */
+function PendingDate({ store, k }: { store: OutlineStore; k: string }) {
+  const date = store.dateOf(k)
+  if (!date) return null
+  const node = k === GHOST ? undefined : store.entry(k).node
+  if (date.pending) return <span className="mt-0.5 inline-flex h-5 items-center rounded-md bg-muted px-1.5 text-xs text-muted-foreground">{date.pending}…</span>
+  return (
+    <span className="mt-0.5 [&>span]:ml-0">
+      <DateChip node={{ date: date.date, end: node?.end, status: node?.status }} />
+    </span>
   )
 }
 
@@ -183,7 +202,12 @@ export function NewRow({ store }: { store: OutlineStore }) {
       {checkbox && <Check checked={checkbox === "done"} onToggle={() => store.toggleDone(GHOST)} />}
       <div className="min-w-0 flex-1 pl-1.5">
         {editing ? (
-          <LineEditor key={editing.seq} value={store.ghost.text} refs={store.refs} caret={editing.caret} label="New line" on={handlers(store, GHOST, navigate)} />
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <LineEditor key={editing.seq} value={store.ghost.text} refs={store.refs} caret={editing.caret} label="New line" on={handlers(store, GHOST, navigate)} />
+            </div>
+            <PendingDate store={store} k={GHOST} />
+          </div>
         ) : (
           <div
             role="textbox"

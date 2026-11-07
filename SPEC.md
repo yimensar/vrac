@@ -173,11 +173,14 @@ existing Northwind is referenced as is. The stored model stays clean.
 ### 2.8 Dates in text
 
 Text is never parsed for dates by itself. A date is set from the line with
-`/due friday 14h` (or `/date`), from a node's page, or by the AI with
-`date` or `date_text`. A phrase ("Friday", "vendredi", "demain 14h",
-"2026-11-12") is read relative to the day being written, in English or
-French, and stored as the canonical field, shown as a chip. `/no date`
-clears it.
+`/due friday 14h` (or `/date`; `/due` alone offers today, tomorrow and
+next Monday), from a node's page, or by the AI with `date` or `date_text`.
+A phrase ("Friday", "vendredi", "demain 14h", "12 novembre", "nov 12",
+"12/11", "2026-11-12") is read relative to the day being written, in
+English or French, looking ahead for a day of the year already past, and
+stored as the canonical field, shown as a chip while reading and while
+editing. A phrase not understood is refused and the line keeps its text.
+`/no date` clears it.
 
 ### 2.9 History and deletion
 
@@ -264,9 +267,11 @@ a group and overdue ones counted in red. Groups fold, and the fold is
 remembered on the device. To-dos are not sorted by day: one is written in
 today's journal whatever its horizon, and a date on it is a real deadline.
 The head disappears when nothing is dated and nothing is open. Every row
-there is edited in place. There is no permanent navigation: a thin bar
-carries the wordmark, the search (⌘K) and a menu to the other views, and
-the writing line itself holds every power through completion menus:
+there is edited in place; each of its sections folds, and the fold is
+remembered on the device. There is no permanent navigation: two quiet
+icons float at the top right, the search (⌘K) and a menu to the other
+views, and the writing line itself holds every power through completion
+menus:
 
 - `#` offers the tags, and creating one, plain or as a to-do tag;
 - `[[` or `@` offers nodes to reference, never the row itself, and

@@ -461,21 +461,39 @@ function useOptions(menu: Menu | null, on: LineHandlers, pick: Pick | null, setP
       apply: (v, m) => command(v, m, () => on.setTodo(null)),
     })
   }
-  commands.push({
-    key: "date",
-    names: ["date", "due", "when", "on"],
-    content: (
-      <>
-        <CalendarIcon className={icon} />
-        {phrase ? `Date: ${phrase}` : "Date…"}
-      </>
-    ),
-    hint: phrase ? undefined : "/due friday 14h",
-    apply: (v, m) => {
-      if (!phrase) return
-      command(v, m, () => on.setFields({ date_text: phrase }))
-    },
-  })
+  if (phrase) {
+    commands.push({
+      key: "date",
+      names: ["date", "due", "when", "on"],
+      content: (
+        <>
+          <CalendarIcon className={icon} />
+          Date: {phrase}
+        </>
+      ),
+      apply: (v, m) => command(v, m, () => on.setFields({ date_text: phrase })),
+    })
+  } else {
+    // Without a phrase: the nearest days, and how to type any other.
+    for (const [word, label] of [
+      ["today", "Today"],
+      ["tomorrow", "Tomorrow"],
+      ["next monday", "Next Monday"],
+    ] as const) {
+      commands.push({
+        key: "date-" + word,
+        names: ["date", "due", "when", "on"],
+        content: (
+          <>
+            <CalendarIcon className={icon} />
+            {label}
+          </>
+        ),
+        hint: word === "today" ? "or /due 12 nov 14h" : undefined,
+        apply: (v, m) => command(v, m, () => on.setFields({ date_text: word })),
+      })
+    }
+  }
   if (on.dated()) {
     commands.push({
       key: "nodate",

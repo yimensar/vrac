@@ -42,6 +42,12 @@ func TestParseDates(t *testing.T) {
 		{"Trip 2026-12-01", "Trip", "2026-12-01", ""},
 		{"Point aujourd'hui 9h", "Point", "2026-11-05", "09:00"},
 		{"Nothing here", "Nothing here", "", ""},
+		{"Livraison le 12 novembre", "Livraison", "2026-11-12", ""},
+		{"Ship on nov 12", "Ship", "2026-11-12", ""},
+		{"Rétro 3 novembre", "Rétro", "2027-11-03", ""},
+		{"Point 12/11 14h", "Point", "2026-11-12", "14:00"},
+		{"Audit 03/02/2027", "Audit", "2027-02-03", ""},
+		{"Ratio 3/2 is fine", "Ratio is fine", "2027-02-03", ""},
 	}
 	for _, c := range cases {
 		rest, date, clock := parseDates(c.in, thu, true)

@@ -56,35 +56,31 @@ export function Layout() {
   }, [])
   return (
     <div className="min-h-svh">
-      <header className="sticky top-0 z-30 bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-3xl items-center gap-0.5 px-3 md:px-5">
-          <Link to="/" className="rounded-md px-1.5 py-0.5 text-lg hover:bg-accent" aria-label="Journal">
-            <Wordmark />
-          </Link>
-          <span className="flex-1" />
-          <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Find" title="Find (⌘K)" onClick={() => setPalette(true)}>
-            <SearchIcon />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Menu">
-                <EllipsisIcon />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-44">
-              {views.map((v) => (
-                <DropdownMenuItem key={v.to} asChild>
-                  <Link to={v.to}>
-                    <v.icon />
-                    {v.label}
-                  </Link>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
-      <main key={preferences.fold} className="mx-auto w-full max-w-3xl px-[max(1rem,env(safe-area-inset-left))] pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 pointer-coarse:pb-36 md:px-6 md:pt-8">
+      {/* The page is for writing: only the search and the menu float
+          over it, at the top right, out of the way. */}
+      <div className="fixed right-[max(0.5rem,env(safe-area-inset-right))] top-[max(0.5rem,env(safe-area-inset-top))] z-30 flex items-center gap-0.5 rounded-lg bg-background/80 p-0.5 backdrop-blur">
+        <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Find" title="Find (⌘K)" onClick={() => setPalette(true)}>
+          <SearchIcon />
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Menu">
+              <EllipsisIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-44">
+            {[{ to: "/", label: "Journal", icon: BookOpenIcon }, ...views].map((v) => (
+              <DropdownMenuItem key={v.to} asChild>
+                <Link to={v.to}>
+                  <v.icon />
+                  {v.label}
+                </Link>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <main key={preferences.fold} className="mx-auto w-full max-w-3xl px-[max(1rem,env(safe-area-inset-left))] pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[calc(1.5rem+env(safe-area-inset-top))] pointer-coarse:pb-36 md:px-6 md:pt-10">
         <Outlet />
       </main>
       <Palette open={palette} onOpenChange={setPalette} />
