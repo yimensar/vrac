@@ -15,7 +15,7 @@ import (
 
 const instructions = `Vrac is the user's memory: one outline where they write notes, to-dos, meetings, decisions, people, projects, anything. You are the brain: record what matters after your actions (triaging mail or messages, a meeting, a decision, an analysis) without being asked to organize anything.
 
-Model. Everything is a node in one outline. #tag says what a node is; [[Name]] says what it is about. Both stay where they are written, and a node's tags are exactly the #tag tokens of its text (removing one removes the tag), so write natural sentences: "#meeting with [[Alice|ID]] about [[Globex|ID]]", "Send the estimate to [[Marc|ID]] #task". Tags are the user's own, with no fields and no built-in meaning: read vrac_types to learn which exist and what they are used for, and never create one without the user's confirmation. One trait only: a to-do tag gives its nodes a checkbox. Any node, whatever its tags, may carry a checkbox (status open or done) and a date (a day, or a day and time, with an optional end): a deadline, a meeting time, an event. Set them with status, date or date_text ("Friday 14h", relative to the day written).
+Model. Everything is a node in one outline. #tag says what a node is; [[Name]] says what it is about. Both stay where they are written, and a node's tags are exactly the #tag tokens of its text (removing one removes the tag), so write natural sentences: "#meeting with [[Alice|ID]] about [[Globex|ID]]", "Send the estimate to [[Marc|ID]] #task". Tags are the user's own, with no fields and no built-in meaning: read vrac_types to learn which exist and what they are used for, and never create one without the user's confirmation. One trait only: a to-do tag (usually #task) makes its nodes to-dos, with a checkbox (status open, or done once set). The checkbox is the tag: to make something a to-do, write the tag; a status without such a tag is rejected. Any node, whatever its tags, may carry a date (a day, or a day and time, with an optional end): a deadline, a meeting time, an event. Set it with date or date_text ("Friday 14h", relative to the day written).
 
 Context is inherited, tags are not: a node concerns X when X or a descendant of X is the node, an ancestor of it, or referenced by it or an ancestor. So a to-do written under "Copil [[Northwind]] #meeting" concerns Northwind without repeating the reference.
 
@@ -176,7 +176,7 @@ var writeSchema = func() map[string]any {
 	strs := map[string]any{"type": "array", "items": str}
 	draft := map[string]any{"type": "object", "required": []string{"input"}, "additionalProperties": false, "properties": map[string]any{
 		"input":     map[string]any{"type": "string", "description": "Text in Vrac syntax: #tag, [[Name|ID]] or [[Name]] references, [[Parent/Child]], #tag/Name."},
-		"status":    map[string]any{"type": "string", "enum": []string{"open", "done"}, "description": "checkbox; nodes with a to-do tag open one by themselves"},
+		"status":    map[string]any{"type": "string", "enum": []string{"open", "done"}, "description": "only for nodes carrying a to-do tag; open unless given"},
 		"date":      map[string]any{"type": "string", "description": "YYYY-MM-DD or YYYY-MM-DDTHH:MM: a deadline, a meeting time, an event"},
 		"end":       map[string]any{"type": "string", "description": "end of a range, same formats"},
 		"date_text": map[string]any{"type": "string", "description": "a date phrase instead of date: 'Friday', 'tomorrow 14h', 'vendredi'"},
@@ -284,7 +284,7 @@ func (s *Server) tools(srv *mcp.Server) {
 		}
 		return nil, map[string]any{"nodes": aiNodes(res.Nodes, res.Refs), "created": res.Created}, nil
 	})
-	mcp.AddTool(srv, tool("vrac_update", "Change a node at expected_revision. input replaces its text (Vrac syntax); if it writes no #tag the node keeps its tags, otherwise the written tags replace them. status, date, date_text, end and aliases change only those fields (empty string clears; an empty status removes the checkbox).", false),
+	mcp.AddTool(srv, tool("vrac_update", "Change a node at expected_revision. input replaces its text (Vrac syntax); if it writes no #tag the node keeps its tags, otherwise the written tags replace them. status (done or open, for a node carrying a to-do tag), date, date_text, end and aliases change only those fields (empty string clears).", false),
 		func(ctx context.Context, req *mcp.CallToolRequest, in updateInput) (*mcp.CallToolResult, any, error) {
 			// Rewriting a sentence must not drop its types by omission.
 			in.KeepTypes = true

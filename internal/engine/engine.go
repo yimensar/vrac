@@ -37,6 +37,9 @@ var schemaV6 string
 //go:embed schema_v7.sql
 var schemaV7 string
 
+//go:embed schema_v8.sql
+var schemaV8 string
+
 // applicationID marks a SQLite file as a Vrac database ("VRAC").
 const applicationID = 0x56524143
 
@@ -66,6 +69,10 @@ var migrations = []func(*Engine, *sql.Tx) error{
 	},
 	migrateOwner,
 	migrateTags,
+	func(e *Engine, tx *sql.Tx) error {
+		_, err := tx.Exec(schemaV8)
+		return err
+	},
 }
 
 // Errors returned by the engine. Callers compare with errors.Is.

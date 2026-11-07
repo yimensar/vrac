@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router"
 import { ChevronRightIcon } from "lucide-react"
+import { toast } from "sonner"
 import { dotClass } from "@/lib/colors"
 import { useTypes } from "@/lib/hooks"
 import { cn } from "@/lib/utils"
@@ -25,10 +26,13 @@ function handlers(store: OutlineStore, k: string, zoom: (id: string) => void, ti
   const common = {
     change: (v: string) => store.setText(k, v),
     intend: (create?: Parameters<OutlineStore["intend"]>[1], type?: string) => store.intend(k, create, type),
-    toggle: () => store.toggleDone(k),
+    toggle: () => {
+      if (!store.toggleDone(k)) toast("No to-do tag yet", { description: "Type / and create one, such as #task." })
+    },
     checkbox: () => store.checkbox(k),
     dated: () => Boolean(e?.node?.date || (k === GHOST ? store.ghost.fields : e?.fields)?.date_text),
     setFields: (f: Parameters<OutlineStore["setFields"]>[1]) => store.setFields(k, f),
+    setTodo: (tag: string | null) => store.setTodo(k, tag),
     zoom: e?.id ? () => zoom(e.id!) : undefined,
     leave,
   }

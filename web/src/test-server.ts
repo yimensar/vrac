@@ -83,7 +83,10 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string; sear
       if (m[3] === "move") place(r, body.placement)
       else if (m[3] === "trash") r.trashed = true
       else {
-        if (body.input !== undefined) Object.assign(r, parse(body.input))
+        if (body.input !== undefined) {
+          Object.assign(r, parse(body.input))
+          r.status = r.types.includes("task") ? (r.status ?? "open") : undefined
+        }
         if (body.status !== undefined) r.status = body.status || undefined
         if (body.date_text) r.date = "2026-11-06"
         if (body.date !== undefined) r.date = body.date || undefined

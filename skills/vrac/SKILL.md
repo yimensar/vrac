@@ -16,10 +16,11 @@ initiative: the user should never have to say "take a note" or "check Vrac".
   where they are written. Tags are the user's own: no tag is built in, none
   has fields. Read `vrac_types` once to learn which tags exist (`task`,
   `meeting`, `book`, `idea`… whatever the user chose) and use those.
-- One trait only: a to-do tag gives its nodes a checkbox (`status` open or
-  done). Any node, whatever its tags, may also carry a checkbox and a `date`
-  (a day, or a day and time, with an optional `end`): a deadline, a meeting
-  time, an event.
+- One trait only: a to-do tag (usually `task`) makes its nodes to-dos, with
+  a checkbox (`status` open, or done once set). The checkbox is the tag:
+  to make something a to-do, write the tag. Any node, whatever its tags,
+  may carry a `date` (a day, or a day and time, with an optional `end`): a
+  deadline, a meeting time, an event.
 - Context is inherited, tags are not: a to-do written under a meeting about
   Northwind concerns Northwind without repeating the reference.
 

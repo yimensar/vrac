@@ -184,13 +184,14 @@ func (e *Engine) Update(ctx context.Context, actor Actor, req UpdateRequest) (Re
 				*p.dst = *p.src
 			}
 		}
-		// A to-do tag gives a checkbox only when the node gains the tag,
-		// so unchecking a to-do never comes back by itself.
-		todo := false
-		if !slices.Equal(types, n.Types) {
-			if todo, err = s.anyTodo(typeIDs); err != nil {
-				return nil, err
-			}
+		// The checkbox follows the tags: lost with the last to-do tag,
+		// opened with the first, and asked for only on a to-do.
+		todo, err := s.anyTodo(typeIDs)
+		if err != nil {
+			return nil, err
+		}
+		if !todo && req.Status == nil {
+			f.Status = ""
 		}
 		dateText := ""
 		if req.DateText != nil {
@@ -392,8 +393,19 @@ func (s *txState) apply(n Node, snap snapshot) error {
 		}
 		typeIDs = append(typeIDs, id)
 	}
+	// The snapshot may predate the rule that only to-dos have a status.
+	todo, err := s.anyTodo(typeIDs)
+	if err != nil {
+		return err
+	}
+	status := snap.Status
+	if !todo {
+		status = ""
+	} else if status == "" {
+		status = StatusOpen
+	}
 	if _, err := s.tx.ExecContext(s.ctx, `UPDATE nodes SET text = ?, name_key = ?, status = nullif(?, ''), start_at = nullif(?, ''), end_at = nullif(?, '') WHERE seq = ?`,
-		snap.Text, nameKeyOf(snap.Text), snap.Status, snap.date(), snap.End, n.seq); err != nil {
+		snap.Text, nameKeyOf(snap.Text), status, snap.date(), snap.End, n.seq); err != nil {
 		return err
 	}
 	if err := s.setTypes(n.seq, typeIDs); err != nil {
@@ -462,8 +474,9 @@ func (e *Engine) CreateType(ctx context.Context, actor Actor, requestID, name st
 	return e.TypeNamed(ctx, name)
 }
 
-// SetTypeTodo gives or removes the to-do trait of a tag. Existing nodes
-// keep their checkbox state; new ones follow the trait.
+// SetTypeTodo gives or removes the to-do trait of a tag. The nodes carrying
+// it follow: they gain an open checkbox, or lose theirs unless another
+// to-do tag keeps it.
 func (e *Engine) SetTypeTodo(ctx context.Context, name string, todo bool) (Type, error) {
 	name = strings.ToLower(strings.TrimSpace(name))
 	err := e.write(ctx, func(tx *sql.Tx) error {
@@ -474,7 +487,14 @@ func (e *Engine) SetTypeTodo(ctx context.Context, name string, todo bool) (Type,
 		if n, _ := r.RowsAffected(); n == 0 {
 			return fmt.Errorf("%w: type %s", ErrNotFound, name)
 		}
-		return nil
+		if todo {
+			_, err = tx.ExecContext(ctx, `UPDATE nodes SET status = 'open' WHERE status IS NULL
+				AND seq IN (SELECT nt.node_seq FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE t.name = ?)`, name)
+		} else {
+			_, err = tx.ExecContext(ctx, `UPDATE nodes SET status = NULL WHERE status IS NOT NULL
+				AND seq NOT IN (SELECT nt.node_seq FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE t.todo = 1)`)
+		}
+		return err
 	})
 	if err != nil {
 		return Type{}, err

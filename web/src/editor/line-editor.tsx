@@ -15,7 +15,7 @@ import { trigger, type Trigger } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
 import { Content } from "@/outline/content"
 import { fromInput, offsetToPos, posToOffset, toInput } from "./convert"
-import { hasType, schema } from "./schema"
+import { hasType, schema, todoTags } from "./schema"
 
 /** What a line asks of its outline. Offsets are input offsets. */
 export type LineHandlers = {
@@ -26,14 +26,16 @@ export type LineHandlers = {
   backspace: () => boolean
   step: (delta: -1 | 1, caret: number) => void
   shift: (delta: -1 | 1, caret: number) => void
-  /** Cmd+Enter: gives a checkbox, checks it, or reopens it. */
+  /** Cmd+Enter: makes the row a to-do, checks it, or reopens it. */
   toggle: () => void
-  /** The row's checkbox as it will be saved. */
+  /** The row's checkbox as it will be saved: it is the to-do tag. */
   checkbox: () => "" | "open" | "done"
   /** True when the row has a date. */
   dated: () => boolean
-  /** Sets the checkbox or the date of the row. */
+  /** Sets the checkbox state or the date of the row. */
   setFields: (f: Fields) => void
+  /** Writes a to-do tag at the end of the row, or removes them all. */
+  setTodo: (tag: string | null) => void
   intend: (create?: Creation, type?: string) => void
   leave: () => void
   /** Opens the row's own page; absent while the row has no ID. */
@@ -301,14 +303,53 @@ function useOptions(menu: Menu | null, on: LineHandlers): Option[] {
   const icon = "size-4 text-muted-foreground"
   const commands: (Option & { names: string[] })[] = []
   const checkbox = on.checkbox()
-  if (checkbox !== "open") {
+  if (checkbox === "") {
+    // A to-do is a node with a to-do tag: one entry per such tag, or the
+    // offer to create the first one.
+    const tags = todoTags()
+    for (const name of tags) {
+      commands.push({
+        key: "todo-" + name,
+        names: ["todo", "to do"],
+        content: (
+          <>
+            <SquareIcon className={icon} />
+            To do <span className={cn("font-medium", typeClass(types.get(name)?.color))}>#{name}</span>
+          </>
+        ),
+        hint: tags[0] === name ? "⌘↵" : undefined,
+        apply: (v, m) => command(v, m, () => on.setTodo(name)),
+      })
+    }
+    if (tags.length === 0) {
+      commands.push({
+        key: "todo-create",
+        names: ["todo", "to do"],
+        content: (
+          <>
+            <SquareIcon className={icon} />
+            Create #task as a to-do tag
+          </>
+        ),
+        hint: "checkbox",
+        apply: (v, m) =>
+          command(v, m, () => {
+            api.createType("task", true).then(
+              () => on.setTodo("task"),
+              (err) => reportError(err),
+            )
+          }),
+      })
+    }
+  }
+  if (checkbox === "done") {
     commands.push({
-      key: "todo",
-      names: ["todo", "to do", "open"],
+      key: "reopen",
+      names: ["reopen", "open", "todo", "to do"],
       content: (
         <>
           <SquareIcon className={icon} />
-          {checkbox === "done" ? "Reopen" : "To do"}
+          Reopen
         </>
       ),
       hint: "⌘↵",
@@ -332,14 +373,15 @@ function useOptions(menu: Menu | null, on: LineHandlers): Option[] {
   if (checkbox) {
     commands.push({
       key: "nocheckbox",
-      names: ["no checkbox", "remove checkbox", "uncheck"],
+      names: ["no checkbox", "not a to-do", "remove", "untask"],
       content: (
         <>
           <XIcon className={icon} />
-          No checkbox
+          Not a to-do
         </>
       ),
-      apply: (v, m) => command(v, m, () => on.setFields({ status: "" })),
+      hint: "removes the tag",
+      apply: (v, m) => command(v, m, () => on.setTodo(null)),
     })
   }
   commands.push({

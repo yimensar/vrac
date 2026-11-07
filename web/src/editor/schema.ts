@@ -13,6 +13,8 @@ export function setTypes(types: Iterable<{ name: string; color: string; todo: bo
 export const hasType = (name: string) => known.has(name)
 export const typeColor = (name: string) => known.get(name)?.color
 export const isTodo = (name: string) => known.get(name)?.todo ?? false
+/** The to-do tags, in creation order. */
+export const todoTags = () => [...known.entries()].filter(([, t]) => t.todo).map(([name]) => name)
 
 export const refClass = "font-medium underline decoration-muted-foreground/40 underline-offset-[3px]"
 

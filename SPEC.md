@@ -94,16 +94,21 @@ shows "#meeting with Bruno about Northwind", the tag in its color.
 **Tags are the user's own.** Nothing is built in: a new instance has no tag,
 and someone who wants `#book` and `#idea` never meets `#project` or
 `#person`. A tag has a name and a color, and no fields. It carries one
-optional trait: **to-do**, which gives the nodes written with it an open
-checkbox. That is what makes `#task` behave like a task without
-configuring anything else; the trait is chosen when the tag is created, or
-later on its page.
+optional trait: **to-do**, which makes the nodes written with it to-dos.
+That is what makes `#task` behave like a task without configuring anything
+else; the trait is chosen when the tag is created, or later on its page.
 
-**Any node may carry a checkbox and a date**, whatever its tags: a note can
-become a to-do (`/todo`, ⌘Enter), a `#book` can have a date. The checkbox
-is open or done; the date is a day (`2026-11-12`) or a day and time
-(`2026-11-12T14:00`), with an optional end. A to-do tag opens the checkbox
-when the node gains the tag; unchecking it does not bring it back.
+**The checkbox is the to-do tag.** A node is a to-do if and only if it
+carries a to-do tag; its checkbox is open or done. `/todo` and ⌘Enter on
+any line write the tag at its end, "Not a to-do" removes it, and the
+checkbox comes and goes with the tag, so the text stays the truth and
+everything about tasks (lists, searches, a future task system) hangs on
+one tag. Giving a tag the trait opens the nodes carrying it; removing it
+closes them.
+
+**Any node may carry a date**, whatever its tags: a day (`2026-11-12`) or
+a day and time (`2026-11-12T14:00`), with an optional end: a deadline, a
+meeting time, an event.
 
 **Tags are not inherited.** A to-do written under a meeting is not a meeting.
 
@@ -265,9 +270,10 @@ the writing line itself holds every power through completion menus:
 
 - `#` offers the tags, and creating one, plain or as a to-do tag;
 - `[[` or `@` offers nodes to reference, and creating one;
-- `/` offers everything a row can become or do: the tags, To do, Done or
-  Reopen, No checkbox, a date from a phrase (`/due friday 14h`), No date,
-  Zoom in, Delete.
+- `/` offers everything a row can become or do: the tags, To do (one
+  entry per to-do tag, or creating `#task` as the first), Done or Reopen,
+  Not a to-do, a date from a phrase (`/due friday 14h`), No date, Zoom in,
+  Delete.
 
 A row reads as it will be saved: a tag being typed colors the bullet at
 once and a to-do tag opens the checkbox before anything is saved. The new
@@ -401,7 +407,8 @@ the user's current Memos skill.
 - Migrations run automatically at start, after a SQLite snapshot backup.
   Migration 7 turned the built-in types into the user's tags (removing the
   unused ones), gave `task` the to-do trait and moved due dates and starts
-  into one date field.
+  into one date field; migration 8 dropped the checkboxes of nodes without
+  a to-do tag.
 - Backups use SQLite's backup facilities, never a raw file copy.
 - Versioned JSON export and import (into an empty instance), preserving IDs,
   structure, types, references and history. It is also the path between

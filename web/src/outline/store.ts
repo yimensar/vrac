@@ -1,6 +1,6 @@
 import { ApiError, api, type Creation, type Fields, type Fold, type Node, type Page, type Placement, type Refs } from "@/lib/api"
 import { nodeInput, typesOf } from "@/lib/syntax"
-import { hasType, isTodo } from "@/editor/schema"
+import { hasType, isTodo, todoTags } from "@/editor/schema"
 
 // The state of rows being edited. Changes apply locally at once and reach
 // the server through one serial queue, so typing never waits for the
@@ -172,15 +172,14 @@ export class OutlineStore {
   types(key: string): string[] {
     return typesOf(this.text(key)).filter(hasType)
   }
-  /** The checkbox of a row as it will be once saved: a to-do tag being
-   * written opens one at once. */
+  /** The checkbox of a row as it will be once saved. The checkbox is the
+   * to-do tag: a row shows one while its text carries such a tag, open
+   * unless it was checked. */
   checkbox(key: string): "" | "open" | "done" {
+    if (!this.types(key).some(isTodo)) return ""
     const node = key === GHOST ? undefined : this.entry(key).node
     const pending = key === GHOST ? this.ghost.fields : this.entry(key).fields
-    if (pending.status !== undefined) return pending.status
-    if (node?.status) return node.status
-    const gained = this.types(key).some((t) => isTodo(t) && !node?.types.includes(t))
-    return gained ? "open" : ""
+    return pending.status || node?.status || "open"
   }
   /** True for top rows of a list, which belong to other outlines. */
   private fixed(key: string) {
@@ -520,10 +519,34 @@ export class OutlineStore {
     this.emit()
   }
 
-  /** Cmd+Enter: a row without a checkbox gets one; an open one is done;
-   * a done one reopens. */
-  toggleDone(key: string) {
-    this.setFields(key, { status: this.checkbox(key) === "open" ? "done" : "open" })
+  /** Makes a row a to-do by writing a to-do tag at the end of its text,
+   * or removes every to-do tag from it. The text is the truth: the
+   * checkbox follows it. */
+  setTodo(key: string, tag: string | null) {
+    const text = this.text(key)
+    const next = tag ? `${text.trimEnd()} #${tag}` : text.replace(/(^|\s)#([\p{L}\p{N}_-]+)(?=\s|$)/gu, (m, _sp, name) => (isTodo(name) ? "" : m)).replace(/\s{2,}/g, " ").trim()
+    if (next === text) return
+    this.setText(key, next)
+    if (key !== GHOST) this.save(key)
+    // The editor of the row shows its own document: remount it on the
+    // new text, the caret at the end.
+    if (this.editing?.key === key) this.focus(key, END)
+    else this.emit()
+  }
+
+  /** Cmd+Enter: a row without a checkbox becomes a to-do with the to-do
+   * tag (the first one when there are several); an open one is done; a
+   * done one reopens. Returns false when no to-do tag exists yet. */
+  toggleDone(key: string): boolean {
+    const state = this.checkbox(key)
+    if (state) {
+      this.setFields(key, { status: state === "open" ? "done" : "open" })
+      return true
+    }
+    const tag = todoTags()[0]
+    if (!tag) return false
+    this.setTodo(key, tag)
+    return true
   }
 
   /** True when some row has children. */

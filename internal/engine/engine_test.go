@@ -206,48 +206,61 @@ func TestFreeTypesNeedExplicitCreation(t *testing.T) {
 	}
 }
 
-// Tags carry no fields: any node may have a checkbox and a date, and a
-// to-do tag only gives new nodes an open checkbox.
-func TestCheckboxAndDateOnAnyNode(t *testing.T) {
+// Tags carry no fields: any node may have a date. The checkbox is the
+// to-do tag: it comes and goes with it.
+func TestCheckboxIsTheTodoTag(t *testing.T) {
 	e := newEngine(t)
 	book := create(t, e, CreateRequest{Nodes: []Draft{{Input: "Dune #book", DateText: "tomorrow 14h"}}, CreateTypes: []string{"book"}}).Nodes[0]
 	if book.Status != "" || book.Date != "2026-11-06T14:00" || book.Text != "Dune #book" {
 		t.Fatalf("book = %+v", book)
 	}
 	open := StatusOpen
-	up, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 1, Status: &open})
+	if _, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 1, Status: &open}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("checkbox without a to-do tag accepted: %v", err)
+	}
+	// Adding the tag opens the checkbox; removing it takes it away.
+	in := "Dune #book #task"
+	up, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 1, Input: &in})
 	if err != nil || up.Nodes[0].Status != StatusOpen {
-		t.Fatalf("checkbox on a book = %+v, %v", up.Nodes, err)
+		t.Fatalf("tagged = %+v, %v", up.Nodes, err)
+	}
+	done := StatusDone
+	up, _ = e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 2, Status: &done})
+	in = "Dune #book"
+	up, _ = e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 3, Input: &in})
+	if up.Nodes[0].Status != "" {
+		t.Fatalf("checkbox outlived the tag: %+v", up.Nodes[0])
 	}
 	none := ""
-	up, _ = e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 2, Status: &none, Date: &none})
-	if up.Nodes[0].Status != "" || up.Nodes[0].Date != "" {
-		t.Fatalf("cleared = %+v", up.Nodes[0])
+	up, _ = e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 4, Date: &none})
+	if up.Nodes[0].Date != "" {
+		t.Fatalf("date not cleared = %+v", up.Nodes[0])
 	}
-	// A to-do tag opens a checkbox; unchecking it does not reopen it.
-	task := write(t, e, "Call Marc #task")[0]
-	if task.Status != StatusOpen {
-		t.Fatalf("task = %+v", task)
-	}
-	up, _ = e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: task.ID, ExpectedRevision: 1, Status: &none})
-	in := "Call Marc now #task"
-	up, _ = e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: task.ID, ExpectedRevision: 2, Input: &in})
-	if up.Nodes[0].Status != "" {
-		t.Fatalf("checkbox came back: %+v", up.Nodes[0])
-	}
-	// The trait can be given later; nodes written from then on get it.
+	// The trait given later opens the nodes carrying the tag; removed, it
+	// closes them unless another to-do tag remains.
+	other := write(t, e, "Foundation #book")[0]
 	if _, err := e.SetTypeTodo(ctx, "book", true); err != nil {
 		t.Fatal(err)
 	}
-	if n := write(t, e, "Foundation #book")[0]; n.Status != StatusOpen {
-		t.Fatalf("book after trait = %+v", n)
+	if v, _ := e.GetNode(ctx, other.ID); v.Node.Status != StatusOpen {
+		t.Fatalf("book after trait = %+v", v.Node)
 	}
-	if _, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 3, DateText: ptr("someday")}); !errors.Is(err, ErrInvalid) {
+	both := write(t, e, "Read it #book #task")[0]
+	if _, err := e.SetTypeTodo(ctx, "book", false); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := e.GetNode(ctx, other.ID); v.Node.Status != "" {
+		t.Fatalf("book after trait removed = %+v", v.Node)
+	}
+	if v, _ := e.GetNode(ctx, both.ID); v.Node.Status != StatusOpen {
+		t.Fatalf("task after book trait removed = %+v", v.Node)
+	}
+	if _, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 5, DateText: ptr("someday")}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("bad date phrase accepted: %v", err)
 	}
 	end := "2026-11-01"
 	date := "2026-11-02"
-	if _, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 3, Date: &date, End: &end}); !errors.Is(err, ErrInvalid) {
+	if _, err := e.Update(ctx, me, UpdateRequest{RequestID: rid(), ID: book.ID, ExpectedRevision: 5, Date: &date, End: &end}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("end before date accepted: %v", err)
 	}
 }
