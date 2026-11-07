@@ -37,4 +37,32 @@ describe("app", () => {
     await userEvent.click(await screen.findByText("first line"))
     expect((await screen.findByRole("textbox", { name: "Edit" })).getAttribute("contenteditable")).toBe("true")
   })
+
+  it("offers types and commands after a slash", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await userEvent.click(await screen.findByLabelText("New line"))
+    await screen.findByRole("textbox", { name: "New line" })
+    await userEvent.keyboard("call Marc /ta")
+    // The query narrows the menu to #task; Enter inserts the type.
+    const option = await screen.findByRole("option", { name: /#task/ })
+    expect(screen.queryByRole("option", { name: /Tomorrow/ })).toBeNull()
+    expect(option).toHaveAttribute("aria-selected", "true")
+    await userEvent.keyboard("{Enter}")
+    expect(screen.queryByRole("listbox")).toBeNull()
+    await userEvent.keyboard("{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["call Marc #task"]))
+  })
+
+  it("completes a reference after @", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await userEvent.click(await screen.findByLabelText("New line"))
+    await screen.findByRole("textbox", { name: "New line" })
+    await userEvent.keyboard("see @North")
+    await userEvent.click(await screen.findByRole("option", { name: /Northwind/ }))
+    await userEvent.keyboard("{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["see [[Northwind]]"]))
+    expect(server.calls.find((c) => c.method === "POST" && c.url === "/api/v1/nodes")!.body.nodes[0].input).toBe("see [[Northwind|northwindaaaaaaaaaaaaaaaaa]]")
+  })
 })

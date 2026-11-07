@@ -1,8 +1,9 @@
 # Vrac
 
-Vrac is a self-hosted workspace for notes, projects, tasks, meetings and
-events, shared by you and your AI. You write in a daily journal with `#type`
-and `[[reference]]`; Vrac gathers everything where it matters. Any AI client
+Vrac (`vrac.` on screen) is a self-hosted outliner for notes, projects,
+tasks, meetings and events, shared by you and your AI. You write in a daily
+journal, one page and nothing else, with `#type`, `[[reference]]` or `@` and
+`/` commands; Vrac gathers everything where it matters. Any AI client
 connects through MCP and keeps it up to date. See [SPEC.md](SPEC.md).
 
 ## Run it locally

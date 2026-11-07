@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 export function PageTitle({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
-      <h1 className="text-2xl font-semibold tracking-tight">{children}</h1>
+      <h1 className="text-xl font-semibold tracking-tight">{children}</h1>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </div>
   )

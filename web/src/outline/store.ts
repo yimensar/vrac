@@ -417,7 +417,8 @@ export class OutlineStore {
     return true
   }
 
-  private remove(key: string) {
+  /** Moves a row to the trash, with its children. */
+  remove(key: string) {
     const e = this.entry(key)
     e.draft = undefined
     this.setChildren(e.parent, this.childrenOf(e.parent).filter((k) => k !== key))

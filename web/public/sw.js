@@ -1,6 +1,6 @@
 // Vrac service worker: caches the application shell so the app opens fast.
 // API responses are never cached: data always comes from the server.
-const CACHE = "vrac-shell-v1"
+const CACHE = "vrac-shell-v2"
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icon.svg"])))

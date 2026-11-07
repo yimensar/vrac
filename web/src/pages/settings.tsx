@@ -31,7 +31,7 @@ export function SettingsPage() {
       </Section>
       <Section title="Connect an AI">
         <p className="mb-2 text-sm text-muted-foreground">
-          Add Vrac as a custom connector (MCP) in Claude, ChatGPT or any MCP client with this URL. You approve the connection here.
+          Add this instance as a custom connector (MCP) in Claude, ChatGPT or any MCP client with this URL. You approve the connection here.
         </p>
         <div className="flex max-w-xl gap-2">
           <Input readOnly value={session?.mcp_url ?? ""} />
@@ -137,7 +137,7 @@ export function SettingsPage() {
           Sign out
         </Button>
         <p className="mt-4 text-xs text-muted-foreground">
-          Vrac {session?.version} · {session?.timezone}
+          vrac. {session?.version} · {session?.timezone}
         </p>
       </Section>
     </>

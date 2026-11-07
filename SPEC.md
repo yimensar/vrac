@@ -235,7 +235,25 @@ whole tree.
 
 React, TypeScript and shadcn/ui, built as a single-page app that uses only
 the public HTTP API, the same one any other client would use. Usable on
-mobile browsers.
+mobile browsers. On screen the product is called `vrac.`, with the dot; the
+repository, the binary and the API keep the name `vrac`.
+
+**One page to write.** The home is the journal: today at the top, with what
+the day already holds (scheduled meetings and events, due and overdue
+tasks) above the day's outline, then the previous days as you scroll. There
+is no permanent navigation: a thin bar carries the wordmark, the search
+(⌘K) and a menu to the other views, and the writing line itself holds every
+power through completion menus:
+
+- `#` offers the types, and creating a free type;
+- `[[` or `@` offers nodes to reference, and creating one as project, person
+  or plain node;
+- `/` offers everything a row can become or do: the types, Done or Reopen
+  for a task, Today and Tomorrow as dates, Zoom in, Delete.
+
+On touch screens, where Tab and Alt+Shift+arrows do not exist, a bar above
+the keyboard offers indent, outdent, move up and down, done and zoom while
+a row is edited.
 
 The app on phones and computers is a Progressive Web App: installable from the
 browser, with its own window and icon, no store and no separate codebase. The
@@ -247,8 +265,8 @@ as a system-wide quick-capture shortcut, it would wrap the same UI and
 authenticate through the built-in OAuth server with PKCE. Offline editing is a
 non-goal; it would require synchronization and a different model.
 
-- **Today**: agenda of the day, due and overdue tasks, the day's journal.
-- **Journal**: days in sequence, outline editor.
+- **Journal** (home): today's agenda and due tasks, then the days in
+  sequence, outline editor.
 - **Node zoom**: authored outline, then the generated sections (scenario 5).
 - **Type views**: a table per type (`#project` with open tasks and last
   activity; `#person`; `#meeting`…).

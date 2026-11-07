@@ -48,15 +48,20 @@ export function tokens(input: string): Token[] {
   return out
 }
 
-export type Trigger = { kind: "ref" | "type"; query: string; length: number }
+/** What the caret follows: [[ or @ for a reference, # for a type, / for a
+ * command. length counts the trigger and its query. */
+export type Trigger = { kind: "ref" | "type" | "command"; query: string; length: number }
 
 /** Finds a completion trigger at the end of the text before the caret. */
 export function trigger(before: string): Trigger | null {
   const ref = /\[\[([^[\]]*)$/.exec(before)
   if (ref) return { kind: "ref", query: ref[1], length: ref[0].length }
-  const type = /(^|\s)#([\p{L}\p{N}_-]*)$/u.exec(before)
-  if (type) return { kind: "type", query: type[2], length: type[2].length + 1 }
-  return null
+  // @, # and / open a menu only at the start of a word, so emails, C# and
+  // paths stay text.
+  const word = /(^|\s)([@#/])([\p{L}\p{N}_-]*)$/u.exec(before)
+  if (!word) return null
+  const kind = word[2] === "@" ? "ref" : word[2] === "#" ? "type" : "command"
+  return { kind, query: word[3], length: word[3].length + 1 }
 }
 
 // Dates are local calendar values: never convert them through UTC.

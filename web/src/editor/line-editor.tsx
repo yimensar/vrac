@@ -7,6 +7,7 @@ import { keymap } from "prosemirror-keymap"
 import type { Node as PMNode } from "prosemirror-model"
 import { EditorState, TextSelection, type Command } from "prosemirror-state"
 import { EditorView } from "prosemirror-view"
+import { CalendarIcon, CheckIcon, Maximize2Icon, Trash2Icon } from "lucide-react"
 import { api, type Creation, type Refs } from "@/lib/api"
 import { typeClass } from "@/lib/colors"
 import { useTypes } from "@/lib/hooks"
@@ -25,9 +26,16 @@ export type LineHandlers = {
   backspace: () => boolean
   step: (delta: -1 | 1, caret: number) => void
   shift: (delta: -1 | 1, caret: number) => void
+  /** Marks a task done or open. */
   toggle: () => void
   intend: (create?: Creation, type?: string) => void
   leave: () => void
+  /** Opens the row's own page; absent while the row has no ID. */
+  zoom?: () => void
+  /** Moves the row to the trash; absent where a row cannot be removed. */
+  remove?: () => void
+  /** True when the row is a task; the / menu offers Done or Reopen. */
+  task?: "open" | "done"
 }
 
 type Menu = { trigger: Trigger; from: number; to: number; left: number; top: number }
@@ -61,6 +69,7 @@ export function LineEditor({ value, refs, caret, label, on }: { value: string; r
   const [menu, setMenu] = useState<Menu | null>(null)
   const menuRef = useRef<{ menu: Menu | null; options: Option[]; active: number }>({ menu: null, options: [], active: 0 })
   const [active, setActive] = useState(0)
+  const list = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const h = () => handlers.current
@@ -138,14 +147,18 @@ export function LineEditor({ value, refs, caret, label, on }: { value: string; r
   const options = useOptions(menu, on)
   menuRef.current = { menu, options, active: Math.min(active, Math.max(options.length - 1, 0)) }
   useEffect(() => setActive(0), [menu?.trigger.query, menu?.trigger.kind])
+  useEffect(() => {
+    list.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" })
+  }, [active, options.length])
 
   return (
     <div className="relative">
       <div ref={host} />
       {menu && options.length > 0 && (
         <div
+          ref={list}
           role="listbox"
-          className="absolute z-50 w-80 max-w-[90vw] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+          className="absolute z-50 max-h-72 w-80 max-w-[90vw] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
           style={{ left: menu.left, top: menu.top }}
         >
           {options.map((o, i) => (
@@ -164,7 +177,7 @@ export function LineEditor({ value, refs, caret, label, on }: { value: string; r
                 i === menuRef.current.active && "bg-accent",
               )}
             >
-              <span className="min-w-0 truncate">{o.content}</span>
+              <span className="flex min-w-0 items-center gap-2 truncate">{o.content}</span>
               {o.hint && <span className="shrink-0 truncate text-xs text-muted-foreground">{o.hint}</span>}
             </button>
           ))}
@@ -199,6 +212,19 @@ function insert(v: EditorView, m: Menu, atom: PMNode) {
   v.dispatch(v.state.tr.replaceWith(m.from, m.to, [atom, schema.text(" ")]).scrollIntoView())
   v.focus()
 }
+
+/** Removes the trigger and its query, then runs a command. */
+function command(v: EditorView, m: Menu, run: () => void) {
+  v.dispatch(v.state.tr.delete(m.from, m.to))
+  run()
+}
+
+function insertText(v: EditorView, m: Menu, text: string) {
+  v.dispatch(v.state.tr.insertText(text + " ", m.from, m.to).scrollIntoView())
+  v.focus()
+}
+
+const matches = (name: string, query: string) => name.toLowerCase().startsWith(query.toLowerCase())
 
 function useOptions(menu: Menu | null, on: LineHandlers): Option[] {
   const types = useTypes()
@@ -236,24 +262,92 @@ function useOptions(menu: Menu | null, on: LineHandlers): Option[] {
     return options
   }
   const lower = query.toLowerCase()
-  for (const t of types.values()) {
-    if (t.name.startsWith(lower)) {
-      options.push({
-        key: t.name,
-        content: <span className={typeClass(t.color)}>#{t.name}</span>,
-        apply: (v, m) => insert(v, m, schema.nodes.type.create({ name: t.name })),
-      })
+  const typeOptions = (hint?: string) => {
+    for (const t of types.values()) {
+      if (t.name.startsWith(lower)) {
+        options.push({
+          key: "type-" + t.name,
+          content: <span className={cn("font-medium", typeClass(t.color))}>#{t.name}</span>,
+          hint,
+          apply: (v, m) => insert(v, m, schema.nodes.type.create({ name: t.name })),
+        })
+      }
     }
   }
-  if (lower && !types.has(lower) && /^[\p{L}\p{N}_-]+$/u.test(lower)) {
-    options.push({
-      key: "create-type",
-      content: <>Create type #{lower}</>,
-      apply: (v, m) => {
-        on.intend(undefined, lower)
-        insert(v, m, schema.nodes.type.create({ name: lower }))
-      },
+  if (menu.trigger.kind === "type") {
+    typeOptions()
+    if (lower && !types.has(lower) && /^[\p{L}\p{N}_-]+$/u.test(lower)) {
+      options.push({
+        key: "create-type",
+        content: <>Create type #{lower}</>,
+        apply: (v, m) => {
+          on.intend(undefined, lower)
+          insert(v, m, schema.nodes.type.create({ name: lower }))
+        },
+      })
+    }
+    return options
+  }
+  // The / menu: everything a row can become or do, filtered by the query.
+  typeOptions("type")
+  const icon = "size-4 text-muted-foreground"
+  const commands: Option[] = []
+  if (on.task) {
+    commands.push({
+      key: on.task === "done" ? "reopen" : "done",
+      content: (
+        <>
+          <CheckIcon className={icon} />
+          {on.task === "done" ? "Reopen" : "Done"}
+        </>
+      ),
+      hint: "⌘↵",
+      apply: (v, m) => command(v, m, on.toggle),
     })
   }
+  for (const [word, label] of [
+    ["today", "Today"],
+    ["tomorrow", "Tomorrow"],
+  ] as const) {
+    commands.push({
+      key: word,
+      content: (
+        <>
+          <CalendarIcon className={icon} />
+          {label}
+        </>
+      ),
+      hint: "date",
+      apply: (v, m) => insertText(v, m, word),
+    })
+  }
+  if (on.zoom) {
+    const zoom = on.zoom
+    commands.push({
+      key: "zoom",
+      content: (
+        <>
+          <Maximize2Icon className={icon} />
+          Zoom in
+        </>
+      ),
+      apply: (v, m) => command(v, m, zoom),
+    })
+  }
+  if (on.remove) {
+    const remove = on.remove
+    commands.push({
+      key: "delete",
+      content: (
+        <>
+          <Trash2Icon className={icon} />
+          Delete
+        </>
+      ),
+      hint: "to the trash",
+      apply: (v, m) => command(v, m, remove),
+    })
+  }
+  options.push(...commands.filter((c) => matches(c.key, lower)))
   return options
 }

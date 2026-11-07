@@ -41,7 +41,7 @@ export function NodePage() {
         <PageTitle>{formatDay(n.day, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</PageTitle>
       ) : (
         <div className="mb-6">
-          <div className="text-2xl font-semibold tracking-tight [&_[role=textbox]]:leading-9">
+          <div className="text-xl font-semibold tracking-tight [&_[role=textbox]]:leading-8">
             <NodeList id={`${id}-title`} page={self} title />
           </div>
           <NodeFields key={n.revision} node={n} />
@@ -49,17 +49,15 @@ export function NodePage() {
       )}
       <Outline key={n.id} source={{ node: n.id }} />
       {sections && (
-        <div className="mt-10 grid gap-x-10 md:grid-cols-2">
+        <div className="mt-10">
           {section("Open tasks", sections.open_tasks)}
           {section("Upcoming", sections.upcoming)}
           {section("Decisions", sections.decisions)}
           {section("Meetings", sections.meetings)}
           {sections.mentions.nodes.length > 0 && (
-            <div className="md:col-span-2">
-              <Section title="Mentions" count={sections.mentions.nodes.length}>
-                <NodeList id={`${id}-mentions`} page={sections.mentions} />
-              </Section>
-            </div>
+            <Section title="Mentions" count={sections.mentions.nodes.length}>
+              <NodeList id={`${id}-mentions`} page={sections.mentions} />
+            </Section>
           )}
         </div>
       )}

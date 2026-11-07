@@ -5,6 +5,7 @@ import { api, current, type Page, type Placement } from "@/lib/api"
 import { reportError } from "@/lib/hooks"
 import { NewRow, Row } from "./row"
 import { OutlineStore } from "./store"
+import { TouchBar } from "./touch-bar"
 
 export type Source = { day: string } | { node: string }
 
@@ -56,6 +57,7 @@ export function Outline({ source, compose = true }: { source: Source; compose?: 
         <Row key={k} store={store} k={k} />
       ))}
       {compose && <NewRow store={store} />}
+      <TouchBar store={store} />
     </div>
   )
 }
@@ -64,7 +66,7 @@ export function Outline({ source, compose = true }: { source: Source; compose?: 
 function Folding({ store }: { store: OutlineStore }) {
   const button = "flex size-6 items-center justify-center rounded text-muted-foreground/60 hover:bg-accent hover:text-foreground"
   return (
-    <div className="absolute -top-6 right-0 flex gap-0.5 opacity-60 transition-opacity group-hover/outline:opacity-100">
+    <div className="absolute -top-7 right-0 flex gap-0.5 opacity-0 transition-opacity group-hover/outline:opacity-100 focus-within:opacity-100">
       <button type="button" className={button} aria-label="Expand all" title="Expand all" onClick={() => store.expandAll()}>
         <ChevronsUpDownIcon className="size-3.5" />
       </button>
@@ -93,6 +95,7 @@ export function NodeList({ id, page, context = true, empty, title }: { id: strin
       {store.root.map((k) => (
         <Row key={k} store={store} k={k} context={context && !title} title={title} />
       ))}
+      <TouchBar store={store} />
     </div>
   )
 }

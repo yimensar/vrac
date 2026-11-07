@@ -22,7 +22,12 @@ describe("syntax", () => {
   it("detects completion triggers before the caret", () => {
     expect(trigger("see [[Su")).toEqual({ kind: "ref", query: "Su", length: 4 })
     expect(trigger("done #ta")).toEqual({ kind: "type", query: "ta", length: 3 })
+    expect(trigger("call @Ma")).toEqual({ kind: "ref", query: "Ma", length: 3 })
+    expect(trigger("/")).toEqual({ kind: "command", query: "", length: 1 })
+    expect(trigger("done /do")).toEqual({ kind: "command", query: "do", length: 3 })
     expect(trigger("C#")).toBeNull()
+    expect(trigger("yan@example")).toBeNull()
+    expect(trigger("see a/b")).toBeNull()
     expect(trigger("[[Northwind]] ok")).toBeNull()
   })
 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Wordmark } from "@/components/layout"
 
 /** Signs in, or creates the owner account on a new instance: username and
  * password, then a passkey; or the identity provider when configured. */
@@ -40,7 +41,8 @@ export function SignIn({ owner, provider }: { owner: boolean; provider: string }
     <div className="flex min-h-svh items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>{creating ? "Create your vrac" : "Sign in to vrac"}</CardTitle>
+          <Wordmark className="mb-4 block text-3xl" />
+          <CardTitle>{creating ? "Create your account" : "Sign in"}</CardTitle>
           <CardDescription>
             {step === "passkey"
               ? "Confirm with your passkey."
@@ -108,7 +110,7 @@ export function AuthorizePage() {
               ? (error as Error).message
               : data && (
                   <>
-                    <strong>{data.client_name}</strong> ({data.redirect_host}) will read and write your whole vrac on your behalf. You can revoke it in Settings.
+                    <strong>{data.client_name}</strong> ({data.redirect_host}) will read and write everything here on your behalf. You can revoke it in Settings.
                   </>
                 )}
           </CardDescription>

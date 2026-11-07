@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query"
-import { BrowserRouter, Route, Routes } from "react-router"
+import { BrowserRouter, Navigate, Route, Routes } from "react-router"
 import { api } from "@/lib/api"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -13,7 +13,6 @@ import { SearchPage } from "@/pages/search"
 import { SettingsPage } from "@/pages/settings"
 import { SharePage } from "@/pages/share"
 import { TasksPage } from "@/pages/tasks"
-import { TodayPage } from "@/pages/today"
 import { TypePage, TypesPage } from "@/pages/types"
 
 export function makeClient() {
@@ -22,14 +21,14 @@ export function makeClient() {
 
 function Gate() {
   const { data: session, error } = useQuery({ queryKey: ["session"], queryFn: api.session })
-  if (error) return <p className="p-8 text-muted-foreground">Vrac is not reachable.</p>
+  if (error) return <p className="p-8 text-muted-foreground">The server is not reachable.</p>
   if (!session) return null
   if (!session.authenticated) return <SignIn owner={session.owner} provider={session.provider} />
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<TodayPage />} />
-        <Route path="journal" element={<JournalPage />} />
+        <Route index element={<JournalPage />} />
+        <Route path="journal" element={<Navigate to="/" replace />} />
         <Route path="day/:day" element={<DayPage />} />
         <Route path="node/:id" element={<NodePage />} />
         <Route path="tasks" element={<TasksPage />} />

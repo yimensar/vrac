@@ -55,6 +55,8 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string } = {
     if (url.startsWith("/api/v1/signin/finish")) return json({ authenticated: true })
     if (url === "/api/v1/today") return json({ today, day: { day: today, exists: true, children: page(dayId) }, agenda: { nodes: [], refs: {} }, due: { nodes: [], refs: {} } })
     if (url === "/api/v1/types") return json({ types })
+    if (url.startsWith("/api/v1/days?")) return json({ days: [] })
+    if (url === "/api/v1/preferences") return json({ fold: "default", theme: "system", parse_dates: true })
     if (url.startsWith("/api/v1/resolve")) return json({ candidates: [northwind] })
     if ((m = url.match(/^\/api\/v1\/days\/(.+)$/))) return json({ day: m[1], exists: true, node: { id: dayId }, children: page(dayId) })
     if ((m = url.match(/^\/api\/v1\/nodes\/([a-z]+)\/children/))) return json(page(m[1]))
