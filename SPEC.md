@@ -332,8 +332,10 @@ non-goal; it would require synchronization and a different model.
   undo. A tag's menu: its page, the search with the tag as a chip, write a
   line carrying it, to-do tag or plain. A setting's menu: its options.
   Commands: write in today's journal (the field is the line), create a
-  tag (plain or to-do); `#name` of a tag that does not exist offers to
-  create it directly.
+  tag (plain or to-do), go to a day (the field is a phrase); `#name` of a
+  tag that does not exist offers to create it directly, and a date phrase
+  typed at the root ("yesterday", "next monday", "12 nov") opens that day
+  of the journal, whether it has content or not.
 - **Activity**: what changed, by whom and from which source, with undo.
 
 There are no other pages: tags, projects, people and settings are reached

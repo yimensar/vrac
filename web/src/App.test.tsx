@@ -123,6 +123,17 @@ describe("app", () => {
     await waitFor(() => expect(server.tree()).toEqual(["hello from the box"]))
   })
 
+  it("opens a journal day from a phrase, whether it exists or not", async () => {
+    fakeServer()
+    render(<App client={makeClient()} />)
+    await screen.findByLabelText("New line")
+    await userEvent.keyboard("{Meta>}k{/Meta}")
+    await userEvent.type(await screen.findByPlaceholderText(FIND), "yesterday")
+    // The fake server's today is not the browser's: the day shows by its date.
+    await userEvent.click(await screen.findByRole("option", { name: /November 4|4 November/ }))
+    await waitFor(() => expect(window.location.pathname).toBe("/day/2026-11-04"))
+  })
+
   it("goes back up a palette menu with Backspace", async () => {
     fakeServer()
     render(<App client={makeClient()} />)

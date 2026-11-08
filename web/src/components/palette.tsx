@@ -72,6 +72,7 @@ type Level =
   | { kind: "new-tag" }
   | { kind: "date"; node: Node }
   | { kind: "write"; parent?: Node; tag?: string }
+  | { kind: "day" }
 
 /** One row of a menu: its default action, and the menu it opens with →. */
 type Entry = {
@@ -106,8 +107,12 @@ function placeholder(level?: Level): string {
       return "Friday, in 3 days, next week, 12 nov 14h…"
     case "write":
       return level.parent ? "A line under it…" : "A line in today's journal…"
+    case "day":
+      return "yesterday, next monday, 12 nov…"
   }
 }
+
+const longDay: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long" }
 
 export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const [text, setText] = useState("")
@@ -169,7 +174,17 @@ export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (
     enabled: remote && asked.length > 1,
     placeholderData: keepPreviousData,
   })
-  const waiting = remote && (asked !== query || resolving || searching)
+  // A date phrase, at the root or in Go to a day, opens that journal day,
+  // existing or not.
+  const dayAsk = open && (!level || level.kind === "day") && !lower.startsWith("#") && asked.length > 2
+  const { data: moment, isFetching: dating } = useQuery({
+    queryKey: ["date", asked],
+    queryFn: () => api.parseDate(asked),
+    enabled: dayAsk,
+    placeholderData: keepPreviousData,
+  })
+  const phraseDay = dayAsk && query.length > 2 && moment?.date ? moment.date : ""
+  const waiting = (remote && (asked !== query || resolving || searching)) || (dayAsk && dating)
   // A node menu acts on the node itself, loaded here with its revision.
   const nodeId = level?.kind === "node" ? level.id : ""
   const { data: view } = useQuery({ queryKey: ["node", nodeId], queryFn: () => api.node(nodeId), enabled: nodeId !== "" })
@@ -186,6 +201,18 @@ export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (
     run: () => go(`/node/${id}`),
     actions: { kind: "node", id, label, types: ts },
   })
+  const dayEntry = (day: string, label?: string): Entry => {
+    const today = localDate()
+    return {
+      value: "d" + day,
+      icon: <CalendarDaysIcon className="size-4" />,
+      label: label ?? (day === today ? "Today" : day === addDays(today, 1) ? "Tomorrow" : day === addDays(today, -1) ? "Yesterday" : formatDay(day, longDay)),
+      text: label ?? formatDay(day, longDay),
+      description: label ? formatDay(day, longDay) : "Its page in the journal",
+      hint: label ? undefined : "journal",
+      run: () => go(day === today ? "/" : `/day/${day}`),
+    }
+  }
   const tagIcon = (name: string) => <HashIcon className={cn("size-4", typeClass(types.get(name)?.color))} />
   const tagEntry = (name: string, count?: number): Entry => ({
     value: "t" + name,
@@ -225,12 +252,14 @@ export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (
     const allCommands: Entry[] = [
       { value: "write", icon: <PenLineIcon className="size-4" />, label: "Write in today's journal", text: "write note line today journal", run: () => enter({ kind: "write" }), actions: { kind: "write" } },
       { value: "new-tag", icon: <PlusIcon className="size-4" />, label: "Create a tag", text: "create new add tag", run: () => enter({ kind: "new-tag" }), actions: { kind: "new-tag" } },
+      { value: "day", icon: <CalendarDaysIcon className="size-4" />, label: "Go to a day", text: "go to day journal open date yesterday", run: () => enter({ kind: "day" }), actions: { kind: "day" } },
     ]
     const commands = allCommands.filter((c) => query === "" || c.text.split(" ").some((w) => w.startsWith(lower)))
     const matchingViews = views.filter((v) => v.label.toLowerCase().startsWith(lower))
     const matchingSettings = settings.filter((s) => query === "" || s.words.some((w) => w.startsWith(lower)) || s.options.some(([, o]) => o.toLowerCase().startsWith(lower)))
     groups = [
       { heading: "Tags", entries: tags },
+      { heading: "Days", entries: phraseDay ? [dayEntry(phraseDay)] : [] },
       { heading: "Go to", entries: candidates.map((c) => nodeEntry(c.id, c.label || c.name, c.types, {}, undefined, c.path?.filter((p) => p !== "Journal").slice(-2).join(" / "))) },
       { heading: "Mentions", entries: mentions.map((n) => nodeEntry(n.id, nodeInput(n, found!.refs), n.types, found!.refs, n.status)) },
       { heading: "Views", entries: matchingViews.map((v) => ({ value: "v" + v.to, icon: <v.icon className="size-4" />, label: v.label, text: v.label, run: () => go(v.to) })) },
@@ -341,6 +370,13 @@ export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (
     entries.push(pick("today", "Today", today), pick("tomorrow", "Tomorrow", addDays(today, 1)), pick("week", "In a week", addDays(today, 7)))
     if (n.date) entries.push({ value: "none", icon: <CalendarOffIcon className="size-4" />, label: "No date", text: "no date remove clear", danger: true, run: () => set({ date: "" }, "Date removed") })
     groups = [{ heading: <Content input={nodeInput(n, view?.refs ?? {})} refs={view?.refs} />, entries: entries.filter((e) => e.value === "phrase" || matches(e)) }]
+  } else if (level.kind === "day") {
+    const today = localDate()
+    const entries: Entry[] = []
+    if (phraseDay) entries.push({ ...dayEntry(phraseDay), value: "phrase", description: <>Read from “{query}”</> })
+    entries.push(...[dayEntry(today, "Today"), dayEntry(addDays(today, -1), "Yesterday"), dayEntry(addDays(today, 1), "Tomorrow")].filter(matches))
+    groups = [{ heading: "Go to a day", entries }]
+    empty = waiting ? "Reading…" : "Not a day I understand: try yesterday, next monday, 12 nov."
   } else if (level.kind === "write") {
     const line = level.tag && !query.includes("#" + level.tag) ? `${query} #${level.tag}` : query
     const where = level.parent ? "Under the node" : "In today's journal"
@@ -516,6 +552,13 @@ function Chip({ level }: { level: Level }) {
         <>
           {level.parent ? <CornerDownRightIcon className="size-3.5" /> : <PenLineIcon className="size-3.5" />}
           {level.tag ? `Write #${level.tag}` : "Write"}
+        </>
+      )
+    case "day":
+      return (
+        <>
+          <CalendarDaysIcon className="size-3.5" />
+          Day
         </>
       )
   }

@@ -118,6 +118,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/v1/today", s.api(s.today))
 	m.HandleFunc("GET /api/v1/days", s.api(s.days))
 	m.HandleFunc("GET /api/v1/days/{day}", s.api(s.day))
+	m.HandleFunc("GET /api/v1/dates", s.api(s.dates))
 	m.HandleFunc("GET /api/v1/roots", s.api(s.roots))
 	m.HandleFunc("GET /api/v1/nodes/{id}", s.api(s.node))
 	m.HandleFunc("GET /api/v1/nodes/{id}/children", s.api(s.children))

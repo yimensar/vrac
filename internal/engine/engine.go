@@ -248,6 +248,27 @@ func (e *Engine) write(ctx context.Context, fn func(*sql.Tx) error) error {
 // Today returns the current local date as YYYY-MM-DD.
 func (e *Engine) Today() string { return e.today() }
 
+// Moment is a date phrase read: a day, and a time when one was written.
+type Moment struct {
+	Date  string `json:"date,omitempty"`
+	Clock string `json:"clock,omitempty"`
+}
+
+// ParseDate reads a date phrase relative to today, for a client that opens
+// a day from it. The whole text must be the phrase: a sentence holding a
+// date is not one.
+func (e *Engine) ParseDate(text string) (Moment, bool) {
+	ref, _ := time.Parse(dateLayout, e.today())
+	rest, date, clock := parseDates(text, ref, true)
+	if rest != "" || (date == "" && clock == "") {
+		return Moment{}, false
+	}
+	if date == "" {
+		date = e.today()
+	}
+	return Moment{Date: date, Clock: clock}, true
+}
+
 func (e *Engine) today() string { return e.now().In(e.loc).Format(dateLayout) }
 
 func (e *Engine) stamp() string { return e.now().UTC().Format(time.RFC3339Nano) }

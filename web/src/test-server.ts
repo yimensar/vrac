@@ -66,6 +66,7 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string; sear
     }
     if (url === "/api/v1/types") return json({ types })
     if (url.startsWith("/api/v1/days?")) return json({ days: [] })
+    if (url.startsWith("/api/v1/dates?")) return json(new URL(url, "http://vrac").searchParams.get("text")?.toLowerCase() === "yesterday" ? { date: "2026-11-04" } : {})
     if (url === "/api/v1/search") {
       // Without a stand-in, words match the day's rows.
       const text = String(body.text ?? "").toLowerCase()

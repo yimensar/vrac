@@ -440,6 +440,25 @@ func TestKeepTypesOnRewrite(t *testing.T) {
 	}
 }
 
+// A client opens a journal day from a phrase, read from today.
+func TestParseDatePhrase(t *testing.T) {
+	e := newEngine(t)
+	if m, ok := e.ParseDate("yesterday"); !ok || m.Date != "2026-11-04" || m.Clock != "" {
+		t.Fatalf("yesterday = %+v %v", m, ok)
+	}
+	if m, ok := e.ParseDate("Friday 14h"); !ok || m.Date != "2026-11-06" || m.Clock != "14:00" {
+		t.Fatalf("friday 14h = %+v %v", m, ok)
+	}
+	if m, ok := e.ParseDate("noon"); !ok || m.Date != "2026-11-05" {
+		t.Fatalf("noon = %+v %v", m, ok)
+	}
+	for _, text := range []string{"open friday", "Marc", ""} {
+		if _, ok := e.ParseDate(text); ok {
+			t.Fatalf("%q read as a phrase", text)
+		}
+	}
+}
+
 func TestSubProjectsAndRenames(t *testing.T) {
 	e := newEngine(t)
 	northwind := write(t, e, "Northwind #project")[0]

@@ -126,6 +126,8 @@ export const api = {
   logout: () => request("POST", "/api/v1/logout"),
   changePassword: (current: string, password: string) => request("POST", "/api/v1/password", { current, password }),
 
+  /** A date phrase read from today, or {} when the text is not one. */
+  parseDate: (text: string) => request<{ date?: string; clock?: string }>("GET", "/api/v1/dates" + q({ text })),
   days: (before?: string) => request<{ days: string[] }>("GET", "/api/v1/days" + q({ before, limit: 10 })),
   day: (day: string) => request<DayView>("GET", `/api/v1/days/${day}`),
   node: (id: string) => request<NodeView>("GET", `/api/v1/nodes/${id}`),

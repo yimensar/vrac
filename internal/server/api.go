@@ -67,6 +67,13 @@ func (s *Server) day(w http.ResponseWriter, r *http.Request, p principal) {
 	respond(w, v, err)
 }
 
+// dates reads a date phrase relative to today; an empty object when the
+// text is not one.
+func (s *Server) dates(w http.ResponseWriter, r *http.Request, p principal) {
+	m, _ := s.engine.ParseDate(r.URL.Query().Get("text"))
+	respond(w, m, nil)
+}
+
 func (s *Server) roots(w http.ResponseWriter, r *http.Request, p principal) {
 	v, err := s.engine.Roots(r.Context(), r.URL.Query().Get("cursor"), intParam(r, "limit"))
 	respond(w, v, err)
