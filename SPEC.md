@@ -175,12 +175,20 @@ existing Northwind is referenced as is. The stored model stays clean.
 Text is never parsed for dates by itself. A date is set from the line with
 `/due friday 14h` (or `/date`; `/due` alone offers today, tomorrow and
 next Monday), from a node's page, or by the AI with `date` or `date_text`.
-A phrase ("Friday", "vendredi", "demain 14h", "12 novembre", "nov 12",
-"12/11", "2026-11-12") is read relative to the day being written, in
-English or French, looking ahead for a day of the year already past, and
-stored as the canonical field, shown as a chip while reading and while
-editing. A phrase not understood is refused and the line keeps its text.
-`/no date` clears it.
+A phrase is read in English or French, the way task tools read them:
+casual words ("today", "tomorrow", "yesterday", "tonight", "demain",
+"hier", "ce soir"), amounts ("in 3 days", "dans une semaine", "2 weeks
+ago", "il y a 2 jours"), periods with a modifier ("next week" is next
+Monday, "end of week" is Friday, "end of month", "fin du mois", "next
+month", "this weekend"), weekdays with a modifier ("friday", "fri", "last
+friday", "vendredi dernier", "this thursday" allows today), dates by name
+or number ("12 novembre", "nov 12", "12/11", "2026-11-12", looking ahead
+for a day of the year already past) and a time ("14h30", "5:30pm", "at
+9:15", "noon", "minuit"; "tonight" alone means 20:00). It is read
+relative to the day being written when a node is created, and to today
+when a date is set later on an existing node, and stored as the canonical
+field, shown as a chip while reading and while editing. A phrase not
+understood is refused and the line keeps its text. `/no date` clears it.
 
 ### 2.9 History and deletion
 

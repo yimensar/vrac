@@ -197,7 +197,9 @@ func (e *Engine) Update(ctx context.Context, actor Actor, req UpdateRequest) (Re
 		if req.DateText != nil {
 			dateText = *req.DateText
 		}
-		f, err = normalizeFields(todo, f, dateText, n.Day)
+		// A phrase set later on a node is read from today, not from the
+		// day the node was written.
+		f, err = normalizeFields(todo, f, dateText, s.e.today())
 		if err != nil {
 			return nil, err
 		}

@@ -109,7 +109,7 @@ describe("app", () => {
     await userEvent.type(await screen.findByPlaceholderText(FIND), "milk")
     await userEvent.click(within(await screen.findByRole("option", { name: /Buy milk/ })).getByRole("button", { name: "Actions" }))
     await userEvent.click(await screen.findByRole("option", { name: /Set a date/ }))
-    await userEvent.type(await screen.findByPlaceholderText("Friday, tomorrow 14h, 12 nov…"), "friday{Enter}")
+    await userEvent.type(await screen.findByPlaceholderText("Friday, in 3 days, next week, 12 nov 14h…"), "friday{Enter}")
     await waitFor(() => expect(server.calls.find((c) => c.method === "PATCH" && c.body.date_text === "friday")).toBeTruthy())
   })
 

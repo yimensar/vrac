@@ -182,7 +182,7 @@ var writeSchema = func() map[string]any {
 		"status":    map[string]any{"type": "string", "enum": []string{"open", "done"}, "description": "only for nodes carrying a to-do tag; open unless given"},
 		"date":      map[string]any{"type": "string", "description": "YYYY-MM-DD or YYYY-MM-DDTHH:MM: a deadline, a meeting time, an event"},
 		"end":       map[string]any{"type": "string", "description": "end of a range, same formats"},
-		"date_text": map[string]any{"type": "string", "description": "a date phrase instead of date: 'Friday', 'tomorrow 14h', 'vendredi'"},
+		"date_text": map[string]any{"type": "string", "description": "a date phrase instead of date: 'Friday', 'tomorrow 14h', 'in 3 days', 'next week', 'end of month', 'vendredi dernier'"},
 		"aliases":   strs,
 		"children":  map[string]any{"type": "array", "items": map[string]any{"$ref": "#/$defs/draft"}},
 	}}

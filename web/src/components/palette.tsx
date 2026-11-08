@@ -103,7 +103,7 @@ function placeholder(level?: Level): string {
     case "new-tag":
       return "Name of the new tag"
     case "date":
-      return "Friday, tomorrow 14h, 12 nov…"
+      return "Friday, in 3 days, next week, 12 nov 14h…"
     case "write":
       return level.parent ? "A line under it…" : "A line in today's journal…"
   }
@@ -337,7 +337,7 @@ export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (
     const set = (change: Parameters<typeof api.update>[1], done: string) => mutate(() => api.update(n, change), done)
     const pick = (value: string, label: string, day: string): Entry => ({ value, icon: <CalendarIcon className="size-4" />, label, text: label, hint: formatDay(day), run: () => set({ date: day }, `Dated ${label.toLowerCase()}`) })
     const entries: Entry[] = []
-    if (query) entries.push({ value: "phrase", icon: <CalendarDaysIcon className="size-4" />, label: <>Set the date to “{query}”</>, text: query, description: "Understood as you write it: a day, a time, a weekday", run: () => set({ date_text: query }, `Dated “${query}”`) })
+    if (query) entries.push({ value: "phrase", icon: <CalendarDaysIcon className="size-4" />, label: <>Set the date to “{query}”</>, text: query, description: "tomorrow, in 3 days, next week, end of month, last friday, 12 nov 14h…", run: () => set({ date_text: query }, `Dated “${query}”`) })
     entries.push(pick("today", "Today", today), pick("tomorrow", "Tomorrow", addDays(today, 1)), pick("week", "In a week", addDays(today, 7)))
     if (n.date) entries.push({ value: "none", icon: <CalendarOffIcon className="size-4" />, label: "No date", text: "no date remove clear", danger: true, run: () => set({ date: "" }, "Date removed") })
     groups = [{ heading: <Content input={nodeInput(n, view?.refs ?? {})} refs={view?.refs} />, entries: entries.filter((e) => e.value === "phrase" || matches(e)) }]
