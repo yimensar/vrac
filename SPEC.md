@@ -312,14 +312,20 @@ non-goal; it would require synchronization and a different model.
   tag shows open ones then done ones; the to-do trait is toggled there.
 - **Agenda**: everything dated, day by day.
 - **Search**: query chips (tag, context, status, date).
-- **Command palette** (⌘K): one field that searches everything (nodes,
-  tags, views, commands, settings) and runs what it finds. An entry with a
-  chevron opens its own menu in place, searched the same way, with the
-  path above the field; Backspace in an empty field goes back up. A tag
-  opens its actions (its page, its nodes in the search, to-do tag or
-  plain); a setting its options; "Create a tag" asks the name, then plain
-  or to-do. `#name` of a tag that does not exist offers to create it
-  directly.
+- **Command palette** (⌘K), the power box: one field that searches
+  everything (nodes, tags, views, commands, settings) and runs what it
+  finds. Enter runs a result's default action (open the node, the tag
+  page, the view); → opens its own menu of actions in place, searched by
+  the same field, with the path shown as chips before the text; Backspace
+  or ← in an empty field goes back up, and a footer names the keys. A
+  node's menu: open, mark done or reopen, set or change the date (today,
+  tomorrow, in a week, or a phrase typed in the field), add a line under
+  it (the field is the line), search what concerns it, move to trash with
+  undo. A tag's menu: its page, the search with the tag as a chip, write a
+  line carrying it, to-do tag or plain. A setting's menu: its options.
+  Commands: write in today's journal (the field is the line), create a
+  tag (plain or to-do); `#name` of a tag that does not exist offers to
+  create it directly.
 - **Activity**: what changed, by whom and from which source, with undo.
 
 There are no other pages: tags, projects, people and settings are reached

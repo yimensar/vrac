@@ -66,7 +66,12 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string; sear
     }
     if (url === "/api/v1/types") return json({ types })
     if (url.startsWith("/api/v1/days?")) return json({ days: [] })
-    if (url === "/api/v1/search") return json(opts.search?.(body) ?? { nodes: [], refs: {} })
+    if (url === "/api/v1/search") {
+      // Without a stand-in, words match the day's rows.
+      const text = String(body.text ?? "").toLowerCase()
+      const matching = text ? [...rows.values()].filter((r) => !r.trashed && r.text.toLowerCase().includes(text)).map(view) : []
+      return json(opts.search?.(body) ?? { nodes: matching, refs: {} })
+    }
     if (url === "/api/v1/preferences") return json({ fold: "default", theme: "system", scale: "default" })
     if (url.startsWith("/api/v1/resolve")) return json({ candidates: [northwind] })
     if ((m = url.match(/^\/api\/v1\/days\/(.+)$/))) return json({ day: m[1], exists: true, node: { id: dayId }, children: page(dayId) })
@@ -85,6 +90,10 @@ export function fakeServer(opts: { authenticated?: boolean; today?: string; sear
         out.push(view(r))
       }
       return json({ nodes: out, refs: {} })
+    }
+    if ((m = url.match(/^\/api\/v1\/nodes\/([a-z]+)$/)) && method === "GET") {
+      const r = rows.get(m[1])
+      return r ? json({ node: view(r), path: [{ id: dayId, name: today, types: [] }], children: page(r.id), refs: {} }) : json({ error: "not_found", message: "not found" }, 404)
     }
     if ((m = url.match(/^\/api\/v1\/nodes\/([a-z]+)(\/(move|trash))?$/))) {
       const r = rows.get(m[1])!

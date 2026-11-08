@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { App, makeClient } from "./App"
 import { fakeServer } from "./test-server"
+
+const FIND = "Search notes, tags, views, commands…"
 
 beforeEach(() => window.history.pushState({}, "", "/"))
 afterEach(() => vi.unstubAllGlobals())
@@ -69,7 +71,7 @@ describe("app", () => {
     render(<App client={makeClient()} />)
     await screen.findByLabelText("New line")
     await userEvent.keyboard("{Meta>}k{/Meta}")
-    const input = await screen.findByPlaceholderText("Find a note, a tag, a view, a setting…")
+    const input = await screen.findByPlaceholderText(FIND)
     // "Create a tag" opens its menu; the field then takes the name.
     await userEvent.type(input, "new")
     await userEvent.click(await screen.findByRole("option", { name: /Create a tag/ }))
@@ -77,13 +79,48 @@ describe("app", () => {
     expect(screen.getByRole("navigation", { name: "Menu path" })).toHaveTextContent("New tag")
     await userEvent.keyboard("{ArrowDown}{Enter}")
     await waitFor(() => expect(server.calls.find((c) => c.url === "/api/v1/types" && c.method === "POST")?.body).toMatchObject({ name: "idea", todo: true }))
-    // The new tag has its own menu: make it a plain tag.
+    // → on the new tag opens its actions: make it a plain tag.
     await userEvent.keyboard("{Meta>}k{/Meta}")
-    await userEvent.type(await screen.findByPlaceholderText("Find a note, a tag, a view, a setting…"), "#ide")
-    await userEvent.click(await screen.findByRole("option", { name: /idea/ }))
+    await userEvent.type(await screen.findByPlaceholderText(FIND), "#ide")
+    await screen.findByRole("option", { name: /#idea/ })
+    await userEvent.keyboard("{ArrowRight}")
     await screen.findByPlaceholderText("Do with #idea…")
     await userEvent.keyboard("plain{Enter}")
     await waitFor(() => expect(server.calls.find((c) => c.method === "PATCH")).toMatchObject({ url: "/api/v1/types/idea", body: { todo: false } }))
+  })
+
+  it("acts on a node from the palette: done, then a date from a phrase", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await userEvent.click(await screen.findByLabelText("New line"))
+    await screen.findByRole("textbox", { name: "New line" })
+    // The first Enter takes the tag from the completion menu.
+    await userEvent.keyboard("Buy milk #task{Enter}{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["Buy milk #task"]))
+    await userEvent.keyboard("{Meta>}k{/Meta}")
+    await userEvent.type(await screen.findByPlaceholderText(FIND), "milk")
+    const row = await screen.findByRole("option", { name: /Buy milk/ })
+    await userEvent.click(within(row).getByRole("button", { name: "Actions" }))
+    await screen.findByPlaceholderText("Do with this node…")
+    await userEvent.click(await screen.findByRole("option", { name: /Mark done/ }))
+    await waitFor(() => expect(server.calls.find((c) => c.method === "PATCH" && c.body.status === "done")).toBeTruthy())
+    // The date menu understands a phrase.
+    await userEvent.keyboard("{Meta>}k{/Meta}")
+    await userEvent.type(await screen.findByPlaceholderText(FIND), "milk")
+    await userEvent.click(within(await screen.findByRole("option", { name: /Buy milk/ })).getByRole("button", { name: "Actions" }))
+    await userEvent.click(await screen.findByRole("option", { name: /Set a date/ }))
+    await userEvent.type(await screen.findByPlaceholderText("Friday, tomorrow 14h, 12 nov…"), "friday{Enter}")
+    await waitFor(() => expect(server.calls.find((c) => c.method === "PATCH" && c.body.date_text === "friday")).toBeTruthy())
+  })
+
+  it("writes a line in today's journal from the palette", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await screen.findByLabelText("New line")
+    await userEvent.keyboard("{Meta>}k{/Meta}")
+    await userEvent.type(await screen.findByPlaceholderText(FIND), "write{Enter}")
+    await userEvent.type(await screen.findByPlaceholderText("A line in today's journal…"), "hello from the box{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["hello from the box"]))
   })
 
   it("goes back up a palette menu with Backspace", async () => {
@@ -91,10 +128,10 @@ describe("app", () => {
     render(<App client={makeClient()} />)
     await screen.findByLabelText("New line")
     await userEvent.keyboard("{Meta>}k{/Meta}")
-    await userEvent.type(await screen.findByPlaceholderText("Find a note, a tag, a view, a setting…"), "theme{Enter}")
-    expect(await screen.findByRole("option", { name: "Dark" })).toBeInTheDocument()
+    await userEvent.type(await screen.findByPlaceholderText(FIND), "theme{Enter}")
+    expect(await screen.findByRole("option", { name: /Dark/ })).toBeInTheDocument()
     await userEvent.keyboard("{Backspace}")
-    expect(await screen.findByPlaceholderText("Find a note, a tag, a view, a setting…")).toHaveValue("")
+    expect(await screen.findByPlaceholderText(FIND)).toHaveValue("")
   })
 
   it("offers types and commands after a slash", async () => {
