@@ -363,7 +363,9 @@ indent and outdent, Backspace deletes an empty row or merges into the row
 above, arrows move between rows, Alt+Shift+arrows reorder, Cmd+Enter
 toggles a to-do. A row is saved shortly after each pause in typing, so the
 same node is current in every list that shows it within a moment, and a
-save refreshes every view, which keeps its folds. In lists of unrelated
+save refreshes every view, which keeps its folds. Leaving an outline
+(another page through the palette or a link) saves what was being written
+and turns a new line with text into a row, as Enter would. In lists of unrelated
 nodes (a node's lists, a tag page, search results) the listed rows
 stay in place: Enter saves and leaves a row rather than adding one.
 Tags and references are links to their pages, while reading and while

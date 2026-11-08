@@ -134,6 +134,19 @@ describe("app", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/day/2026-11-04"))
   })
 
+  it("keeps a line being written when the page changes", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await screen.findByLabelText("New line")
+    // Typed in the new line, not entered, then away through the palette.
+    await userEvent.keyboard("half a task")
+    expect(await screen.findByRole("textbox", { name: "New line" })).toHaveTextContent("half a task")
+    await userEvent.keyboard("{Meta>}k{/Meta}")
+    await userEvent.type(await screen.findByPlaceholderText(FIND), "agenda{Enter}")
+    await waitFor(() => expect(window.location.pathname).toBe("/agenda"))
+    await waitFor(() => expect(server.tree()).toEqual(["half a task"]))
+  })
+
   it("goes back up a palette menu with Backspace", async () => {
     fakeServer()
     render(<App client={makeClient()} />)

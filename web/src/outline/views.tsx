@@ -53,6 +53,9 @@ export function Outline({ source, compose = true, capture = false }: { source: S
   useEffect(() => {
     if (query.data) store.load(query.data.page, query.data.rootId)
   }, [query.data, store])
+  // Navigating away (⌘K to another page, a link) must not lose a line
+  // being written: the requests outlive the outline.
+  useEffect(() => () => store.flush(), [store])
   const loaded = Boolean(query.data)
   useEffect(() => {
     // A pointer that hovers has a keyboard; a touch screen would pop its

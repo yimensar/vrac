@@ -240,6 +240,17 @@ export class OutlineStore {
     if (type && !target.createTypes.includes(type)) target.createTypes.push(type)
   }
 
+  /** Leaving the outline keeps what was written: every pending draft is
+   * saved now and a new line with text becomes a row, as Enter would. */
+  flush() {
+    for (const key of [...this.timers.keys()]) this.save(key)
+    const g = this.ghost
+    if (g.text.trim()) {
+      this.insert(g.parent, this.childrenOf(g.parent).length, g.text.trim(), g.create, g.createTypes, g.fields)
+      this.ghost = { ...emptyGhost(), parent: g.parent }
+    }
+  }
+
   /** Saves a row's draft. */
   save(key: string) {
     clearTimeout(this.timers.get(key))
