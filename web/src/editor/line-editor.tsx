@@ -59,7 +59,8 @@ const markers = new Plugin({
 
 /** What a line asks of its outline. Offsets are input offsets. */
 export type LineHandlers = {
-  change: (value: string) => void
+  /** The text changed; caret is where typing goes on, an input offset. */
+  change: (value: string, caret: number) => void
   enter: (before: string, after: string) => void
   tab: (shift: boolean, caret: number) => void
   /** Backspace at the very start; true when handled. */
@@ -68,6 +69,9 @@ export type LineHandlers = {
   shift: (delta: -1 | 1, caret: number) => void
   /** Shift+arrow out of the row: the selection becomes rows. */
   extend: (delta: -1 | 1) => void
+  /** Reopens the row with the caret at an input offset: the row may
+   * change shape, such as a table that is then edited as one. */
+  place: (caret: number) => void
   /** Cmd+Enter: makes the row a to-do, checks it, or reopens it. */
   toggle: () => void
   /** The row's checkbox as it will be saved: it is the to-do tag. */
@@ -172,7 +176,7 @@ export function LineEditor({ value, refs, caret, label, on }: { value: string; r
       dispatchTransaction(tr) {
         const next = v.state.apply(tr)
         v.updateState(next)
-        if (tr.docChanged) h().change(toInput(next.doc.content))
+        if (tr.docChanged) h().change(toInput(next.doc.content), posToOffset(next.doc, next.selection.from))
         setMenu(menuAt(v))
       },
       handleKeyDown(_v, e) {
@@ -597,6 +601,7 @@ function useOptions(menu: Menu | null, on: LineHandlers, pick: Pick | null, setP
       apply: (v, m) => {
         v.dispatch(v.state.tr.delete(m.from, m.to))
         table(v, columns, rows)
+        on.place(caretOf(v.state))
       },
     })
   }

@@ -3,7 +3,7 @@ import { CalendarIcon, ClockIcon } from "lucide-react"
 import type { Node, Refs } from "@/lib/api"
 import { typeClass } from "@/lib/colors"
 import { useTypes } from "@/lib/hooks"
-import { codeClass, inlineOf, inlineRe, isFenceLine, isSeparatorLine, isTableLine, linkClass } from "@/lib/markdown"
+import { codeClass, inlineOf, inlineRe, isFenceLine, isSeparatorLine, isTableLine, linkClass, tableCells } from "@/lib/markdown"
 import { formatMoment, localDate, tokens } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
 import { refClass } from "@/editor/schema"
@@ -164,7 +164,7 @@ function Inline({ text, start, links }: { text: string; start: number; links: bo
 /** A Markdown table: cells split on |, a |---| line under the first row
  * makes it the header. */
 function Table({ lines, refs, links }: { lines: Line[]; refs: Refs; links: boolean }) {
-  const rows = lines.map((l) => ({ start: l.start, separator: isSeparatorLine(l.text), cells: cells(l) }))
+  const rows = lines.map((l) => ({ start: l.start, separator: isSeparatorLine(l.text), cells: tableCells(l.text).map((c) => ({ start: l.start + c.start, text: c.text })) }))
   const header = rows.length > 1 && rows[1].separator ? rows[0] : null
   const body = rows.filter((r) => r !== header && !r.separator)
   const cell = (c: { start: number; text: string }) => <Tokens input={c.text} start={c.start} refs={refs} links={links} />
@@ -190,26 +190,6 @@ function Table({ lines, refs, links }: { lines: Line[]; refs: Refs; links: boole
       </tbody>
     </table>
   )
-}
-
-/** The cells of a table line, with their input offsets, outer pipes
- * dropped and cells trimmed. */
-function cells(line: Line): { start: number; text: string }[] {
-  const out: { start: number; text: string }[] = []
-  const text = line.text
-  let from = text.indexOf("|") + 1
-  const last = text.lastIndexOf("|")
-  const end = last > from - 1 && /^\s*$/.test(text.slice(last + 1)) ? last : text.length
-  while (from <= end) {
-    let to = text.indexOf("|", from)
-    if (to < 0 || to > end) to = end
-    const raw = text.slice(from, to)
-    const lead = raw.length - raw.trimStart().length
-    out.push({ start: line.start + from + lead, text: raw.trim() })
-    from = to + 1
-    if (to === end) break
-  }
-  return out
 }
 
 const chip = "ml-2 inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-px align-[1px] text-xs text-muted-foreground"

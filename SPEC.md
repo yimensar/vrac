@@ -120,7 +120,11 @@ code block. A node may hold several
 lines (Shift+Enter in the editor, a newline for a client): runs of spaces
 are normalized within a line, blank lines dropped, and the first line
 names the node. Lines starting with `|` render as a Markdown table, the
-one shape for comparisons. Headings, lists and numbering do not exist:
+one shape for comparisons, and a row holding one edits it as a table:
+one field per cell, the first row its header, Tab and Enter walking the
+cells and growing the table at its end, arrows crossing its edges to the
+lines around it, and buttons adding or removing a row or a column; the
+text stays Markdown underneath. Headings, lists and numbering do not exist:
 the outline is the structure.
 
 ### 2.4 References: `[[ ]]` says what a node is about
@@ -298,7 +302,8 @@ menus:
   entry per to-do tag, or creating `#task` as the first), Done or Reopen,
   Not a to-do, a date from a phrase (`/due friday 14h`), No date, Bold,
   Code, Code block, Link, Table (`/table` offers sizes, `/table 3x2` lays
-  out columns × rows), Zoom in, Delete. The same formatting has keys: ⌘B
+  out columns × rows, and the table is then edited as a table), Zoom in,
+  Delete. The same formatting has keys: ⌘B
   bold, ⌘E code, ⌘⇧E code block, ⌘⇧K link; each wraps the selection, or
   opens its markers with the caret inside.
 

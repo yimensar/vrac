@@ -291,7 +291,10 @@ export class OutlineStore {
   }
 
   // Editing.
-  setText(key: string, value: string) {
+  setText(key: string, value: string, caret?: number) {
+    // The caret follows silently: a row that changes shape (a table
+    // appears in its text) reopens where typing was.
+    if (caret !== undefined && this.editing?.key === key) this.editing = { ...this.editing, caret }
     if (key === GHOST) this.ghost.text = value
     else {
       const e = this.entry(key)

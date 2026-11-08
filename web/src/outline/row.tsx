@@ -6,8 +6,10 @@ import { useTypes } from "@/lib/hooks"
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import { LineEditor, type LineHandlers } from "@/editor/line-editor"
+import { parseTable } from "@/lib/markdown"
 import { Content, DateChip, offsetAt } from "./content"
 import { END, GHOST, type OutlineStore } from "./store"
+import { TableNode } from "./table-node"
 
 // Every row uses one grid: a 20px toggle, a 16px bullet, then the line, on
 // 24px lines. Children are indented so their guide falls under the bullet.
@@ -19,13 +21,17 @@ import { END, GHOST, type OutlineStore } from "./store"
  * indents, outdents and leaves like a row. */
 function handlers(store: OutlineStore, k: string, navigate: (to: string) => void, title = false): LineHandlers {
   const zoom = (id: string) => navigate(`/node/${id}`)
+  // An editor reopened on the same row (the caret placed, a table that
+  // appeared) must not be closed by the blur of the one it replaces.
+  const seq = store.editing?.key === k ? store.editing.seq : -1
   const leave = () => {
+    if (store.editing?.key === k && store.editing.seq !== seq) return
     store.save(k)
     store.blur(k)
   }
   const e = k === GHOST ? undefined : store.entry(k)
   const common = {
-    change: (v: string) => store.setText(k, v),
+    change: (v: string, caret?: number) => store.setText(k, v, caret),
     intend: (create?: Parameters<OutlineStore["intend"]>[1], type?: string) => store.intend(k, create, type),
     toggle: () => {
       if (!store.toggleDone(k)) toast("No to-do tag yet", { description: "Type / and create one, such as #task." })
@@ -36,6 +42,7 @@ function handlers(store: OutlineStore, k: string, navigate: (to: string) => void
     setTodo: (tag: string | null) => store.setTodo(k, tag),
     open: navigate,
     extend: (delta: -1 | 1) => store.beginSelection(k, delta),
+    place: (caret: number) => store.focus(k, caret),
     self: e?.id,
     zoom: e?.id ? () => zoom(e.id!) : undefined,
     leave,
@@ -76,7 +83,6 @@ function handlers(store: OutlineStore, k: string, navigate: (to: string) => void
 
 /** A node row. title renders a page heading: no bullet, no children. */
 export function Row({ store, k, context, title }: { store: OutlineStore; k: string; context?: boolean; title?: boolean }) {
-  const navigate = useNavigate()
   const e = store.entry(k)
   const node = e.node
   const editing = store.editing?.key === k ? store.editing : null
@@ -121,7 +127,7 @@ export function Row({ store, k, context, title }: { store: OutlineStore; k: stri
           {editing ? (
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
-                <LineEditor key={editing.seq} value={store.text(k)} refs={store.refs} caret={editing.caret} on={handlers(store, k, navigate, title)} />
+                <Editor key={editing.seq} store={store} k={k} caret={editing.caret} title={title} />
               </div>
               <PendingDate store={store} k={k} />
             </div>
@@ -164,6 +170,16 @@ export function Row({ store, k, context, title }: { store: OutlineStore; k: stri
   )
 }
 
+/** The editor of a row: its line, or, when the text holds a table, the
+ * lines around a table edited as one. */
+function Editor({ store, k, caret, title }: { store: OutlineStore; k: string; caret: number; title?: boolean }) {
+  const navigate = useNavigate()
+  const text = store.text(k)
+  const table = title ? null : parseTable(text)
+  if (table) return <TableNode store={store} k={k} table={table} caret={caret} handlers={(s, key, nav) => handlers(s, key, nav)} />
+  return <LineEditor value={text} refs={store.refs} caret={caret} label={k === GHOST ? "New line" : undefined} on={handlers(store, k, navigate, title)} />
+}
+
 /** The date of a row being edited: the saved one, or the phrase just
  * given, until the server answers. */
 function PendingDate({ store, k }: { store: OutlineStore; k: string }) {
@@ -204,7 +220,6 @@ export const hint = "Write here. / for commands, # for a tag, @ or [[ for a refe
  * or under the row above it once indented. An empty outline shows how to
  * write. */
 export function NewRow({ store }: { store: OutlineStore }) {
-  const navigate = useNavigate()
   const editing = store.editing?.key === GHOST ? store.editing : null
   const empty = store.root.length === 0 && store.ghost.text === ""
   const types = store.types(GHOST)
@@ -221,7 +236,7 @@ export function NewRow({ store }: { store: OutlineStore }) {
         {editing ? (
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
-              <LineEditor key={editing.seq} value={store.ghost.text} refs={store.refs} caret={editing.caret} label="New line" on={handlers(store, GHOST, navigate)} />
+              <Editor key={editing.seq} store={store} k={GHOST} caret={editing.caret} />
             </div>
             <PendingDate store={store} k={GHOST} />
           </div>

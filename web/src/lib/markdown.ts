@@ -38,3 +38,62 @@ export const isFenceLine = (line: string) => /^\s*```[\w-]*\s*$/.test(line)
 export const isTableLine = (line: string) => /^\s*\|/.test(line)
 /** The row under the header: |---|:--:|. */
 export const isSeparatorLine = (line: string) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(line)
+
+/** The cells of a table line, with their offsets in the line, outer pipes
+ * dropped and cells trimmed. */
+export function tableCells(text: string): { start: number; text: string }[] {
+  const out: { start: number; text: string }[] = []
+  let from = text.indexOf("|") + 1
+  const last = text.lastIndexOf("|")
+  const end = last > from - 1 && /^\s*$/.test(text.slice(last + 1)) ? last : text.length
+  while (from <= end) {
+    let to = text.indexOf("|", from)
+    if (to < 0 || to > end) to = end
+    const raw = text.slice(from, to)
+    const lead = raw.length - raw.trimStart().length
+    out.push({ start: from + lead, text: raw.trim() })
+    from = to + 1
+    if (to === end) break
+  }
+  return out
+}
+
+/** The first table of a node's text, with the text before and after it.
+ * rows holds every row but the separator; header says whether the first
+ * row is one. offsets gives each cell's input offset. */
+export type ParsedTable = { head: string; tail: string; start: number; length: number; rows: string[][]; header: boolean; offsets: number[][] }
+
+export function parseTable(text: string): ParsedTable | null {
+  const lines = text.split("\n")
+  let i = 0
+  while (i < lines.length && !(isTableLine(lines[i]) && i + 1 < lines.length && isTableLine(lines[i + 1]))) i++
+  if (i >= lines.length) return null
+  let j = i
+  while (j < lines.length && isTableLine(lines[j])) j++
+  const start = lines.slice(0, i).reduce((n, l) => n + l.length + 1, 0)
+  const block = lines.slice(i, j)
+  const header = block.length > 1 && isSeparatorLine(block[1])
+  const rows: string[][] = []
+  const offsets: number[][] = []
+  let at = start
+  for (const [n, line] of block.entries()) {
+    if (!(n === 1 && header)) {
+      const cells = tableCells(line)
+      rows.push(cells.map((c) => c.text))
+      offsets.push(cells.map((c) => at + c.start))
+    }
+    at += line.length + 1
+  }
+  const columns = Math.max(1, ...rows.map((r) => r.length))
+  for (const r of rows) while (r.length < columns) r.push("")
+  return { head: lines.slice(0, i).join("\n"), tail: lines.slice(j).join("\n"), start, length: block.join("\n").length, rows, header, offsets }
+}
+
+/** Writes rows back as Markdown, a separator under the header. */
+export function tableText(rows: string[][], header = true): string {
+  const line = (cells: string[]) => "| " + cells.map((c) => c.trim() || " ").join(" | ") + " |"
+  const columns = Math.max(1, ...rows.map((r) => r.length))
+  const out = rows.map((r) => line([...r, ...Array.from({ length: columns - r.length }, () => "")]))
+  if (header) out.splice(1, 0, "|" + Array.from({ length: columns }, () => "---").join("|") + "|")
+  return out.join("\n")
+}

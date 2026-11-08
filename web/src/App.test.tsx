@@ -209,12 +209,12 @@ describe("app", () => {
     render(<App client={makeClient()} />)
     await userEvent.click(await screen.findByLabelText("New line"))
     await screen.findByRole("textbox", { name: "New line" })
-    await userEvent.keyboard("| a |{Shift>}{Enter}{/Shift}| b |{Enter}")
-    await waitFor(() => expect(server.tree()).toEqual(["| a |\n| b |"]))
+    await userEvent.keyboard("first{Shift>}{Enter}{/Shift}second{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["first\nsecond"]))
   })
 
   it("formats with keys and slash commands: bold, code, link", async () => {
-    const server = fakeServer()
+    fakeServer()
     render(<App client={makeClient()} />)
     await userEvent.click(await screen.findByLabelText("New line"))
     await screen.findByRole("textbox", { name: "New line" })
@@ -227,11 +227,32 @@ describe("app", () => {
     await userEvent.click((await screen.findAllByRole("option", { name: /^Code/ }))[0])
     await userEvent.keyboard("ls")
     expect(editor).toHaveTextContent("run `ls`")
-    await userEvent.keyboard("{Control>}a{/Control}{Backspace}/table 3x2")
-    await userEvent.click(await screen.findByRole("option", { name: /Table 3 × 2/ }))
-    expect(editor.textContent).toContain("|   |   |   |\n|---|---|---|")
+  })
+
+  it("edits a table as a table: cells, Tab, Enter, then a row below", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await userEvent.click(await screen.findByLabelText("New line"))
+    await screen.findByRole("textbox", { name: "New line" })
+    await userEvent.keyboard("/table 2x1")
+    await userEvent.click(await screen.findByRole("option", { name: /Table 2 × 1/ }))
+    // The row turns into cells, the first header cell focused.
+    // The row reopens on the table, so the cell is looked up again.
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Row 1, column 1" })).toHaveFocus())
+    await userEvent.keyboard("TV{Tab}Price{Tab}77OLED811{Tab}2199 €")
+    // Tab past the last cell adds a row; Enter on an empty last row leaves.
+    await userEvent.keyboard("{Tab}")
+    expect(screen.getByRole("textbox", { name: "Row 3, column 1" })).toHaveFocus()
+    await userEvent.keyboard("{Backspace}")
+    expect(screen.queryByRole("textbox", { name: "Row 3, column 1" })).toBeNull()
+    // Enter on a filled last row adds one; on the empty row it leaves,
+    // dropping it.
     await userEvent.keyboard("{Enter}")
-    await waitFor(() => expect(server.tree()).toEqual(["|   |   |   |\n|---|---|---|\n|   |   |   |\n|   |   |   |"]))
+    expect(screen.getByRole("textbox", { name: "Row 3, column 1" })).toHaveFocus()
+    await userEvent.keyboard("{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["| TV | Price |\n|---|---|\n| 77OLED811 | 2199 € |"]))
+    // The saved row reads as a table and opens as one again.
+    expect(await screen.findByRole("columnheader", { name: "TV" })).toBeInTheDocument()
   })
 
   it("selects rows past the row's edge, then deletes them together", async () => {
