@@ -151,6 +151,8 @@ var trailingTypesRe = regexp.MustCompile(`(\s*(^|\s)#[\p{L}\p{N}_-]+)+\s*$`)
 // labelOf drops the trailing type tokens of a text, which label the node,
 // and keeps those written inside the sentence.
 func labelOf(text string) string {
+	// A node of several lines is named by its first one.
+	text, _, _ = strings.Cut(text, "\n")
 	return strings.TrimSpace(trailingTypesRe.ReplaceAllString(text, ""))
 }
 

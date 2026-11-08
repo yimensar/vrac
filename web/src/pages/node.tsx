@@ -2,12 +2,10 @@ import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router"
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { ChevronRightIcon } from "lucide-react"
-import { api, type ListCount, type Node, type Page } from "@/lib/api"
-import { reportError, useRefresh } from "@/lib/hooks"
-import { formatDay, formatStamp, isDay } from "@/lib/syntax"
+import { api, type ListCount, type Page } from "@/lib/api"
+import { formatDay, isDay } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Loading, PageTitle } from "@/components/page"
 import { Content, TypeName } from "@/outline/content"
 import { NodeList, Outline } from "@/outline/views"
@@ -15,7 +13,8 @@ import { NodeList, Outline } from "@/outline/views"
 /** A node zoomed in: its page is the same page, one level deeper. The
  * breadcrumb leads back to the journal and Escape goes up one level.
  * Below its own outline, the page gathers what concerns it from
- * elsewhere, one list per tag, each row edited in place. */
+ * elsewhere, one list per tag, each row edited in place. Its date, names
+ * and history are a ⌘K away, not on the page. */
 export function NodePage() {
   const { id = "" } = useParams()
   const navigate = useNavigate()
@@ -57,7 +56,6 @@ export function NodePage() {
           <div className="text-xl font-semibold tracking-tight [&_[role=textbox]]:leading-8">
             <NodeList id={`${id}-title`} page={self} title />
           </div>
-          <NodeFields key={n.revision} node={n} />
         </div>
       )}
       <Outline key={n.id} source={{ node: n.id }} />
@@ -101,54 +99,5 @@ function TagList({ id, list }: { id: string; list: ListCount }) {
         </Button>
       )}
     </section>
-  )
-}
-
-/** Date, aliases and authorship of a zoomed node. The date is set from
- * the line (/due) and adjusted here. */
-function NodeFields({ node }: { node: Node }) {
-  const refresh = useRefresh()
-  const [aliases, setAliases] = useState(node.aliases.join(", "))
-  const save = async (change: Parameters<typeof api.update>[1]) => {
-    try {
-      await api.update(node, change)
-      refresh()
-    } catch (err) {
-      reportError(err)
-    }
-  }
-  const local = (m?: string) => (m ? (m.length === 10 ? m + "T00:00" : m) : "")
-  const moment = (v: string) => (v.endsWith("T00:00") ? v.slice(0, 10) : v)
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-      {node.date && (
-        <label className="flex items-center gap-2">
-          Date
-          <Input type="datetime-local" className="h-8 w-52" defaultValue={local(node.date)} onBlur={(e) => moment(e.target.value) !== node.date && save({ date: moment(e.target.value) })} />
-        </label>
-      )}
-      {node.date && (
-        <label className="flex items-center gap-2">
-          End
-          <Input type="datetime-local" className="h-8 w-52" defaultValue={local(node.end)} onBlur={(e) => moment(e.target.value) !== (node.end ?? "") && save({ end: moment(e.target.value) })} />
-        </label>
-      )}
-      <label className="flex items-center gap-2">
-        Also called
-        <Input
-          className="h-8 w-56"
-          value={aliases}
-          placeholder="other names, comma separated"
-          onChange={(e) => setAliases(e.target.value)}
-          onBlur={() => {
-            const list = aliases.split(",").map((a) => a.trim()).filter(Boolean)
-            if (list.join("\u0000") !== node.aliases.join("\u0000")) save({ aliases: list })
-          }}
-        />
-      </label>
-      <span>
-        {node.updated_by} · {node.source} · {formatStamp(node.updated_at)}
-      </span>
-    </div>
   )
 }

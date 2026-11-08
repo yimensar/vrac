@@ -23,7 +23,9 @@ import {
   SlidersHorizontalIcon,
   SquareCheckIcon,
   SquareIcon,
+  TagsIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react"
 import { api, type Node, type Preferences, type Refs } from "@/lib/api"
 import { dotClass, typeClass } from "@/lib/colors"
@@ -73,6 +75,7 @@ type Level =
   | { kind: "date"; node: Node }
   | { kind: "write"; parent?: Node; tag?: string }
   | { kind: "day" }
+  | { kind: "aliases"; node: Node }
 
 /** One row of a menu: its default action, and the menu it opens with →. */
 type Entry = {
@@ -109,6 +112,8 @@ function placeholder(level?: Level): string {
       return level.parent ? "A line under it…" : "A line in today's journal…"
     case "day":
       return "yesterday, next monday, 12 nov…"
+    case "aliases":
+      return "Other names, comma separated"
   }
 }
 
@@ -311,6 +316,7 @@ export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (
       entries.push(
         { value: "date", icon: <CalendarIcon className="size-4" />, label: n.date ? "Change the date" : "Set a date", text: "date due schedule when", description: n.date ? formatDay(n.date.slice(0, 10)) : "A deadline, a time, an event", run: () => enter({ kind: "date", node: n }), actions: { kind: "date", node: n } },
         { value: "write", icon: <CornerDownRightIcon className="size-4" />, label: "Add a line under it", text: "add write line under child note", run: () => enter({ kind: "write", parent: n }), actions: { kind: "write", parent: n } },
+        { value: "aliases", icon: <TagsIcon className="size-4" />, label: n.aliases.length ? "Change its other names" : "Give it other names", text: "also called alias names rename", description: n.aliases.length ? n.aliases.join(", ") : "Found by them too: GBX for Globex", run: () => enter({ kind: "aliases", node: n }), actions: { kind: "aliases", node: n } },
         { value: "concerns", icon: <SearchIcon className="size-4" />, label: "Search what concerns it", text: "search concerns about related", description: "Everything written about it, from anywhere", run: () => go(`/search?concerns=${n.id}`) },
         {
           value: "trash",
@@ -377,6 +383,14 @@ export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (
     entries.push(...[dayEntry(today, "Today"), dayEntry(addDays(today, -1), "Yesterday"), dayEntry(addDays(today, 1), "Tomorrow")].filter(matches))
     groups = [{ heading: "Go to a day", entries }]
     empty = waiting ? "Reading…" : "Not a day I understand: try yesterday, next monday, 12 nov."
+  } else if (level.kind === "aliases") {
+    const n = level.node
+    const names = query.split(",").map((a) => a.trim()).filter(Boolean)
+    const entries: Entry[] = []
+    if (names.length) entries.push({ value: "set", icon: <TagsIcon className="size-4" />, label: <>Also called {names.join(", ")}</>, text: query, run: () => mutate(() => api.update(n, { aliases: names }), "Names changed") })
+    if (n.aliases.length && !query) entries.push({ value: "clear", icon: <XIcon className="size-4" />, label: "Remove its other names", text: "remove clear", description: n.aliases.join(", "), danger: true, run: () => mutate(() => api.update(n, { aliases: [] }), "Names removed") })
+    groups = [{ heading: <Content input={nodeInput(n, view?.refs ?? {})} refs={view?.refs} />, entries }]
+    empty = "Type the names, comma separated."
   } else if (level.kind === "write") {
     const line = level.tag && !query.includes("#" + level.tag) ? `${query} #${level.tag}` : query
     const where = level.parent ? "Under the node" : "In today's journal"
@@ -559,6 +573,13 @@ function Chip({ level }: { level: Level }) {
         <>
           <CalendarDaysIcon className="size-3.5" />
           Day
+        </>
+      )
+    case "aliases":
+      return (
+        <>
+          <TagsIcon className="size-3.5" />
+          Names
         </>
       )
   }

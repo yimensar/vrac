@@ -5,17 +5,36 @@ import { history, redo, undo } from "prosemirror-history"
 import { InputRule, inputRules } from "prosemirror-inputrules"
 import { keymap } from "prosemirror-keymap"
 import type { Node as PMNode } from "prosemirror-model"
-import { EditorState, TextSelection, type Command } from "prosemirror-state"
-import { EditorView } from "prosemirror-view"
+import { EditorState, Plugin, TextSelection, type Command } from "prosemirror-state"
+import { Decoration, DecorationSet, EditorView } from "prosemirror-view"
 import { CalendarIcon, CalendarOffIcon, CheckIcon, Maximize2Icon, SquareIcon, Trash2Icon, XIcon } from "lucide-react"
 import { api, type Creation, type Fields, type Refs } from "@/lib/api"
 import { typeClass } from "@/lib/colors"
 import { reportError, useDebounced, useTypes } from "@/lib/hooks"
+import { codeClass, inlineRe, linkClass } from "@/lib/markdown"
 import { trigger, type Trigger } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
 import { Content } from "@/outline/content"
 import { fromInput, offsetToPos, posToOffset, toInput } from "./convert"
 import { hasType, schema, todoTags } from "./schema"
+
+// Inline Markdown reads the same while written: its markers stay, styled
+// as rows render them.
+const markers = new Plugin({
+  props: {
+    decorations(state) {
+      const out: Decoration[] = []
+      state.doc.descendants((node, pos) => {
+        if (!node.isText) return
+        for (const m of node.text!.matchAll(inlineRe)) {
+          const cls = m[1] ? "font-semibold" : m[2] ? codeClass : linkClass
+          out.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, { class: cls }))
+        }
+      })
+      return DecorationSet.create(state.doc, out)
+    },
+  },
+})
 
 /** What a line asks of its outline. Offsets are input offsets. */
 export type LineHandlers = {
@@ -95,7 +114,8 @@ export function LineEditor({ value, refs, caret, label, on }: { value: string; r
       }
     const keys = keymap({
       Enter: run((s) => h().enter(toInput(s.doc.content.cut(0, s.selection.from)), toInput(s.doc.content.cut(s.selection.to)))),
-      "Shift-Enter": () => true,
+      // A line break inside the node: a table, a short note.
+      "Shift-Enter": (s, d) => (d?.(s.tr.insertText("\n")), true),
       "Mod-Enter": run(() => h().toggle()),
       Tab: run((s) => h().tab(false, caretOf(s))),
       "Shift-Tab": run((s) => h().tab(true, caretOf(s))),
@@ -112,7 +132,7 @@ export function LineEditor({ value, refs, caret, label, on }: { value: string; r
     const doc = fromInput(value, refs)
     const state = EditorState.create({
       doc,
-      plugins: [rules, history(), keys, keymap(baseKeymap)],
+      plugins: [rules, markers, history(), keys, keymap(baseKeymap)],
       selection: TextSelection.create(doc, offsetToPos(doc, caret)),
     })
     const v = new EditorView(host.current!, {

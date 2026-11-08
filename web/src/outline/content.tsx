@@ -3,13 +3,15 @@ import { CalendarIcon, ClockIcon } from "lucide-react"
 import type { Node, Refs } from "@/lib/api"
 import { typeClass } from "@/lib/colors"
 import { useTypes } from "@/lib/hooks"
+import { codeClass, inlineOf, inlineRe, isSeparatorLine, isTableLine, linkClass } from "@/lib/markdown"
 import { formatMoment, localDate, tokens } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
 import { refClass } from "@/editor/schema"
 
 // The one rendering of a line, shared by saved rows, unsaved rows, labels
 // and completions. Spans carry their input offsets so a click can place the
-// caret where it lands.
+// caret where it lands. Text holds inline Markdown (bold, code, links) and
+// a node of several lines starting with | reads as a table.
 
 export function TypeName({ name, className, link = false, ...rest }: { name: string; className?: string; link?: boolean } & React.HTMLAttributes<HTMLElement>) {
   const types = useTypes()
@@ -28,21 +30,51 @@ export function TypeName({ name, className, link = false, ...rest }: { name: str
   )
 }
 
+type Line = { start: number; text: string }
+
 /** Renders input text. extra lists types to show after it, smaller. */
 export function Content({ input, refs = {}, extra = [], links = false }: { input: string; refs?: Refs; extra?: string[]; links?: boolean }) {
-  const toks = tokens(input)
-  const inline = new Set(toks.flatMap((t) => (t.kind === "type" ? [t.name] : [])))
+  const inline = new Set(tokens(input).flatMap((t) => (t.kind === "type" ? [t.name] : [])))
+  const lines: Line[] = []
+  let at = 0
+  for (const text of input.split("\n")) {
+    lines.push({ start: at, text })
+    at += text.length + 1
+  }
+  // Consecutive table lines make a table; the other lines keep their
+  // breaks, which the row's white-space preserves.
+  const tabular = lines.map((l, k) => isTableLine(l.text) && ((k > 0 && isTableLine(lines[k - 1].text)) || (k + 1 < lines.length && isTableLine(lines[k + 1].text))))
+  const blocks: React.ReactNode[] = []
+  for (let i = 0; i < lines.length; ) {
+    let j = i + 1
+    while (j < lines.length && tabular[j] === tabular[i]) j++
+    if (tabular[i]) {
+      blocks.push(<Table key={i} lines={lines.slice(i, j)} refs={refs} links={links} />)
+    } else {
+      const last = lines[j - 1]
+      blocks.push(<Tokens key={i} input={input.slice(lines[i].start, last.start + last.text.length)} start={lines[i].start} refs={refs} links={links} />)
+    }
+    i = j
+  }
   return (
     <>
-      {toks.map((t) => {
-        if (t.kind === "text") {
-          return (
-            <span key={t.start} data-start={t.start}>
-              {t.text}
-            </span>
-          )
-        }
-        const atom = { "data-start": t.start, "data-length": t.length }
+      {blocks}
+      {extra
+        .filter((t) => !inline.has(t))
+        .map((t) => (
+          <TypeName key={t} name={t} className="ml-1.5 text-xs" />
+        ))}
+    </>
+  )
+}
+
+/** The tokens of a piece of input whose first character is at start. */
+function Tokens({ input, start, refs, links }: { input: string; start: number; refs: Refs; links: boolean }) {
+  return (
+    <>
+      {tokens(input).map((t) => {
+        if (t.kind === "text") return <Inline key={t.start} text={t.text} start={start + t.start} links={links} />
+        const atom = { "data-start": start + t.start, "data-length": t.length }
         if (t.kind === "type") return <TypeName key={t.start} name={t.name} link={links} {...atom} />
         const label = (t.id && refs[t.id]?.label) || t.name
         return links && t.id ? (
@@ -55,13 +87,111 @@ export function Content({ input, refs = {}, extra = [], links = false }: { input
           </span>
         )
       })}
-      {extra
-        .filter((t) => !inline.has(t))
-        .map((t) => (
-          <TypeName key={t} name={t} className="ml-1.5 text-xs" />
-        ))}
     </>
   )
+}
+
+/** Plain text with its inline Markdown. Wrappers carry no offset: the
+ * spans inside them do, so a click lands in the text. */
+function Inline({ text, start, links }: { text: string; start: number; links: boolean }) {
+  const out: React.ReactNode[] = []
+  let last = 0
+  const plain = (from: number, to: number) => {
+    if (to > from)
+      out.push(
+        <span key={from} data-start={start + from}>
+          {text.slice(from, to)}
+        </span>,
+      )
+  }
+  for (const m of text.matchAll(inlineRe)) {
+    const i = m.index
+    const piece = inlineOf(m)
+    const len = piece.kind === "url" ? piece.href.length : m[0].length
+    plain(last, i)
+    const at = start + i
+    if (piece.kind === "bold") {
+      out.push(
+        <strong key={i} className="font-semibold">
+          <span data-start={at + piece.innerAt}>{piece.inner}</span>
+        </strong>,
+      )
+    } else if (piece.kind === "code") {
+      out.push(
+        <code key={i} className={codeClass}>
+          <span data-start={at + piece.innerAt}>{piece.inner}</span>
+        </code>,
+      )
+    } else {
+      const label = piece.kind === "link" ? piece.text : piece.href
+      const labelAt = piece.kind === "link" ? at + piece.textAt : at
+      out.push(
+        links ? (
+          <a key={i} href={piece.href} target="_blank" rel="noopener noreferrer" className={cn(linkClass, "break-all")} onClick={(e) => e.stopPropagation()}>
+            <span data-start={labelAt}>{label}</span>
+          </a>
+        ) : (
+          <span key={i} className={cn(linkClass, "break-all")} data-start={labelAt}>
+            {label}
+          </span>
+        ),
+      )
+    }
+    last = i + len
+  }
+  plain(last, text.length)
+  return <>{out}</>
+}
+
+/** A Markdown table: cells split on |, a |---| line under the first row
+ * makes it the header. */
+function Table({ lines, refs, links }: { lines: Line[]; refs: Refs; links: boolean }) {
+  const rows = lines.map((l) => ({ start: l.start, separator: isSeparatorLine(l.text), cells: cells(l) }))
+  const header = rows.length > 1 && rows[1].separator ? rows[0] : null
+  const body = rows.filter((r) => r !== header && !r.separator)
+  const cell = (c: { start: number; text: string }) => <Tokens input={c.text} start={c.start} refs={refs} links={links} />
+  return (
+    <table className="my-1 w-full border-collapse text-sm [&_td]:border-b [&_td]:border-border/50 [&_td]:px-2 [&_td]:py-1 [&_td]:align-top [&_th]:border-b [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-medium [&_th]:text-muted-foreground">
+      {header && (
+        <thead>
+          <tr>
+            {header.cells.map((c) => (
+              <th key={c.start}>{cell(c)}</th>
+            ))}
+          </tr>
+        </thead>
+      )}
+      <tbody>
+        {body.map((r) => (
+          <tr key={r.start}>
+            {r.cells.map((c) => (
+              <td key={c.start}>{cell(c)}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/** The cells of a table line, with their input offsets, outer pipes
+ * dropped and cells trimmed. */
+function cells(line: Line): { start: number; text: string }[] {
+  const out: { start: number; text: string }[] = []
+  const text = line.text
+  let from = text.indexOf("|") + 1
+  const last = text.lastIndexOf("|")
+  const end = last > from - 1 && /^\s*$/.test(text.slice(last + 1)) ? last : text.length
+  while (from <= end) {
+    let to = text.indexOf("|", from)
+    if (to < 0 || to > end) to = end
+    const raw = text.slice(from, to)
+    const lead = raw.length - raw.trimStart().length
+    out.push({ start: line.start + from + lead, text: raw.trim() })
+    from = to + 1
+    if (to === end) break
+  }
+  return out
 }
 
 const chip = "ml-2 inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-px align-[1px] text-xs text-muted-foreground"

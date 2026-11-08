@@ -41,7 +41,7 @@ func parseInput(raw string) (parsedInput, error) {
 	if strings.ContainsRune(raw, 0) {
 		return p, invalid("text contains a NUL character")
 	}
-	raw = strings.ReplaceAll(raw, "\n", " ")
+	raw = strings.ReplaceAll(raw, "\r\n", "\n")
 	var b strings.Builder
 	seenType := map[string]bool{}
 	addRef := func(t refToken) {
@@ -93,11 +93,23 @@ func parseInput(raw string) (parsedInput, error) {
 		b.WriteByte(raw[i])
 		i++
 	}
-	p.Text = strings.Join(strings.Fields(b.String()), " ")
+	p.Text = normalizeLines(b.String())
 	if len(p.Text) > maxTextLength {
 		return p, invalid("text exceeds %d bytes", maxTextLength)
 	}
 	return p, nil
+}
+
+// normalizeLines keeps the line breaks of a text (a table, a few lines of
+// a note) and normalizes the spaces of each line; blank lines are dropped.
+func normalizeLines(text string) string {
+	var lines []string
+	for _, l := range strings.Split(text, "\n") {
+		if l = strings.Join(strings.Fields(l), " "); l != "" {
+			lines = append(lines, l)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func boundaryBefore(s string) bool {

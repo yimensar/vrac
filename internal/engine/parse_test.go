@@ -105,6 +105,21 @@ func TestParseDates(t *testing.T) {
 	}
 }
 
+// Lines survive, for tables and short notes; blank lines and runs of
+// spaces do not, and the first line names the node.
+func TestParseInputLines(t *testing.T) {
+	p, err := parseInput("Prices   #reference\r\n\n| TV | Price |\n|---|---|\n| 77OLED811  | 2199 € |\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Text != "Prices #reference\n| TV | Price |\n|---|---|\n| 77OLED811 | 2199 € |" {
+		t.Fatalf("text = %q", p.Text)
+	}
+	if l := labelOf(p.Text); l != "Prices" {
+		t.Fatalf("label = %q", l)
+	}
+}
+
 func TestLevenshtein(t *testing.T) {
 	if levenshtein("tsak", "task") != 2 || levenshtein("", "abc") != 3 {
 		t.Fatal("levenshtein")

@@ -112,6 +112,16 @@ meeting time, an event.
 
 **Tags are not inherited.** A to-do written under a meeting is not a meeting.
 
+**Text is a line, with inline Markdown.** A node is one short line; its
+details are its children. The line may hold `**bold**`, `` `code` ``,
+`[text](url)` and bare URLs, rendered while reading and styled in place
+while editing, so a row reads the same both ways. A node may hold several
+lines (Shift+Enter in the editor, a newline for a client): runs of spaces
+are normalized within a line, blank lines dropped, and the first line
+names the node. Lines starting with `|` render as a Markdown table, the
+one shape for comparisons. Headings, lists and numbering do not exist:
+the outline is the structure.
+
 ### 2.4 References: `[[ ]]` says what a node is about
 
 `[[Northwind]]` is a link to a node by ID. The displayed label is the target's
@@ -314,8 +324,9 @@ non-goal; it would require synchronization and a different model.
 - **Today** (home): today's journal alone, outline editor.
 - **Journal**: today, then the days in sequence as you scroll.
 - **Node zoom**: breadcrumb from the journal (Escape goes up one level),
-  authored outline, then one list per tag of what concerns the node from
-  elsewhere (scenario 5).
+  the node as title, its outline, then one list per tag of what concerns
+  it from elsewhere (scenario 5). Nothing else: its date, other names and
+  history are reached from the palette and Activity.
 - **Tag pages**: every node carrying the tag, most recent first; a to-do
   tag shows open ones then done ones; the to-do trait is toggled there.
 - **Agenda**: everything dated, day by day.
@@ -328,8 +339,8 @@ non-goal; it would require synchronization and a different model.
   or ← in an empty field goes back up, and a footer names the keys. A
   node's menu: open, mark done or reopen, set or change the date (today,
   tomorrow, in a week, or a phrase typed in the field), add a line under
-  it (the field is the line), search what concerns it, move to trash with
-  undo. A tag's menu: its page, the search with the tag as a chip, write a
+  it (the field is the line), its other names (the field is the list),
+  search what concerns it, move to trash with undo. A tag's menu: its page, the search with the tag as a chip, write a
   line carrying it, to-do tag or plain. A setting's menu: its options.
   Commands: write in today's journal (the field is the line), create a
   tag (plain or to-do), go to a day (the field is a phrase); `#name` of a

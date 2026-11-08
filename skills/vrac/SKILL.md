@@ -51,8 +51,22 @@ Write when a conversation or an action produced at least one of:
   the subject, so the day's journal shows what the user worked on.
 
 Do not write chit-chat, general questions unrelated to the user's work,
-restatements of what is already in Vrac, or your own reasoning. One short line
-per item; children for details. `#tag` and `[[references]]` stay where you
+restatements of what is already in Vrac, or your own reasoning.
+
+## Shape: an outline, not prose
+
+Vrac is an outliner read on a phone. One short line per node, one fact or
+action per line; details, figures, caveats and sources are children, not
+clauses of a long sentence. A node is never a paragraph: a research result
+is a parent line stating the conclusion, then one child per finding, each
+with its own children (price, condition, link). Inline Markdown is read:
+`**bold**` for the thing that matters, `` `code` `` for identifiers and
+commands, `[text](url)` or a bare URL for a source (one per line, at the
+end or as a child). A node may hold several lines (`\n`); several lines
+starting with `|` render as a table, the right shape for comparisons
+(prices, options, dates): one table node, with a header row and a `|---|`
+line. No headings, no bullet characters, no numbering: the outline is the
+structure. Prefer ten short nodes to one long one. `#tag` and `[[references]]` stay where you
 write them, so write natural sentences: `#meeting with [[Alice|…]] about
 [[Globex|…]]`, never a sentence that only makes sense once the tag is
 removed. Write in the user's language.
