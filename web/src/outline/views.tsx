@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react"
 import { api, current, type Page, type Placement } from "@/lib/api"
 import { reportError } from "@/lib/hooks"
+import { cn } from "@/lib/utils"
 import { NewRow, Row } from "./row"
 import { GHOST, OutlineStore, ROOT } from "./store"
 import { TouchBar } from "./touch-bar"
@@ -56,12 +57,56 @@ export function Outline({ source, compose = true, capture = false }: { source: S
   // Navigating away (⌘K to another page, a link) must not lose a line
   // being written: the requests outlive the outline.
   useEffect(() => () => store.flush(), [store])
+  // Selected rows answer the keyboard and the clipboard: copy as an
+  // outline, cut or delete to the trash, Shift+arrows to grow, Escape or
+  // a click to stop, an arrow or Enter to edit again.
+  const selecting = store.selection.size > 0
+  useEffect(() => {
+    const onMouseUp = () => (store.dragFrom = "")
+    window.addEventListener("mouseup", onMouseUp)
+    return () => window.removeEventListener("mouseup", onMouseUp)
+  }, [store])
+  useEffect(() => {
+    if (!selecting) return
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey
+      if (e.key === "Escape") store.clearSelection()
+      else if (e.key === "Backspace" || e.key === "Delete") store.removeSelection()
+      else if (e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) store.extendSelection(e.key === "ArrowUp" ? -1 : 1)
+      else if (e.key === "ArrowUp" || e.key === "ArrowDown") store.editSelection(e.key === "ArrowUp" ? -1 : 1)
+      else if (e.key === "Enter") store.editSelection(-1)
+      else if (mod || e.key.length !== 1) return
+      else {
+        store.clearSelection()
+        return
+      }
+      e.preventDefault()
+    }
+    const onCopy = (e: ClipboardEvent) => {
+      e.clipboardData?.setData("text/plain", store.selectionText())
+      e.preventDefault()
+      if (e.type === "cut") store.removeSelection()
+    }
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest("[data-selected]")) store.clearSelection()
+    }
+    window.addEventListener("keydown", onKey)
+    document.addEventListener("copy", onCopy)
+    document.addEventListener("cut", onCopy)
+    document.addEventListener("mousedown", onDown)
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      document.removeEventListener("copy", onCopy)
+      document.removeEventListener("cut", onCopy)
+      document.removeEventListener("mousedown", onDown)
+    }
+  }, [selecting, store])
   const loaded = Boolean(query.data)
   useEffect(() => {
     // A pointer that hovers has a keyboard; a touch screen would pop its
     // keyboard up, so it waits for a tap.
-    if (capture && loaded && !store.editing && window.matchMedia?.("(hover: hover)").matches) store.focus(GHOST)
-  }, [capture, loaded, store])
+    if (capture && loaded && !store.editing && !selecting && window.matchMedia?.("(hover: hover)").matches) store.focus(GHOST)
+  }, [capture, loaded, selecting, store])
   useEffect(() => {
     if (!capture) return
     const onKey = (e: KeyboardEvent) => {
@@ -77,7 +122,7 @@ export function Outline({ source, compose = true, capture = false }: { source: S
   }, [capture, store])
   if (!query.data) return null
   return (
-    <div data-testid="outline" className="group/outline relative">
+    <div data-testid="outline" className={cn("group/outline relative", selecting && "select-none")}>
       {store.foldable && <Folding store={store} />}
       {store.root.map((k) => (
         <Row key={k} store={store} k={k} />

@@ -31,6 +31,9 @@ export function inlineOf(m: RegExpMatchArray): Inline {
   return { kind: "url", href: trimUrl(s) }
 }
 
+/** A line that opens or closes a code block: ``` with an optional language. */
+export const isFenceLine = (line: string) => /^\s*```[\w-]*\s*$/.test(line)
+
 /** A line that opens a table row. */
 export const isTableLine = (line: string) => /^\s*\|/.test(line)
 /** The row under the header: |---|:--:|. */

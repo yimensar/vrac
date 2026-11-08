@@ -213,6 +213,47 @@ describe("app", () => {
     await waitFor(() => expect(server.tree()).toEqual(["| a |\n| b |"]))
   })
 
+  it("formats with keys and slash commands: bold, code, link", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await userEvent.click(await screen.findByLabelText("New line"))
+    await screen.findByRole("textbox", { name: "New line" })
+    // ⌘B (Ctrl here) opens the markers and the caret stays inside them;
+    // the caret cannot leave them in this DOM, so each goes on its own line.
+    const editor = screen.getByRole("textbox", { name: "New line" })
+    await userEvent.keyboard("say {Control>}b{/Control}hi")
+    expect(editor).toHaveTextContent("say **hi**")
+    await userEvent.keyboard("{Control>}a{/Control}{Backspace}run /cod")
+    await userEvent.click((await screen.findAllByRole("option", { name: /^Code/ }))[0])
+    await userEvent.keyboard("ls")
+    expect(editor).toHaveTextContent("run `ls`")
+    await userEvent.keyboard("{Control>}a{/Control}{Backspace}/table 3x2")
+    await userEvent.click(await screen.findByRole("option", { name: /Table 3 × 2/ }))
+    expect(editor.textContent).toContain("|   |   |   |\n|---|---|---|")
+    await userEvent.keyboard("{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["|   |   |   |\n|---|---|---|\n|   |   |   |\n|   |   |   |"]))
+  })
+
+  it("selects rows past the row's edge, then deletes them together", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await userEvent.click(await screen.findByLabelText("New line"))
+    await screen.findByRole("textbox", { name: "New line" })
+    await userEvent.keyboard("one{Enter}two{Enter}three{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["one", "two", "three"]))
+    await userEvent.click(await screen.findByText("one"))
+    await waitFor(() => expect(document.querySelector('[contenteditable="true"]')).toBeTruthy())
+    await userEvent.keyboard("{Shift>}{ArrowDown}{/Shift}")
+    await waitFor(() => expect(document.querySelectorAll("[data-selected]")).toHaveLength(2))
+    // The selection copies as an outline and deletes as one.
+    await userEvent.keyboard("{Shift>}{ArrowDown}{/Shift}")
+    expect(document.querySelectorAll("[data-selected]")).toHaveLength(3)
+    await userEvent.keyboard("{Shift>}{ArrowUp}{/Shift}")
+    expect(document.querySelectorAll("[data-selected]")).toHaveLength(2)
+    await userEvent.keyboard("{Backspace}")
+    await waitFor(() => expect(server.tree()).toEqual(["three"]))
+  })
+
   it("opens the reference menu with the subjects in use, before typing", async () => {
     fakeServer()
     render(<App client={makeClient()} />)

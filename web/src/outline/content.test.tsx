@@ -19,6 +19,14 @@ describe("content", () => {
     expect(container.textContent).toContain(". Done")
   })
 
+  it("renders lines between ``` fences as a code block", () => {
+    const { container } = render(<Content input={"Install\n```\nnpm i\nnpm run dev\n```\nthen open **it**"} />)
+    const pre = container.querySelector("pre")!
+    expect(pre).toHaveTextContent("npm i npm run dev")
+    expect(pre.textContent).toContain("\n")
+    expect(container.querySelector("strong")).toHaveTextContent("it")
+  })
+
   it("renders lines starting with | as a table, the first line naming the node", () => {
     const { container } = render(<Content input={"Prices #reference\n| TV | Price |\n|---|---|\n| **77OLED811** | 2199 € |"} />, { wrapper })
     expect(container.querySelectorAll("th")).toHaveLength(2)

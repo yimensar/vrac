@@ -58,6 +58,12 @@ export class OutlineStore {
   rootId?: string
   editing: Editing | null = null
   ghost = emptyGhost()
+  /** Rows selected as blocks, from the anchor to the head, both visible. */
+  selection = new Set<string>()
+  private anchor = ""
+  private head = ""
+  /** The row a mouse button went down on, until it comes up. */
+  dragFrom = ""
   private queue: Promise<void> = Promise.resolve()
   private pending = 0
   private listeners = new Set<() => void>()
@@ -208,6 +214,7 @@ export class OutlineStore {
   // Focus.
   focus(key: string, caret = END) {
     this.editing = { key, caret, seq: ++this.seq }
+    this.selection = new Set()
     this.emit()
   }
   blur(key: string) {
@@ -215,6 +222,72 @@ export class OutlineStore {
       this.editing = null
       this.emit()
     }
+  }
+
+  // Block selection: whole rows, as a text selection that left its row.
+  /** Selects the visible rows from one row to another, and stops editing. */
+  select(from: string, to: string) {
+    const rows = this.visible()
+    const a = rows.indexOf(from)
+    const b = rows.indexOf(to)
+    if (a < 0 || b < 0) return
+    this.anchor = from
+    this.head = to
+    this.selection = new Set(rows.slice(Math.min(a, b), Math.max(a, b) + 1))
+    if (this.editing) this.save(this.editing.key)
+    this.editing = null
+    this.emit()
+  }
+  /** Shift+arrow from a row being edited: the row and its neighbour. */
+  beginSelection(key: string, delta: -1 | 1) {
+    if (key === GHOST) return
+    const rows = this.visible()
+    const j = Math.min(Math.max(rows.indexOf(key) + delta, 0), rows.length - 1)
+    this.select(key, rows[j])
+  }
+  /** Shift+arrow while rows are selected: the head moves. */
+  extendSelection(delta: -1 | 1) {
+    const rows = this.visible()
+    const j = rows.indexOf(this.head) + delta
+    if (j < 0 || j >= rows.length) return
+    this.select(this.anchor, rows[j])
+  }
+  clearSelection() {
+    if (this.selection.size === 0) return
+    this.selection = new Set()
+    this.emit()
+  }
+  /** The selected rows whose parent is not selected: the others go with them. */
+  private selectedRoots(): string[] {
+    return [...this.selection].filter((k) => !this.selection.has(this.entry(k).parent))
+  }
+  /** The selection as text: one line per row, children indented, so it
+   * pastes as an outline anywhere. */
+  selectionText(): string {
+    const lines: string[] = []
+    const walk = (key: string, depth: number) => {
+      const text = this.text(key).replace(/\[\[([^\]|]+)\|[a-z2-7]{26}\]\]/g, "[[$1]]")
+      const pad = "  ".repeat(depth)
+      lines.push(pad + "- " + text.split("\n").join("\n" + pad + "  "))
+      for (const c of this.entry(key).children ?? []) walk(c, depth + 1)
+    }
+    for (const k of this.selectedRoots()) walk(k, 0)
+    return lines.join("\n")
+  }
+  /** Moves the selected rows to the trash. */
+  removeSelection() {
+    const roots = this.selectedRoots()
+    this.selection = new Set()
+    for (const k of roots) this.remove(k)
+    this.emit()
+  }
+  /** Leaves the selection to edit its first or last row. */
+  editSelection(end: -1 | 1) {
+    const rows = this.visible().filter((k) => this.selection.has(k))
+    const key = end < 0 ? rows[0] : rows[rows.length - 1]
+    this.selection = new Set()
+    if (key) this.focus(key, END)
+    else this.emit()
   }
 
   // Editing.

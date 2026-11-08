@@ -115,7 +115,8 @@ meeting time, an event.
 **Text is a line, with inline Markdown.** A node is one short line; its
 details are its children. The line may hold `**bold**`, `` `code` ``,
 `[text](url)` and bare URLs, rendered while reading and styled in place
-while editing, so a row reads the same both ways. A node may hold several
+while editing, so a row reads the same both ways; lines between ``` fences render as a
+code block. A node may hold several
 lines (Shift+Enter in the editor, a newline for a client): runs of spaces
 are normalized within a line, blank lines dropped, and the first line
 names the node. Lines starting with `|` render as a Markdown table, the
@@ -295,8 +296,11 @@ menus:
   go, and plain "Create" asks which tag, or none, next;
 - `/` offers everything a row can become or do: the tags, To do (one
   entry per to-do tag, or creating `#task` as the first), Done or Reopen,
-  Not a to-do, a date from a phrase (`/due friday 14h`), No date, Zoom in,
-  Delete.
+  Not a to-do, a date from a phrase (`/due friday 14h`), No date, Bold,
+  Code, Code block, Link, Table (`/table` offers sizes, `/table 3x2` lays
+  out columns × rows), Zoom in, Delete. The same formatting has keys: ⌘B
+  bold, ⌘E code, ⌘⇧E code block, ⌘⇧K link; each wraps the selection, or
+  opens its markers with the caret inside.
 
 A row reads as it will be saved: a tag being typed colors the bullet at
 once and a to-do tag opens the checkbox before anything is saved. The new
@@ -373,6 +377,13 @@ nodes (a node's lists, a tag page, search results) the listed rows
 stay in place: Enter saves and leaves a row rather than adding one.
 Tags and references are links to their pages, while reading and while
 editing.
+
+**A selection that leaves its row selects rows.** Shift+↓ or Shift+↑ past
+the edge of the row being edited, or a mouse drag from one row into
+another, selects whole rows, highlighted as blocks, children included.
+Shift+arrows grow or shrink the selection, ⌘C copies it as an indented
+text outline, ⌘X or Backspace moves it to the trash, Escape or a click
+elsewhere ends it, an arrow or Enter edits its first or last row again.
 
 The agenda and the week show only nodes with a date; a meeting noted in
 the journal without one is not scheduled.

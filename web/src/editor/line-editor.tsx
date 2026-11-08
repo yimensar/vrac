@@ -7,15 +7,16 @@ import { keymap } from "prosemirror-keymap"
 import type { Node as PMNode } from "prosemirror-model"
 import { EditorState, Plugin, TextSelection, type Command } from "prosemirror-state"
 import { Decoration, DecorationSet, EditorView } from "prosemirror-view"
-import { CalendarIcon, CalendarOffIcon, CheckIcon, Maximize2Icon, SquareIcon, Trash2Icon, XIcon } from "lucide-react"
+import { BoldIcon, CalendarIcon, CalendarOffIcon, CheckIcon, CodeIcon, LinkIcon, Maximize2Icon, SquareCodeIcon, SquareIcon, TableIcon, Trash2Icon, XIcon } from "lucide-react"
 import { api, type Creation, type Fields, type Refs } from "@/lib/api"
 import { typeClass } from "@/lib/colors"
 import { reportError, useDebounced, useTypes } from "@/lib/hooks"
-import { codeClass, inlineRe, linkClass } from "@/lib/markdown"
+import { codeClass, inlineRe, isFenceLine, linkClass } from "@/lib/markdown"
 import { trigger, type Trigger } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
 import { Content } from "@/outline/content"
 import { fromInput, offsetToPos, posToOffset, toInput } from "./convert"
+import { codeBlock, link, table, tableSize, wrap } from "./format"
 import { hasType, schema, todoTags } from "./schema"
 
 // Inline Markdown reads the same while written: its markers stay, styled
@@ -24,9 +25,29 @@ const markers = new Plugin({
   props: {
     decorations(state) {
       const out: Decoration[] = []
+      // Fenced lines read as code, markers included; the others carry
+      // their inline marks. An atom counts one position, like a character.
+      const text = state.doc.textBetween(0, state.doc.content.size, undefined, "\ufffc")
+      const fenced: [number, number][] = []
+      let open = -1
+      let at = 0
+      for (const line of text.split("\n")) {
+        if (isFenceLine(line)) {
+          if (open < 0) open = at
+          else {
+            fenced.push([open, at + line.length])
+            open = -1
+          }
+        }
+        at += line.length + 1
+      }
+      if (open >= 0) fenced.push([open, text.length])
+      for (const [from, to] of fenced) if (to > from) out.push(Decoration.inline(from, to, { class: "font-mono text-[0.85em] text-muted-foreground" }))
+      const inFence = (pos: number) => fenced.some(([f, t]) => pos >= f && pos < t)
       state.doc.descendants((node, pos) => {
         if (!node.isText) return
         for (const m of node.text!.matchAll(inlineRe)) {
+          if (inFence(pos + m.index)) continue
           const cls = m[1] ? "font-semibold" : m[2] ? codeClass : linkClass
           out.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, { class: cls }))
         }
@@ -45,6 +66,8 @@ export type LineHandlers = {
   backspace: () => boolean
   step: (delta: -1 | 1, caret: number) => void
   shift: (delta: -1 | 1, caret: number) => void
+  /** Shift+arrow out of the row: the selection becomes rows. */
+  extend: (delta: -1 | 1) => void
   /** Cmd+Enter: makes the row a to-do, checks it, or reopens it. */
   toggle: () => void
   /** The row's checkbox as it will be saved: it is the to-do tag. */
@@ -116,6 +139,14 @@ export function LineEditor({ value, refs, caret, label, on }: { value: string; r
       Enter: run((s) => h().enter(toInput(s.doc.content.cut(0, s.selection.from)), toInput(s.doc.content.cut(s.selection.to)))),
       // A line break inside the node: a table, a short note.
       "Shift-Enter": (s, d) => (d?.(s.tr.insertText("\n")), true),
+      "Mod-b": (_s, _d, v) => (wrap(v!, "**", "**"), true),
+      "Mod-e": (_s, _d, v) => (wrap(v!, "`", "`"), true),
+      "Mod-Shift-e": (_s, _d, v) => (codeBlock(v!), true),
+      "Mod-Shift-k": (_s, _d, v) => (link(v!), true),
+      // Selecting past the row's edge selects rows; a one-line row has no
+      // other edge to reach.
+      "Shift-ArrowUp": (s, _d, v) => (!s.doc.textContent.includes("\n") || v!.endOfTextblock("up") ? (h().extend(-1), true) : false),
+      "Shift-ArrowDown": (s, _d, v) => (!s.doc.textContent.includes("\n") || v!.endOfTextblock("down") ? (h().extend(1), true) : false),
       "Mod-Enter": run(() => h().toggle()),
       Tab: run((s) => h().tab(false, caretOf(s))),
       "Shift-Tab": run((s) => h().tab(true, caretOf(s))),
@@ -266,6 +297,13 @@ function command(v: EditorView, m: Menu, run: () => void) {
   v.dispatch(v.state.tr.delete(m.from, m.to))
   run()
 }
+
+const formatting: { key: string; names: string[]; label: string; icon: typeof BoldIcon; hint: string; apply: (v: EditorView) => void }[] = [
+  { key: "bold", names: ["bold", "strong"], label: "Bold", icon: BoldIcon, hint: "⌘B", apply: (v) => wrap(v, "**", "**") },
+  { key: "code", names: ["code", "inline code", "mono"], label: "Code", icon: CodeIcon, hint: "⌘E", apply: (v) => wrap(v, "`", "`") },
+  { key: "codeblock", names: ["code block", "block", "pre", "fence"], label: "Code block", icon: SquareCodeIcon, hint: "⌘⇧E", apply: codeBlock },
+  { key: "link", names: ["link", "url"], label: "Link", icon: LinkIcon, hint: "⌘⇧K", apply: link },
+]
 
 const matches = (name: string, query: string) => name.toLowerCase().startsWith(query.toLowerCase())
 
@@ -540,6 +578,43 @@ function useOptions(menu: Menu | null, on: LineHandlers, pick: Pick | null, setP
         </>
       ),
       apply: (v, m) => command(v, m, zoom),
+    })
+  }
+  // /table 3x2 lays out that many columns and rows; /table alone offers
+  // the usual sizes.
+  const size = tableSize(phrase)
+  for (const [columns, rows] of size ? [size] : word && "table".startsWith(word) && !phrase ? [[2, 2], [3, 3], [4, 3]] : []) {
+    commands.push({
+      key: `table-${columns}x${rows}`,
+      names: ["table", "grid"],
+      content: (
+        <>
+          <TableIcon className={icon} />
+          Table {columns} × {rows}
+        </>
+      ),
+      hint: columns === 2 && rows === 2 && !size ? "or /table 3x4" : "columns × rows",
+      apply: (v, m) => {
+        v.dispatch(v.state.tr.delete(m.from, m.to))
+        table(v, columns, rows)
+      },
+    })
+  }
+  for (const f of formatting) {
+    commands.push({
+      key: f.key,
+      names: f.names,
+      content: (
+        <>
+          <f.icon className={icon} />
+          {f.label}
+        </>
+      ),
+      hint: f.hint,
+      apply: (v, m) => {
+        v.dispatch(v.state.tr.delete(m.from, m.to))
+        f.apply(v)
+      },
     })
   }
   if (on.remove) {

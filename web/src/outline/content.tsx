@@ -3,7 +3,7 @@ import { CalendarIcon, ClockIcon } from "lucide-react"
 import type { Node, Refs } from "@/lib/api"
 import { typeClass } from "@/lib/colors"
 import { useTypes } from "@/lib/hooks"
-import { codeClass, inlineOf, inlineRe, isSeparatorLine, isTableLine, linkClass } from "@/lib/markdown"
+import { codeClass, inlineOf, inlineRe, isFenceLine, isSeparatorLine, isTableLine, linkClass } from "@/lib/markdown"
 import { formatMoment, localDate, tokens } from "@/lib/syntax"
 import { cn } from "@/lib/utils"
 import { refClass } from "@/editor/schema"
@@ -11,7 +11,8 @@ import { refClass } from "@/editor/schema"
 // The one rendering of a line, shared by saved rows, unsaved rows, labels
 // and completions. Spans carry their input offsets so a click can place the
 // caret where it lands. Text holds inline Markdown (bold, code, links) and
-// a node of several lines starting with | reads as a table.
+// a node of several lines starting with | reads as a table; lines between
+// ``` fences read as a code block.
 
 export function TypeName({ name, className, link = false, ...rest }: { name: string; className?: string; link?: boolean } & React.HTMLAttributes<HTMLElement>) {
   const types = useTypes()
@@ -43,13 +44,30 @@ export function Content({ input, refs = {}, extra = [], links = false }: { input
   }
   // Consecutive table lines make a table; the other lines keep their
   // breaks, which the row's white-space preserves.
-  const tabular = lines.map((l, k) => isTableLine(l.text) && ((k > 0 && isTableLine(lines[k - 1].text)) || (k + 1 < lines.length && isTableLine(lines[k + 1].text))))
+  // Each line belongs to a table, a code block or plain text; a ``` line
+  // opens a block that the next one closes, or the end of the node.
+  const kind: ("text" | "table" | "code")[] = []
+  for (let k = 0, fenced = false; k < lines.length; k++) {
+    const t = lines[k].text
+    if (isFenceLine(t)) {
+      fenced = !fenced
+      kind.push("code")
+    } else if (fenced) kind.push("code")
+    else kind.push(isTableLine(t) && ((k > 0 && isTableLine(lines[k - 1].text)) || (k + 1 < lines.length && isTableLine(lines[k + 1].text))) ? "table" : "text")
+  }
   const blocks: React.ReactNode[] = []
   for (let i = 0; i < lines.length; ) {
     let j = i + 1
-    while (j < lines.length && tabular[j] === tabular[i]) j++
-    if (tabular[i]) {
+    while (j < lines.length && kind[j] === kind[i] && !(kind[i] === "code" && j - 1 > i && isFenceLine(lines[j - 1].text))) j++
+    if (kind[i] === "table") {
       blocks.push(<Table key={i} lines={lines.slice(i, j)} refs={refs} links={links} />)
+    } else if (kind[i] === "code") {
+      const inner = lines.slice(i, j).filter((l) => !isFenceLine(l.text))
+      blocks.push(
+        <pre key={i} className="my-1 overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-[0.85em] leading-5">
+          <code data-start={inner[0]?.start ?? lines[i].start}>{inner.map((l) => l.text).join("\n")}</code>
+        </pre>,
+      )
     } else {
       const last = lines[j - 1]
       blocks.push(<Tokens key={i} input={input.slice(lines[i].start, last.start + last.text.length)} start={lines[i].start} refs={refs} links={links} />)

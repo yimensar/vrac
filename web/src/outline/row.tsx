@@ -35,6 +35,7 @@ function handlers(store: OutlineStore, k: string, navigate: (to: string) => void
     setFields: (f: Parameters<OutlineStore["setFields"]>[1]) => store.setFields(k, f),
     setTodo: (tag: string | null) => store.setTodo(k, tag),
     open: navigate,
+    extend: (delta: -1 | 1) => store.beginSelection(k, delta),
     self: e?.id,
     zoom: e?.id ? () => zoom(e.id!) : undefined,
     leave,
@@ -84,9 +85,25 @@ export function Row({ store, k, context, title }: { store: OutlineStore; k: stri
   const checkbox = store.checkbox(k)
   const hasChildren = (e.children?.length ?? node?.child_count ?? 0) > 0
   const parent = context && node?.parent_id ? store.refs[node.parent_id] : undefined
+  const selected = store.selection.has(k)
   return (
     <div>
-      <div className="group flex items-start">
+      {/* A drag that leaves the row selects rows, from the one the button
+          went down on to the one the pointer reaches. */}
+      <div
+        className={cn("group flex items-start rounded-md", selected && "bg-accent/70")}
+        data-selected={selected || undefined}
+        onMouseDownCapture={(ev) => {
+          if (ev.button !== 0) return
+          store.dragFrom = k
+        }}
+        onMouseEnter={(ev) => {
+          if (ev.buttons & 1 && store.dragFrom && store.dragFrom !== k) {
+            window.getSelection()?.removeAllRanges()
+            store.select(store.dragFrom, k)
+          }
+        }}
+      >
         {!title && (
           <button
             type="button"
