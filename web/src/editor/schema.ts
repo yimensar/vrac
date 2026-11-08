@@ -20,7 +20,9 @@ export const refClass = "font-medium underline decoration-muted-foreground/40 un
 
 export const schema = new Schema({
   nodes: {
-    doc: { content: "inline*" },
+    // Line breaks written with Shift+Enter are text: the parser must not
+    // fold them into spaces when it reads what was typed.
+    doc: { content: "inline*", whitespace: "pre" },
     text: { group: "inline" },
     ref: {
       group: "inline",

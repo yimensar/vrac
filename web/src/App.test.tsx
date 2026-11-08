@@ -204,6 +204,15 @@ describe("app", () => {
     expect(body.create).toEqual([{ name: "Dupont", types: ["person"] }])
   })
 
+  it("keeps a line break written with Shift+Enter while typing goes on", async () => {
+    const server = fakeServer()
+    render(<App client={makeClient()} />)
+    await userEvent.click(await screen.findByLabelText("New line"))
+    await screen.findByRole("textbox", { name: "New line" })
+    await userEvent.keyboard("| a |{Shift>}{Enter}{/Shift}| b |{Enter}")
+    await waitFor(() => expect(server.tree()).toEqual(["| a |\n| b |"]))
+  })
+
   it("opens the reference menu with the subjects in use, before typing", async () => {
     fakeServer()
     render(<App client={makeClient()} />)
