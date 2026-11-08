@@ -204,6 +204,19 @@ describe("app", () => {
     expect(body.create).toEqual([{ name: "Dupont", types: ["person"] }])
   })
 
+  it("opens the reference menu with the subjects in use, before typing", async () => {
+    fakeServer()
+    render(<App client={makeClient()} />)
+    await userEvent.click(await screen.findByLabelText("New line"))
+    await screen.findByRole("textbox", { name: "New line" })
+    await userEvent.keyboard("see @")
+    expect(await screen.findByRole("option", { name: /Northwind/ })).toBeInTheDocument()
+    await userEvent.keyboard("{Escape}")
+    await userEvent.keyboard("{Meta>}k{/Meta}")
+    await screen.findByPlaceholderText(FIND)
+    expect(await screen.findByRole("option", { name: /Northwind/ })).toBeInTheDocument()
+  })
+
   it("completes a reference after @", async () => {
     const server = fakeServer()
     render(<App client={makeClient()} />)

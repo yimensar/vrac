@@ -170,7 +170,8 @@ export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (
   const { data: names, isFetching: resolving } = useQuery({
     queryKey: ["resolve", asked],
     queryFn: () => api.resolve(asked),
-    enabled: remote && asked.length > 0,
+    enabled: remote,
+    staleTime: asked === "" ? 60_000 : 5_000,
     placeholderData: keepPreviousData,
   })
   const { data: found, isFetching: searching } = useQuery({
@@ -252,7 +253,8 @@ export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (
     const newTag = lower.startsWith("#") && tagName.test(tagQuery) && !types.has(tagQuery) ? tagQuery : ""
     const tags = [...types.values()].filter((t) => t.name.startsWith(tagQuery) && (lower.startsWith("#") || query.length > 0)).map((t) => tagEntry(t.name, t.count))
     if (newTag) tags.push(...createTagEntries(newTag))
-    const candidates = query.length > 0 ? (names?.candidates ?? []) : []
+    // Before anything is typed: the subjects in use, to jump to or act on.
+    const candidates = names?.candidates ?? []
     const mentions = query.length > 1 ? (found?.nodes ?? []) : []
     const allCommands: Entry[] = [
       { value: "write", icon: <PenLineIcon className="size-4" />, label: "Write in today's journal", text: "write note line today journal", run: () => enter({ kind: "write" }), actions: { kind: "write" } },
@@ -262,11 +264,14 @@ export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (
     const commands = allCommands.filter((c) => query === "" || c.text.split(" ").some((w) => w.startsWith(lower)))
     const matchingViews = views.filter((v) => v.label.toLowerCase().startsWith(lower))
     const matchingSettings = settings.filter((s) => query === "" || s.words.some((w) => w.startsWith(lower)) || s.options.some(([, o]) => o.toLowerCase().startsWith(lower)))
-    groups = [
-      { heading: "Tags", entries: tags },
+    // A view, a command or a setting named by its first letters comes
+    // before the nodes: few of them, and an exact intent.
+    const nodes: Group[] = [
       { heading: "Days", entries: phraseDay ? [dayEntry(phraseDay)] : [] },
-      { heading: "Go to", entries: candidates.map((c) => nodeEntry(c.id, c.label || c.name, c.types, {}, undefined, c.path?.filter((p) => p !== "Journal").slice(-2).join(" / "))) },
+      { heading: query ? "Go to" : "Recent", entries: candidates.map((c) => nodeEntry(c.id, c.label || c.name, c.types, {}, undefined, c.path?.filter((p) => p !== "Journal").slice(-2).join(" / "))) },
       { heading: "Mentions", entries: mentions.map((n) => nodeEntry(n.id, nodeInput(n, found!.refs), n.types, found!.refs, n.status)) },
+    ]
+    const app: Group[] = [
       { heading: "Views", entries: matchingViews.map((v) => ({ value: "v" + v.to, icon: <v.icon className="size-4" />, label: v.label, text: v.label, run: () => go(v.to) })) },
       { heading: "Commands", entries: commands },
       {
@@ -281,14 +286,15 @@ export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (
           actions: { kind: "setting", setting: s },
         })),
       },
-      {
-        heading: "Search",
-        entries:
-          query.length > 1 && !lower.startsWith("#")
-            ? [{ value: "search", icon: <SearchIcon className="size-4" />, label: <>Search for “{query}”</>, text: query, hint: "every match", run: () => go(`/search?text=${encodeURIComponent(query)}`) }]
-            : [],
-      },
     ]
+    const search: Group = {
+      heading: "Search",
+      entries:
+        query.length > 1 && !lower.startsWith("#")
+          ? [{ value: "search", icon: <SearchIcon className="size-4" />, label: <>Search for “{query}”</>, text: query, hint: "every match", run: () => go(`/search?text=${encodeURIComponent(query)}`) }]
+          : [],
+    }
+    groups = query ? [{ heading: "Tags", entries: tags }, ...app, ...nodes, search] : [...nodes, ...app]
     if (waiting) empty = "Searching…"
   } else if (level.kind === "tag") {
     const name = level.name

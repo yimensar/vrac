@@ -8,8 +8,15 @@ import { ApiError, api, type Type } from "./api"
 export function useDebounced<T>(value: T, delay = 150): T {
   const [settled, setSettled] = useState(value)
   useEffect(() => {
+    // Leaving or reaching empty happens at once: a menu opens full and
+    // the first letter is asked without waiting for a pause.
+    if (settled === "" || value === "") {
+      setSettled(value)
+      return
+    }
     const t = setTimeout(() => setSettled(value), delay)
     return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, delay])
   return settled
 }

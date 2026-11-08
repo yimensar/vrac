@@ -289,8 +289,9 @@ views, and the writing line itself holds every power through completion
 menus:
 
 - `#` offers the tags, and creating one, plain or as a to-do tag;
-- `[[` or `@` offers nodes to reference, never the row itself, and
-  creating one: `[[Dupont #person` creates Dupont tagged person in one
+- `[[` or `@` opens at once on the subjects in use (the referenced ones,
+  most recently referenced first, then typed nodes), then offers nodes
+  matching what is typed, never the row itself, and creating one: `[[Dupont #person` creates Dupont tagged person in one
   go, and plain "Create" asks which tag, or none, next;
 - `/` offers everything a row can become or do: the tags, To do (one
   entry per to-do tag, or creating `#task` as the first), Done or Reopen,
@@ -333,7 +334,9 @@ non-goal; it would require synchronization and a different model.
 - **Search**: query chips (tag, context, status, date).
 - **Command palette** (⌘K), the power box: one field that searches
   everything (nodes, tags, views, commands, settings) and runs what it
-  finds. Enter runs a result's default action (open the node, the tag
+  finds; it opens on the subjects in use. The first letter is asked of
+  the server at once, the next ones after a pause in typing, and the
+  last answer stays shown until the next. Enter runs a result's default action (open the node, the tag
   page, the view); → opens its own menu of actions in place, searched by
   the same field, with the path shown as chips before the text; Backspace
   or ← in an empty field goes back up, and a footer names the keys. A

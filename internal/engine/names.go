@@ -173,13 +173,24 @@ func (e *Engine) Resolve(ctx context.Context, name string, limit int) ([]Brief, 
 
 func (e *Engine) candidates(ctx context.Context, q queryer, name string, limit int) ([]Brief, error) {
 	key := nameKey(name)
+	var rows *sql.Rows
+	var err error
 	if key == "" {
-		return []Brief{}, nil
-	}
-	// Names and aliases starting with the key, through their indexes;
-	// words anywhere come next from full text.
-	upper := key + "\U0010FFFF"
-	rows, err := q.QueryContext(ctx, `WITH matches(seq, rank) AS (
+		// Nothing typed yet: the subjects in use, the ones referenced most
+		// recently first, then the typed nodes, so a menu opens full.
+		rows, err = q.QueryContext(ctx, `SELECT n.id, n.text, coalesce((SELECT group_concat(t.name, ' ') FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE nt.node_seq = n.seq), ''), n.seq
+			FROM nodes n
+			WHERE n.kind = 'node' AND n.trashed_at IS NULL AND n.text != ''
+			  AND (EXISTS (SELECT 1 FROM refs WHERE target_seq = n.seq) OR EXISTS (SELECT 1 FROM node_types WHERE node_seq = n.seq))
+			ORDER BY EXISTS (SELECT 1 FROM refs WHERE target_seq = n.seq) DESC,
+				coalesce((SELECT max(s.updated_at) FROM refs r JOIN nodes s ON s.seq = r.source_seq WHERE r.target_seq = n.seq), n.updated_at) DESC,
+				coalesce((SELECT max(s.seq) FROM refs r JOIN nodes s ON s.seq = r.source_seq WHERE r.target_seq = n.seq), n.seq) DESC
+			LIMIT ?`, limit)
+	} else {
+		// Names and aliases starting with the key, through their indexes;
+		// words anywhere come next from full text.
+		upper := key + "\U0010FFFF"
+		rows, err = q.QueryContext(ctx, `WITH matches(seq, rank) AS (
 			SELECT seq, CASE WHEN name_key = ?1 THEN 0 ELSE 2 END
 			FROM nodes WHERE name_key >= ?1 AND name_key < ?2 AND kind = 'node' AND trashed_at IS NULL
 			UNION ALL
@@ -192,6 +203,7 @@ func (e *Engine) candidates(ctx context.Context, q queryer, name string, limit i
 			(EXISTS (SELECT 1 FROM node_types WHERE node_seq = n.seq) OR n.parent_seq IS NULL OR EXISTS (SELECT 1 FROM refs WHERE target_seq = n.seq)) DESC,
 			length(n.text), n.seq
 		LIMIT ?3`, key, upper, limit)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +238,7 @@ func (e *Engine) candidates(ctx context.Context, q queryer, name string, limit i
 	}
 	// Then any node whose words match, such as a meeting or a task, typed
 	// and recent ones first.
-	if match := ftsQuery(name); match != "" && len(list) < limit {
+	if match := ftsQuery(name); key != "" && match != "" && len(list) < limit {
 		rows, err := q.QueryContext(ctx, `SELECT n.id, n.text, coalesce((SELECT group_concat(t.name, ' ') FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE nt.node_seq = n.seq), ''), n.seq
 			FROM search JOIN nodes n ON n.seq = search.rowid
 			WHERE search MATCH ? AND n.kind = 'node' AND n.trashed_at IS NULL AND n.text != ''

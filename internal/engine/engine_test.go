@@ -440,6 +440,26 @@ func TestKeepTypesOnRewrite(t *testing.T) {
 	}
 }
 
+// Before anything is typed, the subjects in use come up: the referenced
+// ones first, most recently referenced first, then typed nodes.
+func TestResolveSuggestions(t *testing.T) {
+	e := newEngine(t)
+	write(t, e, "Globex #project", "Northwind #project", "Buy milk #task", "plain note")
+	write(t, e, "Call about [[Globex]]")
+	write(t, e, "Estimate for [[Northwind]]")
+	c, err := e.Resolve(ctx, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, b := range c {
+		names = append(names, b.Name)
+	}
+	if !slices.Equal(names, []string{"Northwind", "Globex", "Buy milk"}) {
+		t.Fatalf("suggestions = %v", names)
+	}
+}
+
 // A client opens a journal day from a phrase, read from today.
 func TestParseDatePhrase(t *testing.T) {
 	e := newEngine(t)

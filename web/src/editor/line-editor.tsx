@@ -290,7 +290,8 @@ function useOptions(menu: Menu | null, on: LineHandlers, pick: Pick | null, setP
   const { name, tags } = isRef ? nameAndTags(query) : { name: "", tags: [] }
   // The server is asked once typing pauses; its last answer stays shown.
   const asked = useDebounced(name)
-  const { data } = useQuery({ queryKey: ["resolve", asked], queryFn: () => api.resolve(asked), enabled: isRef && asked.length > 0, staleTime: 5_000, placeholderData: keepPreviousData })
+  // Nothing typed yet lists the subjects in use, kept for a while.
+  const { data } = useQuery({ queryKey: ["resolve", asked], queryFn: () => api.resolve(asked), enabled: isRef, staleTime: asked === "" ? 60_000 : 5_000, placeholderData: keepPreviousData })
   if (!menu) return []
   const options: Option[] = []
   const create = (v: EditorView, m: Menu, tagged: string[]) => {
