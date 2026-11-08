@@ -123,8 +123,9 @@ names the node. Lines starting with `|` render as a Markdown table, the
 one shape for comparisons, and a row holding one edits it as a table:
 one field per cell, the first row its header, Tab and Enter walking the
 cells and growing the table at its end, arrows crossing its edges to the
-lines around it, and buttons adding or removing a row or a column; the
-text stays Markdown underneath. Headings, lists and numbering do not exist:
+lines around it, buttons adding or removing a row, a column or the table
+itself, and Backspace in an empty table removing it; the text stays
+Markdown underneath. Headings, lists and numbering do not exist:
 the outline is the structure.
 
 ### 2.4 References: `[[ ]]` says what a node is about

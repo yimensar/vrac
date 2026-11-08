@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useNavigate } from "react-router"
 import { type ParsedTable, tableText } from "@/lib/markdown"
 import { LineEditor, type LineHandlers } from "@/editor/line-editor"
@@ -16,6 +16,10 @@ export function TableNode({ store, k, table, caret, handlers }: { store: Outline
   const navigate = useNavigate()
   const base = handlers(store, k, navigate)
   const [part, setPart] = useState<Part>(() => placeOf(table, caret))
+  // Focus moving between the parts (a cell, a line, a button) stays in
+  // the row: a line's blur leaves only when focus left the whole node.
+  const box = useRef<HTMLDivElement>(null)
+  const leaveLine = () => setTimeout(() => !box.current?.contains(document.activeElement) && base.leave())
   const compose = (head: string, rows: string[][], tail: string) => [head, tableText(rows, table.header), tail].filter((s) => s !== "").join("\n")
   const setRows = (rows: string[][]) => store.setText(k, compose(table.head, rows, table.tail))
   const leave = () => {
@@ -26,12 +30,14 @@ export function TableNode({ store, k, table, caret, handlers }: { store: Outline
   const lastCell: Cell = [table.rows.length - 1, 0]
   const head: LineHandlers = {
     ...base,
+    leave: leaveLine,
     change: (v) => store.setText(k, compose(v, table.rows, table.tail)),
     enter: (before, after) => store.enter(k, before, [after, tableText(table.rows, table.header), table.tail].filter((s) => s !== "").join("\n")),
     step: (delta, c) => (delta > 0 ? setPart(firstCell) : base.step(delta, c)),
   }
   const tail: LineHandlers = {
     ...base,
+    leave: leaveLine,
     change: (v) => store.setText(k, compose(table.head, table.rows, v)),
     enter: (before, after) => store.enter(k, compose(table.head, table.rows, before), after),
     backspace: () => (setPart(lastCell), true),
@@ -39,7 +45,7 @@ export function TableNode({ store, k, table, caret, handlers }: { store: Outline
   }
   const cell = Array.isArray(part) ? part : null
   return (
-    <>
+    <div ref={box}>
       {(table.head !== "" || part === "head") && (
         <LineEditor key="head" value={table.head} refs={store.refs} caret={part === "head" ? Math.min(caret, table.head.length) : END} label={k === GHOST ? "New line" : "Edit"} on={head} />
       )}
@@ -62,9 +68,16 @@ export function TableNode({ store, k, table, caret, handlers }: { store: Outline
           }
         }}
         onEscape={leave}
+        onRemove={() => {
+          // The lines around it stay, as one line again, the caret where
+          // the table was.
+          store.setText(k, [table.head, table.tail].filter((s) => s !== "").join("\n"))
+          store.focus(k, table.head.length)
+        }}
+        onSelect={(delta) => base.extend(delta)}
       />
-      {(table.tail !== "" || part === "tail") && <LineEditor key="tail" value={table.tail} refs={store.refs} caret={part === "tail" ? END : END} on={tail} />}
-    </>
+      {(table.tail !== "" || part === "tail") && <LineEditor key="tail" value={table.tail} refs={store.refs} caret={END} on={tail} />}
+    </div>
   )
 }
 

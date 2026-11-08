@@ -275,6 +275,26 @@ describe("app", () => {
     await waitFor(() => expect(server.tree()).toEqual(["three"]))
   })
 
+  it("removes a table with Backspace once it is empty, or with its button", async () => {
+    fakeServer()
+    render(<App client={makeClient()} />)
+    await userEvent.click(await screen.findByLabelText("New line"))
+    await screen.findByRole("textbox", { name: "New line" })
+    await userEvent.keyboard("/table 2x1")
+    await userEvent.click(await screen.findByRole("option", { name: /Table 2 × 1/ }))
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Row 1, column 1" })).toHaveFocus())
+    await userEvent.keyboard("{Backspace}")
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "Row 1, column 1" })).toBeNull())
+    expect(await screen.findByRole("textbox", { name: "New line" })).toHaveTextContent("")
+    // Once filled, the button takes it away and the text around it stays.
+    await userEvent.keyboard("Prices /table 2x1")
+    await userEvent.click(await screen.findByRole("option", { name: /Table 2 × 1/ }))
+    await userEvent.type(await screen.findByRole("textbox", { name: "Row 1, column 1" }), "TV")
+    await userEvent.click(screen.getByRole("button", { name: "Remove the table" }))
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "Row 1, column 1" })).toBeNull())
+    expect(await screen.findByRole("textbox", { name: "New line" })).toHaveTextContent("Prices")
+  })
+
   it("opens the reference menu with the subjects in use, before typing", async () => {
     fakeServer()
     render(<App client={makeClient()} />)

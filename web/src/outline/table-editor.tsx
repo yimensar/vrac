@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { ColumnsIcon, MinusIcon, PlusIcon, RowsIcon } from "lucide-react"
+import { ColumnsIcon, MinusIcon, PlusIcon, RowsIcon, Trash2Icon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // A table edited as a table: one plain field per cell, the first row its
@@ -15,6 +15,8 @@ export function TableEditor({
   onChange,
   onLeave,
   onEscape,
+  onRemove,
+  onSelect,
 }: {
   rows: string[][]
   /** The cell that takes the keyboard, when the table does. */
@@ -23,6 +25,10 @@ export function TableEditor({
   /** The caret leaves the table upwards, downwards, or by Enter on the last row. */
   onLeave: (where: "up" | "down" | "enter") => void
   onEscape: () => void
+  /** The table goes, the lines around it stay. */
+  onRemove: () => void
+  /** Shift+arrow: the row joins a block selection. */
+  onSelect: (delta: -1 | 1) => void
 }) {
   const box = useRef<HTMLTableElement>(null)
   const columns = Math.max(1, ...rows.map((r) => r.length))
@@ -44,7 +50,8 @@ export function TableEditor({
   const go = (r: number, c: number) => box.current?.querySelector<HTMLInputElement>(`input[data-cell="${r}-${c}"]`)?.focus()
   const addRow = (at = rows.length) => onChange([...rows.slice(0, at), Array.from({ length: columns }, () => ""), ...rows.slice(at)])
   const addColumn = () => onChange(rows.map((row) => [...row, ""]))
-  const removeRow = () => rows.length > 2 && onChange(rows.slice(0, -1))
+  const removeRow = () => rows.length > 1 && onChange(rows.slice(0, -1))
+  const empty = rows.every((row) => row.every((x) => x === ""))
   const removeColumn = () => columns > 1 && onChange(rows.map((row) => row.slice(0, columns - 1)))
   // A row added by Tab or Enter takes the focus once it exists.
   const pending = useRef<Cell | null>(null)
@@ -58,7 +65,14 @@ export function TableEditor({
     const el = e.currentTarget
     const atStart = el.selectionStart === 0 && el.selectionEnd === 0
     const atEnd = el.selectionStart === el.value.length && el.selectionEnd === el.value.length
-    if (e.key === "Tab") {
+    if (e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      e.preventDefault()
+      onSelect(e.key === "ArrowUp" ? -1 : 1)
+    } else if (e.key === "Backspace" && empty) {
+      // Nothing left in it: the table itself goes.
+      e.preventDefault()
+      onRemove()
+    } else if (e.key === "Tab") {
       e.preventDefault()
       if (e.shiftKey) {
         if (c > 0) go(r, c - 1)
@@ -92,7 +106,7 @@ export function TableEditor({
     } else if (e.key === "ArrowRight" && atEnd && c + 1 < columns) {
       e.preventDefault()
       go(r, c + 1)
-    } else if (e.key === "Backspace" && el.value === "" && r === rows.length - 1 && r > 1 && rows[r].every((x) => x === "")) {
+    } else if (e.key === "Backspace" && el.value === "" && r === rows.length - 1 && r > 0 && rows[r].every((x) => x === "")) {
       // An empty last row goes with a Backspace in it.
       e.preventDefault()
       onChange(rows.slice(0, -1))
@@ -135,13 +149,16 @@ export function TableEditor({
           <ColumnsIcon className="size-3.5" />
           <PlusIcon className="size-3" />
         </Tool>
-        <Tool label="Remove the last row" onClick={removeRow} disabled={rows.length <= 2}>
+        <Tool label="Remove the last row" onClick={removeRow} disabled={rows.length <= 1}>
           <RowsIcon className="size-3.5" />
           <MinusIcon className="size-3" />
         </Tool>
         <Tool label="Remove the last column" onClick={removeColumn} disabled={columns <= 1}>
           <ColumnsIcon className="size-3.5" />
           <MinusIcon className="size-3" />
+        </Tool>
+        <Tool label="Remove the table" onClick={onRemove}>
+          <Trash2Icon className="size-3.5" />
         </Tool>
       </div>
     </div>
