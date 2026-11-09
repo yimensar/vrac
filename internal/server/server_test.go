@@ -315,6 +315,21 @@ func TestOAuthAndMCP(t *testing.T) {
 	if len(nodes) != 1 || nodes[0].(map[string]any)["updated_by"] != "Claude" || nodes[0].(map[string]any)["source"] != "outlook" {
 		t.Fatalf("search = %v", got.StructuredContent)
 	}
+	// A paragraph in one node is kept, with a warning naming it; a short
+	// line with its details as children is not warned.
+	long := call("vrac_write", map[string]any{"request_id": "w3", "source": "chat", "nodes": []any{map[string]any{"input": strings.Repeat("A finding with many clauses, ", 10) + "https://a.example https://b.example"}}})
+	warnings, _ := long.StructuredContent.(map[string]any)["warnings"].([]any)
+	if long.IsError || len(warnings) != 1 || !strings.Contains(warnings[0].(string), "characters") {
+		t.Fatalf("long write = %v", long.StructuredContent)
+	}
+	short := call("vrac_write", map[string]any{"request_id": "w4", "source": "chat", "nodes": []any{map[string]any{"input": "TV under 1800 €", "children": []any{map[string]any{"input": "https://a.example"}, map[string]any{"input": "| a | b |\n|---|---|\n| " + strings.Repeat("x", 300) + " | y |"}}}}})
+	if _, warned := short.StructuredContent.(map[string]any)["warnings"]; warned {
+		t.Fatalf("short write warned: %v", short.StructuredContent)
+	}
+	links := call("vrac_write", map[string]any{"request_id": "w5", "source": "chat", "nodes": []any{map[string]any{"input": "Sources https://a.example https://b.example"}}})
+	if w, _ := links.StructuredContent.(map[string]any)["warnings"].([]any); len(w) != 1 || !strings.Contains(w[0].(string), "links") {
+		t.Fatalf("links write = %v", links.StructuredContent)
+	}
 	// A rewrite without a tag keeps it; keep_types false removes it.
 	task := nodes[0].(map[string]any)
 	update := func(rid string, revision float64, args map[string]any) map[string]any {

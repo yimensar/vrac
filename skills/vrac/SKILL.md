@@ -66,7 +66,32 @@ end or as a child). A node may hold several lines (`\n`); several lines
 starting with `|` render as a table, the right shape for comparisons
 (prices, options, dates): one table node, with a header row and a `|---|`
 line. No headings, no bullet characters, no numbering: the outline is the
-structure. Prefer ten short nodes to one long one. `#tag` and `[[references]]` stay where you
+structure. Prefer ten short nodes to one long one; a line stays under 200
+characters. A write answers with `warnings` when a node is too long or
+holds several links: fix them at once (`vrac_update` the line, children
+with `vrac_write` and `placement.parent_id`).
+
+A research result, as Vrac expects it:
+
+```
+OLED 77" under 1800 € — **Samsung S85H at 1499 €** #reference
+  Samsung TQ77S85H — **1499 €** at Carrefour
+    120 Hz, HDR10+, brightness not found
+    validity to confirm by hand
+    https://www.dealabs.com/…
+  Philips 77OLED811 — **2049 €** (above budget)
+    165 Hz, 2500 nits announced
+    https://ledenicheur.fr/…
+  | Model | Price | Hz |
+  |---|---|---|
+  | Samsung TQ77S85H | 1499 € | 120 |
+  | Philips 77OLED811 | 2049 € | 165 |
+```
+
+A scheduled or repeated check keeps that one note current: update the
+summary line and the findings that changed (`vrac_update`), add only what
+is new, and write nothing when nothing changed. Never add a "nothing new"
+line per run. `#tag` and `[[references]]` stay where you
 write them, so write natural sentences: `#meeting with [[Alice|…]] about
 [[Globex|…]]`, never a sentence that only makes sense once the tag is
 removed. Write in the user's language.

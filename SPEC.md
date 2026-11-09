@@ -425,6 +425,13 @@ Tools (V1):
 
 Results show text with `[[Name|ID]]` references.
 
+Writes answer with `warnings` when a node is not in outline form (a line
+over 200 characters outside tables and code, several links in one node),
+naming the node and what to do; the write itself is kept. The server
+instructions ask for one short line per node, details as children, tables
+for comparisons, and, for a scheduled or repeated check, one note kept
+current rather than a line per run.
+
 `vrac_update` keeps a node's tags when its new text writes none, so a
 rewritten sentence does not lose its type, status or date by omission;
 with `keep_types: false` the node has exactly the tags its text writes,
