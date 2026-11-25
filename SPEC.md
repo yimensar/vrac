@@ -346,19 +346,20 @@ non-goal; it would require synchronization and a different model.
   history are reached from the palette and Activity.
 - **Tag pages**: every node carrying the tag, most recent first; a to-do
   tag shows open ones then done ones; the to-do trait is toggled there.
-- **Tasks**: every open to-do, a menu away, for a morning look. Next
-  actions (the next tag) come first, across every group; to-dos carrying
-  the waiting tag stand apart; the others go under the nodes with the
-  group tag they name themselves (a call to Sixtine about Léandre is under
-  both), or else under the most specific one they concern through their
-  place (a to-do in Lot 2 is under Lot 2, not also under Northwind); the
-  biggest groups first, the ungrouped last; someday ones (the someday tag)
-  come last, still visible. A to-do with several of these tags goes to
-  someday, else next, else waiting. None is hidden, however old: a
-  postponed to-do must not slip out of sight. The owner picks the four
-  tags (by default `#project`, `#next`, `#waiting` and `#someday`), kept in
-  the preferences: the view never guesses a subject, it follows the tag
-  the owner chose.
+- **Tasks**: every open to-do, a menu away, for a morning look, sorted
+  one of two ways. By a group tag (a project, a person): each to-do goes
+  under the nodes with that tag it names itself (a call to Sixtine about
+  Léandre is under both), or else under the most specific one it concerns
+  through its place (a to-do in Lot 2 is under Lot 2, not also under
+  Northwind); the biggest groups first, the ungrouped last; in each group
+  next actions first, then the others, then waiting and someday ones, so a
+  status never takes a to-do out of its group. Without a group tag, by
+  status: Next, Waiting, Open, Someday (a to-do with several of these tags
+  goes to someday, else next, else waiting). None is hidden, however old:
+  a postponed to-do must not slip out of sight. The owner picks the group
+  tag (or status) and the three status tags (by default `#project`,
+  `#next`, `#waiting` and `#someday`), kept in the preferences: the view
+  never guesses a subject, it follows the tag the owner chose.
 - **Review** (from Tasks, GTD style, and `vrac_review` for AI clients):
   the open to-dos nobody has changed or kept for 7 days, or 30 for
   someday ones, the longest unseen first. The server builds the queue

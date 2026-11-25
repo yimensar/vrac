@@ -6,7 +6,7 @@ const node = (id: string, extra: Partial<Node> = {}): Node => ({
   created_at: "", updated_at: "", created_by: "", updated_by: "", source: "", child_count: 0, ref_ids: [], ...extra,
 })
 
-test("open to-dos are sorted into waiting and groups, old ones included", () => {
+test("open to-dos stay in their groups, waiting ones last, old ones included", () => {
   const page: Page = {
     nodes: [
       node("a"),
@@ -26,12 +26,12 @@ test("open to-dos are sorted into waiting and groups, old ones included", () => 
     subjects: { a: ["marc", "north"], c: ["lot", "north"], d: ["north"], f: ["globex"], g: ["marc"] },
   }
   const s = taskSections(page, { group: "project", waiting: "waiting", next: "next", someday: "someday" })
-  expect(s.waiting.map((n) => n.id)).toEqual(["b"])
+  expect(s.waiting).toEqual([])
   expect(s.groups.map((g) => [g.subject?.name, g.nodes.map((n) => n.id)])).toEqual([
     ["Northwind", ["a", "d"]],
     ["Globex", ["f"]],
     ["Lot 2", ["c"]],
-    [undefined, ["e", "g"]],
+    [undefined, ["e", "g", "b"]],
   ])
 })
 
@@ -51,14 +51,7 @@ test("a to-do about two people is under each", () => {
   ])
 })
 
-test("without tags, everything is one list", () => {
-  const page: Page = { nodes: [node("a", { types: ["task", "waiting"] })], refs: {}, subjects: {} }
-  const s = taskSections(page, { group: "", waiting: "", next: "", someday: "" })
-  expect(s.waiting).toEqual([])
-  expect(s.groups).toEqual([{ subject: undefined, nodes: [page.nodes[0]] }])
-})
-
-test("next actions come first and someday ones last, out of their groups", () => {
+test("without a group tag, to-dos are sorted by status", () => {
   const page: Page = {
     nodes: [
       node("now", { types: ["task", "next"] }),
@@ -66,10 +59,26 @@ test("next actions come first and someday ones last, out of their groups", () =>
       node("wait", { types: ["task", "waiting"] }),
       node("plain"),
     ],
+    refs: {},
+    subjects: {},
+  }
+  const s = taskSections(page, { group: "", waiting: "waiting", next: "next", someday: "someday" })
+  expect([s.next, s.waiting, s.someday].map((l) => l.map((n) => n.id))).toEqual([["now"], ["wait"], ["later"]])
+  expect(s.groups).toEqual([{ nodes: [page.nodes[3]] }])
+})
+
+test("with a group tag, next actions lead each group and someday ones close it", () => {
+  const page: Page = {
+    nodes: [
+      node("plain"),
+      node("later", { types: ["task", "someday", "next"] }),
+      node("wait", { types: ["task", "waiting"] }),
+      node("now", { types: ["task", "next"] }),
+    ],
     refs: { north: { id: "north", name: "Northwind", label: "Northwind", types: ["project"] } },
-    subjects: { now: ["north"], later: ["north"], plain: ["north"] },
+    subjects: { now: ["north"], later: ["north"], plain: ["north"], wait: ["north"] },
   }
   const s = taskSections(page, { group: "project", waiting: "waiting", next: "next", someday: "someday" })
-  expect([s.next, s.waiting, s.someday].map((l) => l.map((n) => n.id))).toEqual([["now"], ["wait"], ["later"]])
-  expect(s.groups.map((g) => [g.subject?.name, g.nodes.map((n) => n.id)])).toEqual([["Northwind", ["plain"]]])
+  expect([s.next, s.waiting, s.someday]).toEqual([[], [], []])
+  expect(s.groups.map((g) => [g.subject?.name, g.nodes.map((n) => n.id)])).toEqual([["Northwind", ["now", "plain", "wait", "later"]]])
 })

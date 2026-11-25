@@ -13,9 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TypeName } from "@/outline/content"
 import { NodeList } from "@/outline/views"
 
-/** Every open to-do, sorted for a morning look: next actions first,
- * waiting apart, the others by the node of the group tag (a project) they
- * concern, someday ones last. Each is edited in place. */
+/** Every open to-do, sorted for a morning look: by the node of the group
+ * tag (a project, a person) they concern, or by status (next, waiting,
+ * open, someday). Each is edited in place. */
 export function TasksPage() {
   const prefs = usePreferences()
   const { data } = useQuery({ queryKey: ["tasks"], queryFn: openTasks })
@@ -100,7 +100,7 @@ function TagChoices() {
   const prefs = usePreferences()
   const set = useSetPreferences()
   const tags = [...useTypes().values()].filter((t) => !t.todo)
-  const choice = (label: string, value: string, onChange: (v: string) => void) => (
+  const choice = (label: string, value: string, onChange: (v: string) => void, empty = "none") => (
     <label className="flex items-center justify-between gap-3 text-sm">
       {label}
       <Select value={value || none} onValueChange={(v) => onChange(v === none ? "" : v)}>
@@ -108,7 +108,7 @@ function TagChoices() {
           <SelectValue />
         </SelectTrigger>
         <SelectContent align="end">
-          <SelectItem value={none}>none</SelectItem>
+          <SelectItem value={none}>{empty}</SelectItem>
           {value && !tags.some((t) => t.name === value) && <SelectItem value={value}>#{value}</SelectItem>}
           {tags.map((t) => (
             <SelectItem key={t.name} value={t.name}>
@@ -127,7 +127,7 @@ function TagChoices() {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="flex w-64 flex-col gap-2">
-        {choice("Group by", prefs.tasks_group, (v) => set({ tasks_group: v }))}
+        {choice("Group by", prefs.tasks_group, (v) => set({ tasks_group: v }), "status")}
         {choice("Next", prefs.tasks_next, (v) => set({ tasks_next: v }))}
         {choice("Waiting", prefs.tasks_waiting, (v) => set({ tasks_waiting: v }))}
         {choice("Someday", prefs.tasks_someday, (v) => set({ tasks_someday: v }))}
