@@ -362,14 +362,17 @@ non-goal; it would require synchronization and a different model.
   `#next`, `#waiting` and `#someday`), kept in the preferences: the view
   never guesses a subject, it follows the tag the owner chose.
 - **Review** (from Tasks, GTD style, and `vrac_review` for AI clients):
-  the open to-dos nobody has changed or kept for 7 days, or 30 for
-  someday ones, the longest unseen first. The server builds the queue
+  on demand, of everything the Tasks view shows, or of the queue of open
+  to-dos nobody has changed or kept for 7 days, or 30 for someday ones,
+  the longest unseen first. The server builds the queue
   (`GET /api/v1/review`) and applies each decision
   (`POST /api/v1/nodes/{id}/review` with an action): done, keep (records
-  `reviewed_at` without a new revision), date (a phrase), next or someday
-  (sets that tag of the preferences and takes the other off), trash. The
-  web review shows one at a time, the line itself editable in place, and
-  can skip; its queue is fixed when the review starts.
+  `reviewed_at` without a new revision), date (a phrase), trash, or a
+  status: next, waiting or someday (sets that tag of the preferences and
+  takes the other two off) or open (takes all three off). The web review
+  shows one at a time, the line itself editable in place; setting a
+  status keeps the to-do on screen, the other decisions and skip move on.
+  Its queue is fixed when the review starts.
 - **Agenda**: everything dated, day by day.
 - **Search**: query chips (tag, context, status, date).
 - **Command palette** (⌘K), the power box: one field that searches

@@ -219,7 +219,7 @@ type (
 	reviewDecision struct {
 		ID               string `json:"id"`
 		ExpectedRevision int64  `json:"expected_revision"`
-		Action           string `json:"action" jsonschema:"keep (looked at, unchanged), done, date (with date_text), trash, next or someday"`
+		Action           string `json:"action" jsonschema:"keep (looked at, unchanged), done, date (with date_text), trash, or a status: next, waiting, someday, open (none of them)"`
 		DateText         string `json:"date_text,omitempty" jsonschema:"for date: a day such as Friday or 2026-12-01, relative to today"`
 	}
 	trashInput struct {
@@ -392,7 +392,7 @@ func (s *Server) tools(srv *mcp.Server) {
 			}
 			return nil, map[string]any{"nodes": aiNodes(res.Nodes, res.Refs)}, nil
 		})
-	mcp.AddTool(srv, tool("vrac_review", "The weekly review of open to-dos. Without decisions, returns the queue: open to-dos nobody changed or looked at for 7 days (30 for someday ones), longest unseen first, with the subjects each concerns, and how many are due. With decisions, applies each (keep, done, date, trash, next, someday) and returns its result, then the queue.", false),
+	mcp.AddTool(srv, tool("vrac_review", "The weekly review of open to-dos. Without decisions, returns the queue: open to-dos nobody changed or looked at for 7 days (30 for someday ones), longest unseen first, with the subjects each concerns, and how many are due. With decisions, applies each (keep, done, date, trash, or a status: next, waiting, someday, open) and returns its result, then the queue.", false),
 		func(ctx context.Context, req *mcp.CallToolRequest, in reviewInput) (*mcp.CallToolResult, any, error) {
 			if len(in.Decisions) > 0 && in.RequestID == "" {
 				return toolError(fmt.Errorf("%w: request_id is required with decisions", engine.ErrInvalid))

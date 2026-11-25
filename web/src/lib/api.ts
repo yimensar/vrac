@@ -51,7 +51,8 @@ export type Result = { nodes: Node[]; refs: Refs; created?: Brief[] }
 export type Fold = "default" | "expanded" | "collapsed"
 export type Scale = "small" | "default" | "large" | "larger"
 /** The tasks_ fields are tags of the tasks view; empty for none. */
-export type ReviewAction = "keep" | "done" | "date" | "trash" | "next" | "someday"
+export type ReviewAction = "keep" | "done" | "date" | "trash" | TaskStatus
+export type TaskStatus = "next" | "waiting" | "someday" | "open"
 
 export type Preferences = {
   fold: Fold

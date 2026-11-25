@@ -48,4 +48,15 @@ test("the tasks view groups open to-dos by project or by status", async ({ page 
   await page.reload()
   await expect(section(/^Next/).getByText("Call the bank")).toBeVisible()
   await expect(page.getByText("Learn to sail")).toBeHidden()
+
+  // A review on demand walks what is shown; a status changes in place.
+  await page.getByRole("button", { name: /^Review/ }).click()
+  await page.getByRole("menuitem", { name: /Everything shown/ }).click()
+  await expect(page.getByText("1 / 3")).toBeVisible()
+  await expect(page.getByText("Call the bank")).toBeVisible()
+  await page.keyboard.press("w")
+  await expect(page.getByRole("button", { name: "Waiting", pressed: true })).toBeVisible()
+  await expect(page.getByText("1 / 3")).toBeVisible()
+  await page.getByRole("button", { name: "Done", exact: true }).click()
+  await expect(page.getByText("2 / 3")).toBeVisible()
 })

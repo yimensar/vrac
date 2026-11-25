@@ -4,9 +4,10 @@ import { useQuery } from "@tanstack/react-query"
 import { api, type Page } from "@/lib/api"
 import { useTypes } from "@/lib/hooks"
 import { usePreferences, useSetPreferences } from "@/lib/preferences"
-import { statusOrder, taskSections } from "@/lib/tasks"
+import { statusOrder, taskSections, type TaskSections } from "@/lib/tasks"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Review } from "./review"
 import { Loading, PageTitle, Section } from "@/components/page"
@@ -45,10 +46,22 @@ export function TasksPage() {
       <PageTitle
         actions={
           <>
-            {due && due.nodes.length > 0 && (
-              <Button size="sm" onClick={() => setReview(due)}>
-                Review {due.nodes.length}
-              </Button>
+            {data && data.nodes.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant={due?.nodes.length ? "default" : "outline"}>
+                    Review{due?.nodes.length ? ` ${due.nodes.length}` : ""}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem disabled={!due?.nodes.length} onSelect={() => due && setReview(due)}>
+                    Unseen for a week ({due?.nodes.length ?? 0})
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => sections && setReview({ nodes: shown(sections), refs: data.refs })}>
+                    Everything shown ({sections ? shown(sections).length : 0})
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             <TagChoices />
           </>
@@ -78,6 +91,12 @@ export function TasksPage() {
       ))}
     </>
   )
+}
+
+/** The to-dos on the view, in its order, each once. */
+function shown(s: TaskSections): Page["nodes"] {
+  const seen = new Set<string>()
+  return [...s.next, ...s.waiting, ...s.someday, ...s.groups.flatMap((g) => g.nodes)].filter((n) => !seen.has(n.id) && seen.add(n.id))
 }
 
 /** Every open to-do with the subjects it concerns, across pages. */

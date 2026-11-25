@@ -115,7 +115,7 @@ func TestRetag(t *testing.T) {
 
 func TestReviewDecisions(t *testing.T) {
 	e := open(t, filepath.Join(t.TempDir(), "vrac.sqlite"))
-	for _, name := range []string{"next", "someday"} {
+	for _, name := range []string{"next", "someday", "waiting"} {
 		if _, err := e.CreateType(ctx, me, rid(), name, false); err != nil {
 			t.Fatal(err)
 		}
@@ -133,8 +133,16 @@ func TestReviewDecisions(t *testing.T) {
 	if got := decide(bank, ReviewNext, ""); got.Text != "Call the bank #task #next" || !slices.Equal(got.Types, []string{"task", "next"}) || got.Status != StatusOpen {
 		t.Fatalf("next = %+v", got)
 	}
-	if got := decide(deck, ReviewSomeday, ""); got.Text != "Send the deck #task #someday" {
-		t.Fatalf("someday = %+v", got)
+	deck = decide(deck, ReviewSomeday, "")
+	if deck.Text != "Send the deck #task #someday" {
+		t.Fatalf("someday = %+v", deck)
+	}
+	deck = decide(deck, ReviewWaiting, "")
+	if deck.Text != "Send the deck #task #waiting" {
+		t.Fatalf("waiting = %+v", deck)
+	}
+	if got := decide(deck, ReviewOpen, ""); got.Text != "Send the deck #task" || !slices.Equal(got.Types, []string{"task"}) {
+		t.Fatalf("open = %+v", got)
 	}
 	if got := decide(idea, ReviewDone, ""); got.Status != StatusDone {
 		t.Fatalf("done = %+v", got)

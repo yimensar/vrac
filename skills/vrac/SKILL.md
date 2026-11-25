@@ -177,8 +177,8 @@ GTD weekly review with `vrac_review`:
 2. Show about ten at a time, grouped by project, numbered, one short line
    each with its age; say how many remain. No commentary.
 3. The user answers briefly ("1 faite, 2 vendredi, 3 garde, 4 supprime,
-   5 next, 6 un jour"). Map each to an action: done, date (`date_text`),
-   keep, trash, next, someday. An unanswered one is left for later (no
+   5 next, 6 un jour, 7 en attente"). Map each to an action: done, date
+   (`date_text`), keep, trash, or a status: next, waiting, someday, open. An unanswered one is left for later (no
    decision). A rewrite ("3 → appeler Marc plutôt") is a `vrac_update`.
 4. Apply them in one `vrac_review` call with a fresh `request_id` and the
    `expected_revision` from the queue; it answers with each result and the

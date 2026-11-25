@@ -181,8 +181,9 @@ type ReviewRequest struct {
 	ExpectedRevision int64  `json:"expected_revision"`
 	// Action is the review's decision on the to-do: keep (the default)
 	// leaves it as it is, done checks it, date sets DateText as its date,
-	// trash deletes it, next and someday give it the matching tag of the
-	// preferences, taking the other one off.
+	// trash deletes it, next, waiting and someday give it the matching tag
+	// of the preferences, taking the other two off, and open takes all
+	// three off.
 	Action   string `json:"action,omitempty"`
 	DateText string `json:"date_text,omitempty"`
 }

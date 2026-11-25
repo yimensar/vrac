@@ -1,7 +1,7 @@
-import type { Node, Page, Ref } from "./api"
+import type { Node, Page, Ref, TaskStatus } from "./api"
 
 export type TaskGroup = { subject?: Ref; nodes: Node[] }
-export type TaskStatus = "next" | "waiting" | "someday" | "open"
+export type { TaskStatus } from "./api"
 export type TaskSections = { next: Node[]; waiting: Node[]; someday: Node[]; groups: TaskGroup[] }
 export type TaskTags = { group: string; waiting: string; next: string; someday: string; hide?: Partial<Record<TaskStatus, boolean>> }
 

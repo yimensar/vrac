@@ -45,6 +45,9 @@ const (
 	ReviewTrash   = "trash"
 	ReviewNext    = "next"
 	ReviewSomeday = "someday"
+	ReviewWaiting = "waiting"
+	// ReviewOpen takes the next, waiting and someday tags off.
+	ReviewOpen = "open"
 )
 
 // decide applies a review decision other than keep, each through the
@@ -68,25 +71,30 @@ func (e *Engine) decide(ctx context.Context, actor Actor, req ReviewRequest) (Re
 		update.DateText = ptrTo(req.DateText)
 	case ReviewTrash:
 		return e.Trash(ctx, actor, TrashRequest{RequestID: req.RequestID, ID: req.ID, ExpectedRevision: req.ExpectedRevision})
-	case ReviewNext, ReviewSomeday:
+	case ReviewNext, ReviewWaiting, ReviewSomeday, ReviewOpen:
 		prefs, err := e.Preferences(ctx)
 		if err != nil {
 			return Result{}, err
 		}
-		add, other := prefs.TasksNext, prefs.TasksSomeday
-		if req.Action == ReviewSomeday {
-			add, other = other, add
-		}
-		if add == "" {
+		// A to-do has one status: setting one takes the others off.
+		tags := map[string]string{ReviewNext: prefs.TasksNext, ReviewWaiting: prefs.TasksWaiting, ReviewSomeday: prefs.TasksSomeday}
+		add := tags[req.Action]
+		if req.Action != ReviewOpen && add == "" {
 			return Result{}, invalid("no %s tag is set in the preferences", req.Action)
 		}
-		text, err := Retag(n.Text, add, other)
+		var others []string
+		for _, t := range tags {
+			if t != add {
+				others = append(others, t)
+			}
+		}
+		text, err := Retag(n.Text, add, others...)
 		if err != nil {
 			return Result{}, err
 		}
 		update.Input = &text
 	default:
-		return Result{}, invalid("action is keep, done, date, trash, next or someday")
+		return Result{}, invalid("action is keep, done, date, trash, next, waiting, someday or open")
 	}
 	return e.Update(ctx, actor, update)
 }
