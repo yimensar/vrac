@@ -193,6 +193,42 @@ func TestAPIWritesAndUnresolvedNames(t *testing.T) {
 	}
 }
 
+func TestCaptureWithAToken(t *testing.T) {
+	h := newHarness(t)
+	h.setup()
+	h.call("POST", "/api/v1/types", map[string]any{"request_id": "t1", "name": "task", "todo": true}, 200)
+	token, err := CreateToken(context.Background(), h.engine, "Shortcut")
+	if err != nil {
+		t.Fatal(err)
+	}
+	post := func(body string) (int, map[string]any) {
+		req, _ := http.NewRequest("POST", h.url+"/api/v1/capture", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var out map[string]any
+		json.NewDecoder(res.Body).Decode(&out)
+		return res.StatusCode, out
+	}
+	code, out := post(`{"request_id":"2026-11-25T10:00:00","text":"Call the plumber #task #urgent"}`)
+	if code != 200 {
+		t.Fatalf("capture = %d %v", code, out)
+	}
+	node := out["nodes"].([]any)[0].(map[string]any)
+	if node["text"] != "Call the plumber #task urgent" || node["status"] != "open" || node["source"] != "capture" {
+		t.Fatalf("node = %v", node)
+	}
+	if u := out["unresolved"].([]any); len(u) != 1 || u[0].(map[string]any)["name"] != "urgent" {
+		t.Fatalf("unresolved = %v", out["unresolved"])
+	}
+	if code, _ := post(`{"request_id":"x","text":""}`); code != http.StatusBadRequest {
+		t.Fatalf("empty capture = %d", code)
+	}
+}
+
 // TestOAuthAndMCP connects an MCP client the way Claude or ChatGPT does:
 // discovery, registration, owner approval, PKCE token exchange, then tools.
 func TestOAuthAndMCP(t *testing.T) {

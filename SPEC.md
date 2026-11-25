@@ -185,6 +185,11 @@ existing Northwind is referenced as is. The stored model stays clean.
 - **AI.** A write that names an unknown tag or node is rejected. The error
   returns close candidates, aliases included. The AI either reuses one or
   creates explicitly, after confirming with the user as its skill instructs.
+- **Quick capture.** `POST /api/v1/capture` writes one line, typed without
+  completion (a shortcut, a script), to the end of today's journal with the
+  source `capture`. It never refuses a name: an unknown or ambiguous tag or
+  reference is kept as plain words (`#tsak` becomes `tsak`) and listed in the
+  answer. Nothing is created; the line is fixed later in the journal.
 
 ### 2.8 Dates in text
 
@@ -495,7 +500,7 @@ the user's current Memos skill.
 
 V1: everything above, except the Docker image.
 
-Later: quick capture desktop app (global shortcut), audio capture and
+Later: desktop app with a global capture shortcut, audio capture and
 transcription, inbox of unfiled captures, attention queue (overdue, stale
 projects, meetings without follow-up), MCP prompts (daily briefing, weekly
 review, meeting prep), external calendars, Reminders and Todoist bridges,

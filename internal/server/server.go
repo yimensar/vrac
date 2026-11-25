@@ -124,6 +124,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/v1/nodes/{id}/children", s.api(s.children))
 	m.HandleFunc("GET /api/v1/nodes/{id}/lists", s.api(s.lists))
 	m.HandleFunc("POST /api/v1/nodes", s.api(s.create))
+	m.HandleFunc("POST /api/v1/capture", s.api(s.capture))
 	m.HandleFunc("PATCH /api/v1/nodes/{id}", s.api(s.update))
 	m.HandleFunc("POST /api/v1/nodes/{id}/move", s.api(s.move))
 	m.HandleFunc("POST /api/v1/nodes/{id}/trash", s.api(s.trash))

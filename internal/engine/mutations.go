@@ -14,99 +14,102 @@ func (e *Engine) Create(ctx context.Context, actor Actor, req CreateRequest) (Re
 	if len(req.Nodes) == 0 {
 		return Result{}, invalid("nodes are required")
 	}
-	return e.mutate(ctx, actor, req.RequestID, req, func(s *txState) ([]int64, error) {
-		if err := s.allow(req.Create, req.CreateTypes); err != nil {
-			return nil, err
+	return e.mutate(ctx, actor, req.RequestID, req, func(s *txState) ([]int64, error) { return s.create(req) })
+}
+
+// create inserts the drafts of req, or fails with every unresolved name.
+func (s *txState) create(req CreateRequest) ([]int64, error) {
+	if err := s.allow(req.Create, req.CreateTypes); err != nil {
+		return nil, err
+	}
+	type item struct {
+		draft  Draft
+		parsed parsedInput
+		kids   []*item
+	}
+	count := 0
+	var parse func(d Draft, depth int) (*item, error)
+	parse = func(d Draft, depth int) (*item, error) {
+		if count++; count > maxDraftNodes {
+			return nil, invalid("at most %d nodes per request", maxDraftNodes)
 		}
-		type item struct {
-			draft  Draft
-			parsed parsedInput
-			kids   []*item
+		if depth > maxDepth {
+			return nil, invalid("drafts are at most %d levels deep", maxDepth)
 		}
-		count := 0
-		var parse func(d Draft, depth int) (*item, error)
-		parse = func(d Draft, depth int) (*item, error) {
-			if count++; count > maxDraftNodes {
-				return nil, invalid("at most %d nodes per request", maxDraftNodes)
-			}
-			if depth > maxDepth {
-				return nil, invalid("drafts are at most %d levels deep", maxDepth)
-			}
-			p, err := parseInput(d.Input)
-			if err != nil {
-				return nil, err
-			}
-			if err := s.check(p); err != nil {
-				return nil, err
-			}
-			it := &item{draft: d, parsed: p}
-			for _, c := range d.Children {
-				k, err := parse(c, depth+1)
-				if err != nil {
-					return nil, err
-				}
-				it.kids = append(it.kids, k)
-			}
-			return it, nil
-		}
-		var items []*item
-		for _, d := range req.Nodes {
-			it, err := parse(d, 0)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, it)
-		}
-		if err := s.fail(); err != nil {
-			return nil, err
-		}
-		parent, after, err := s.placement(req.Placement)
+		p, err := parseInput(d.Input)
 		if err != nil {
 			return nil, err
 		}
-		day, err := s.dayOf(parent)
+		if err := s.check(p); err != nil {
+			return nil, err
+		}
+		it := &item{draft: d, parsed: p}
+		for _, c := range d.Children {
+			k, err := parse(c, depth+1)
+			if err != nil {
+				return nil, err
+			}
+			it.kids = append(it.kids, k)
+		}
+		return it, nil
+	}
+	var items []*item
+	for _, d := range req.Nodes {
+		it, err := parse(d, 0)
 		if err != nil {
 			return nil, err
 		}
-		var seqs []int64
-		var insert func(it *item, parent sql.NullInt64, pos int64) (int64, error)
-		insert = func(it *item, parent sql.NullInt64, pos int64) (int64, error) {
-			r, err := s.resolve(it.parsed)
-			if err != nil {
-				return 0, err
-			}
-			d := it.draft
-			todo, err := s.anyTodo(r.typeIDs)
-			if err != nil {
-				return 0, err
-			}
-			f, err := normalizeFields(todo, fields{d.Status, d.Date, d.End}, d.DateText, day)
-			if err != nil {
-				return 0, err
-			}
-			seq, _, err := s.insert(parent, pos, r.text, r.typeIDs, f, d.Aliases, day)
-			if err != nil {
-				return 0, err
-			}
-			seqs = append(seqs, seq)
-			for i, k := range it.kids {
-				if _, err := insert(k, sql.NullInt64{Int64: seq, Valid: true}, int64(i+1)*positionGap); err != nil {
-					return 0, err
-				}
-			}
-			return seq, nil
+		items = append(items, it)
+	}
+	if err := s.fail(); err != nil {
+		return nil, err
+	}
+	parent, after, err := s.placement(req.Placement)
+	if err != nil {
+		return nil, err
+	}
+	day, err := s.dayOf(parent)
+	if err != nil {
+		return nil, err
+	}
+	var seqs []int64
+	var insert func(it *item, parent sql.NullInt64, pos int64) (int64, error)
+	insert = func(it *item, parent sql.NullInt64, pos int64) (int64, error) {
+		r, err := s.resolve(it.parsed)
+		if err != nil {
+			return 0, err
 		}
-		for _, it := range items {
-			pos, err := s.slot(parent, after)
-			if err != nil {
-				return nil, err
-			}
-			if after, err = insert(it, parent, pos); err != nil {
-				return nil, err
+		d := it.draft
+		todo, err := s.anyTodo(r.typeIDs)
+		if err != nil {
+			return 0, err
+		}
+		f, err := normalizeFields(todo, fields{d.Status, d.Date, d.End}, d.DateText, day)
+		if err != nil {
+			return 0, err
+		}
+		seq, _, err := s.insert(parent, pos, r.text, r.typeIDs, f, d.Aliases, day)
+		if err != nil {
+			return 0, err
+		}
+		seqs = append(seqs, seq)
+		for i, k := range it.kids {
+			if _, err := insert(k, sql.NullInt64{Int64: seq, Valid: true}, int64(i+1)*positionGap); err != nil {
+				return 0, err
 			}
 		}
-		return seqs, nil
-	})
+		return seq, nil
+	}
+	for _, it := range items {
+		pos, err := s.slot(parent, after)
+		if err != nil {
+			return nil, err
+		}
+		if after, err = insert(it, parent, pos); err != nil {
+			return nil, err
+		}
+	}
+	return seqs, nil
 }
 
 func (s *txState) editable(id string, expected int64) (Node, error) {

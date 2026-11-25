@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/yan-imensar/vrac/internal/engine"
@@ -105,6 +106,24 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, p principal) {
 		return
 	}
 	v, err := s.engine.Create(r.Context(), p.actor(b.Source), b.CreateRequest)
+	respond(w, v, err)
+}
+
+// capture appends one line to today's journal and keeps unknown names as
+// plain words, for clients without completion such as an Apple Shortcut.
+func (s *Server) capture(w http.ResponseWriter, r *http.Request, p principal) {
+	var b struct {
+		RequestID string `json:"request_id"`
+		Text      string `json:"text"`
+		Source    string `json:"source,omitempty"`
+	}
+	if !decode(w, r, &b) {
+		return
+	}
+	if strings.TrimSpace(b.Source) == "" {
+		b.Source = "capture"
+	}
+	v, err := s.engine.Capture(r.Context(), p.actor(b.Source), b.RequestID, b.Text)
 	respond(w, v, err)
 }
 
