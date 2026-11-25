@@ -4,9 +4,8 @@ export type TaskGroup = { subject?: Ref; nodes: Node[] }
 export type TaskSections = { waiting: Node[]; groups: TaskGroup[] }
 
 /** Sorts open to-dos for the tasks view. Those carrying the waiting tag
- * stand apart; the others go under every node carrying the group tag they
- * concern (a call to Sixtine about Léandre is under both), the biggest
- * groups first and the ungrouped last. None is hidden, however old. Order
+ * stand apart; the others go under their groups (see groupsOf), the
+ * biggest groups first and the ungrouped last. None is hidden, however old. Order
  * within a section is the order of the page. */
 export function taskSections(page: Page, opts: { group: string; waiting: string }): TaskSections {
   const waiting: Node[] = []
@@ -14,7 +13,7 @@ export function taskSections(page: Page, opts: { group: string; waiting: string 
   for (const n of page.nodes) {
     if (opts.waiting && n.types.includes(opts.waiting)) waiting.push(n)
     else {
-      const ids = opts.group ? (page.subjects?.[n.id] ?? []).filter((s) => page.refs[s]?.types.includes(opts.group)) : []
+      const ids = opts.group ? groupsOf(n, page, opts.group) : []
       for (const key of ids.length ? ids : [""]) {
         if (!groups.has(key)) groups.set(key, { subject: key ? page.refs[key] : undefined, nodes: [] })
         groups.get(key)!.nodes.push(n)
@@ -40,4 +39,14 @@ export function lastLook(n: Node): string {
 export function reviewQueue(nodes: Node[], now: Date): Node[] {
   const before = new Date(now.getTime() - reviewDays * 86_400_000).toISOString()
   return nodes.filter((n) => lastLook(n) < before).sort((a, b) => lastLook(a).localeCompare(lastLook(b)))
+}
+
+/** The nodes with the group tag a to-do is filed under: those it names
+ * itself (a call to Sixtine about Léandre is under both), or else the most
+ * specific one it concerns through its place (a to-do in Lot 2 is under
+ * Lot 2, not also under Northwind which holds Lot 2). */
+export function groupsOf(n: Node, page: Page, group: string): string[] {
+  const tagged = (page.subjects?.[n.id] ?? []).filter((s) => page.refs[s]?.types.includes(group))
+  const named = tagged.filter((s) => n.ref_ids.includes(s))
+  return named.length ? named : tagged.slice(0, 1)
 }
