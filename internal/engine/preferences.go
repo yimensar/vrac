@@ -26,10 +26,17 @@ type Preferences struct {
 	// TasksWaiting is the tag of to-dos waiting on someone else, shown
 	// apart on the tasks view. Empty shows none apart.
 	TasksWaiting string `json:"tasks_waiting"`
+	// TasksNext is the tag of the next actions, listed first on the tasks
+	// view across every group. Empty shows none apart.
+	TasksNext string `json:"tasks_next"`
+	// TasksSomeday is the tag of to-dos set aside for later, listed last on
+	// the tasks view and reviewed monthly instead of weekly. Empty shows
+	// none apart.
+	TasksSomeday string `json:"tasks_someday"`
 }
 
 // DefaultPreferences apply until the owner changes them.
-var DefaultPreferences = Preferences{Fold: "default", Theme: "system", Scale: "default", TasksGroup: "project", TasksWaiting: "waiting"}
+var DefaultPreferences = Preferences{Fold: "default", Theme: "system", Scale: "default", TasksGroup: "project", TasksWaiting: "waiting", TasksNext: "next", TasksSomeday: "someday"}
 
 // Preferences returns the stored preferences over the defaults.
 func (e *Engine) Preferences(ctx context.Context) (Preferences, error) {
@@ -66,7 +73,7 @@ func (e *Engine) SetPreferences(ctx context.Context, p Preferences) (Preferences
 	default:
 		return p, invalid("scale is small, default, large or larger")
 	}
-	for _, tag := range []*string{&p.TasksGroup, &p.TasksWaiting} {
+	for _, tag := range []*string{&p.TasksGroup, &p.TasksWaiting, &p.TasksNext, &p.TasksSomeday} {
 		*tag = strings.ToLower(strings.TrimSpace(*tag))
 		if *tag != "" {
 			if err := validTypeName(*tag); err != nil {

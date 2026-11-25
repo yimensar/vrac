@@ -346,20 +346,28 @@ non-goal; it would require synchronization and a different model.
   history are reached from the palette and Activity.
 - **Tag pages**: every node carrying the tag, most recent first; a to-do
   tag shows open ones then done ones; the to-do trait is toggled there.
-- **Tasks**: every open to-do, a menu away, for a morning look. To-dos
-  carrying the waiting tag stand apart; the others go under the nodes
-  with the group tag they name themselves (a call to Sixtine about Léandre
-  is under both), or else under the most specific one they concern through
-  their place (a to-do in Lot 2 is under Lot 2, not also under Northwind);
-  the biggest groups first, the ungrouped last. None is hidden, however old: a postponed
-  to-do must not slip out of sight. The owner picks both tags (by default `#project` and
-  `#waiting`), kept in the preferences: the view never guesses a subject,
-  it follows the tag the owner chose.
-- **Review** (from Tasks, GTD style): the open to-dos nobody has changed
-  or kept for 7 days, the longest unseen first, one at a time: done, keep
-  (records `reviewed_at` without a new revision), date (a phrase), delete
-  (to the trash) or skip, the line itself editable in place. The queue is
-  fixed when the review starts.
+- **Tasks**: every open to-do, a menu away, for a morning look. Next
+  actions (the next tag) come first, across every group; to-dos carrying
+  the waiting tag stand apart; the others go under the nodes with the
+  group tag they name themselves (a call to Sixtine about Léandre is under
+  both), or else under the most specific one they concern through their
+  place (a to-do in Lot 2 is under Lot 2, not also under Northwind); the
+  biggest groups first, the ungrouped last; someday ones (the someday tag)
+  come last, still visible. A to-do with several of these tags goes to
+  someday, else next, else waiting. None is hidden, however old: a
+  postponed to-do must not slip out of sight. The owner picks the four
+  tags (by default `#project`, `#next`, `#waiting` and `#someday`), kept in
+  the preferences: the view never guesses a subject, it follows the tag
+  the owner chose.
+- **Review** (from Tasks, GTD style, and `vrac_review` for AI clients):
+  the open to-dos nobody has changed or kept for 7 days, or 30 for
+  someday ones, the longest unseen first. The server builds the queue
+  (`GET /api/v1/review`) and applies each decision
+  (`POST /api/v1/nodes/{id}/review` with an action): done, keep (records
+  `reviewed_at` without a new revision), date (a phrase), next or someday
+  (sets that tag of the preferences and takes the other off), trash. The
+  web review shows one at a time, the line itself editable in place, and
+  can skip; its queue is fixed when the review starts.
 - **Agenda**: everything dated, day by day.
 - **Search**: query chips (tag, context, status, date).
 - **Command palette** (⌘K), the power box: one field that searches
@@ -442,6 +450,7 @@ Tools (V1):
 | `vrac_trash` | move to the trash, or restore |
 | `vrac_create_type` | create a tag explicitly, plain or to-do |
 | `vrac_activity` | recent changes with actor and source |
+| `vrac_review` | the review queue with subjects and last-seen days, and batch decisions on it |
 
 Results show text with `[[Name|ID]]` references.
 

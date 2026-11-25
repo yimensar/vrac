@@ -1,5 +1,5 @@
 import type { Node, Page } from "./api"
-import { reviewQueue, taskSections } from "./tasks"
+import { taskSections } from "./tasks"
 
 const node = (id: string, extra: Partial<Node> = {}): Node => ({
   id, kind: "node", text: id, types: ["task"], status: "open", aliases: [], day: "2026-11-20", revision: 1,
@@ -25,7 +25,7 @@ test("open to-dos are sorted into waiting and groups, old ones included", () => 
     },
     subjects: { a: ["marc", "north"], c: ["lot", "north"], d: ["north"], f: ["globex"], g: ["marc"] },
   }
-  const s = taskSections(page, { group: "project", waiting: "waiting" })
+  const s = taskSections(page, { group: "project", waiting: "waiting", next: "next", someday: "someday" })
   expect(s.waiting.map((n) => n.id)).toEqual(["b"])
   expect(s.groups.map((g) => [g.subject?.name, g.nodes.map((n) => n.id)])).toEqual([
     ["Northwind", ["a", "d"]],
@@ -44,7 +44,7 @@ test("a to-do about two people is under each", () => {
     },
     subjects: { call: ["sixtine", "leandre"] },
   }
-  const s = taskSections(page, { group: "person", waiting: "" })
+  const s = taskSections(page, { group: "person", waiting: "", next: "", someday: "" })
   expect(s.groups.map((g) => [g.subject?.name, g.nodes.map((n) => n.id)])).toEqual([
     ["Léandre", ["call"]],
     ["Sixtine", ["call"]],
@@ -53,17 +53,23 @@ test("a to-do about two people is under each", () => {
 
 test("without tags, everything is one list", () => {
   const page: Page = { nodes: [node("a", { types: ["task", "waiting"] })], refs: {}, subjects: {} }
-  const s = taskSections(page, { group: "", waiting: "" })
+  const s = taskSections(page, { group: "", waiting: "", next: "", someday: "" })
   expect(s.waiting).toEqual([])
   expect(s.groups).toEqual([{ subject: undefined, nodes: [page.nodes[0]] }])
 })
 
-test("the review queue holds to-dos unseen for a week, the longest unseen first", () => {
-  const nodes = [
-    node("fresh", { updated_at: "2026-11-24T10:00:00Z" }),
-    node("kept", { updated_at: "2026-10-01T10:00:00Z", reviewed_at: "2026-11-23T10:00:00Z" }),
-    node("old", { updated_at: "2026-11-10T10:00:00Z" }),
-    node("older", { updated_at: "2026-10-01T10:00:00Z", reviewed_at: "2026-11-02T10:00:00Z" }),
-  ]
-  expect(reviewQueue(nodes, new Date("2026-11-25T10:00:00Z")).map((n) => n.id)).toEqual(["older", "old"])
+test("next actions come first and someday ones last, out of their groups", () => {
+  const page: Page = {
+    nodes: [
+      node("now", { types: ["task", "next"] }),
+      node("later", { types: ["task", "someday", "next"] }),
+      node("wait", { types: ["task", "waiting"] }),
+      node("plain"),
+    ],
+    refs: { north: { id: "north", name: "Northwind", label: "Northwind", types: ["project"] } },
+    subjects: { now: ["north"], later: ["north"], plain: ["north"] },
+  }
+  const s = taskSections(page, { group: "project", waiting: "waiting", next: "next", someday: "someday" })
+  expect([s.next, s.waiting, s.someday].map((l) => l.map((n) => n.id))).toEqual([["now"], ["wait"], ["later"]])
+  expect(s.groups.map((g) => [g.subject?.name, g.nodes.map((n) => n.id)])).toEqual([["Northwind", ["plain"]]])
 })

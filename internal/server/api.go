@@ -169,11 +169,20 @@ func (s *Server) trash(w http.ResponseWriter, r *http.Request, p principal) {
 }
 
 func (s *Server) review(w http.ResponseWriter, r *http.Request, p principal) {
-	var b revisionBody
+	var b struct {
+		revisionBody
+		Action   string `json:"action,omitempty"`
+		DateText string `json:"date_text,omitempty"`
+	}
 	if !decode(w, r, &b) {
 		return
 	}
-	v, err := s.engine.Review(r.Context(), p.actor(b.Source), engine.ReviewRequest{RequestID: b.RequestID, ID: r.PathValue("id"), ExpectedRevision: b.ExpectedRevision})
+	v, err := s.engine.Review(r.Context(), p.actor(b.Source), engine.ReviewRequest{RequestID: b.RequestID, ID: r.PathValue("id"), ExpectedRevision: b.ExpectedRevision, Action: b.Action, DateText: b.DateText})
+	respond(w, v, err)
+}
+
+func (s *Server) reviewQueue(w http.ResponseWriter, r *http.Request, p principal) {
+	v, err := s.engine.ReviewQueue(r.Context())
 	respond(w, v, err)
 }
 

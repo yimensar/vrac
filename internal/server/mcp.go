@@ -76,6 +76,9 @@ type aiNode struct {
 	Revision   int64    `json:"revision"`
 	UpdatedBy  string   `json:"updated_by"`
 	Source     string   `json:"source"`
+	// LastSeen is the day a to-do of the review queue was last changed or
+	// looked at.
+	LastSeen string `json:"last_seen,omitempty"`
 }
 
 func aiNodes(nodes []engine.Node, refs map[string]engine.Ref) []aiNode {
@@ -161,20 +164,24 @@ func aiPageOf(p engine.Page) aiPage {
 
 // toolError turns engine errors into tool results the model can act on.
 func toolError(err error) (*mcp.CallToolResult, any, error) {
+	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: errorMessage(err)}}}, nil, nil
+}
+
+func errorMessage(err error) string {
 	var u *engine.UnresolvedError
-	msg := err.Error()
 	if errors.As(err, &u) {
 		b, _ := json.Marshal(u.Items)
-		msg = "Unresolved names. Reuse a candidate ID with [[Name|ID]], or ask the user before passing it in create/create_types: " + string(b)
-	} else if !errors.Is(err, engine.ErrInvalid) && !errors.Is(err, engine.ErrNotFound) && !errors.Is(err, engine.ErrConflict) && !errors.Is(err, engine.ErrProtected) {
-		msg = "internal error"
+		return "Unresolved names. Reuse a candidate ID with [[Name|ID]], or ask the user before passing it in create/create_types: " + string(b)
 	}
-	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: msg}}}, nil, nil
+	if !errors.Is(err, engine.ErrInvalid) && !errors.Is(err, engine.ErrNotFound) && !errors.Is(err, engine.ErrConflict) && !errors.Is(err, engine.ErrProtected) {
+		return "internal error"
+	}
+	return err.Error()
 }
 
 func tool(name, description string, readOnly bool) *mcp.Tool {
 	f := false
-	destructive := !readOnly && (name == "vrac_update" || name == "vrac_move" || name == "vrac_trash")
+	destructive := !readOnly && (name == "vrac_update" || name == "vrac_move" || name == "vrac_trash" || name == "vrac_review")
 	return &mcp.Tool{Name: name, Description: description,
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: readOnly, DestructiveHint: &destructive, IdempotentHint: true, OpenWorldHint: &f}}
 }
@@ -202,6 +209,18 @@ type (
 	moveInput struct {
 		engine.MoveRequest
 		Source string `json:"source"`
+	}
+	reviewInput struct {
+		RequestID string           `json:"request_id,omitempty" jsonschema:"required with decisions; each decision uses it with its index"`
+		Source    string           `json:"source,omitempty"`
+		Decisions []reviewDecision `json:"decisions,omitempty" jsonschema:"the user's decisions on to-dos of the queue, applied one by one"`
+		Limit     int              `json:"limit,omitempty" jsonschema:"to-dos of the queue to return, default 10, at most 50"`
+	}
+	reviewDecision struct {
+		ID               string `json:"id"`
+		ExpectedRevision int64  `json:"expected_revision"`
+		Action           string `json:"action" jsonschema:"keep (looked at, unchanged), done, date (with date_text), trash, next or someday"`
+		DateText         string `json:"date_text,omitempty" jsonschema:"for date: a day such as Friday or 2026-12-01, relative to today"`
 	}
 	trashInput struct {
 		RequestID        string `json:"request_id"`
@@ -372,6 +391,50 @@ func (s *Server) tools(srv *mcp.Server) {
 				return toolError(err)
 			}
 			return nil, map[string]any{"nodes": aiNodes(res.Nodes, res.Refs)}, nil
+		})
+	mcp.AddTool(srv, tool("vrac_review", "The weekly review of open to-dos. Without decisions, returns the queue: open to-dos nobody changed or looked at for 7 days (30 for someday ones), longest unseen first, with the subjects each concerns, and how many are due. With decisions, applies each (keep, done, date, trash, next, someday) and returns its result, then the queue.", false),
+		func(ctx context.Context, req *mcp.CallToolRequest, in reviewInput) (*mcp.CallToolResult, any, error) {
+			if len(in.Decisions) > 0 && in.RequestID == "" {
+				return toolError(fmt.Errorf("%w: request_id is required with decisions", engine.ErrInvalid))
+			}
+			actor := actorOf(req, in.Source)
+			var results []map[string]any
+			for i, d := range in.Decisions {
+				res, err := e.Review(ctx, actor, engine.ReviewRequest{RequestID: fmt.Sprintf("%s:%d", in.RequestID, i), ID: d.ID,
+					ExpectedRevision: d.ExpectedRevision, Action: d.Action, DateText: d.DateText})
+				r := map[string]any{"id": d.ID, "action": d.Action}
+				if err != nil {
+					r["error"] = errorMessage(err)
+				} else if len(res.Nodes) > 0 {
+					r["node"] = aiNodes(res.Nodes[:1], res.Refs)[0]
+				}
+				results = append(results, r)
+			}
+			p, err := e.ReviewQueue(ctx)
+			if err != nil {
+				return toolError(err)
+			}
+			due := len(p.Nodes)
+			limit := in.Limit
+			if limit <= 0 {
+				limit = 10
+			}
+			p.Nodes = p.Nodes[:min(limit, 50, len(p.Nodes))]
+			subjects := map[string][]string{}
+			for _, n := range p.Nodes {
+				subjects[n.ID] = p.Subjects[n.ID]
+			}
+			p.Subjects = subjects
+			queue := aiPageOf(p)
+			for i, n := range p.Nodes {
+				seen := max(n.UpdatedAt, n.ReviewedAt)
+				queue.Nodes[i].LastSeen = seen[:min(10, len(seen))]
+			}
+			out := map[string]any{"due": due, "queue": queue}
+			if results != nil {
+				out["results"] = results
+			}
+			return nil, out, nil
 		})
 	mcp.AddTool(srv, tool("vrac_create_type", "Create a tag, only after the user confirmed it. Prefer existing tags. With todo, its nodes get a checkbox.", false),
 		func(ctx context.Context, req *mcp.CallToolRequest, in typeInput) (*mcp.CallToolResult, any, error) {

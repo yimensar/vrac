@@ -129,6 +129,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/v1/nodes/{id}/move", s.api(s.move))
 	m.HandleFunc("POST /api/v1/nodes/{id}/trash", s.api(s.trash))
 	m.HandleFunc("POST /api/v1/nodes/{id}/review", s.api(s.review))
+	m.HandleFunc("GET /api/v1/review", s.api(s.reviewQueue))
 	m.HandleFunc("POST /api/v1/nodes/{id}/restore", s.api(s.restore))
 	m.HandleFunc("POST /api/v1/nodes/{id}/undo", s.api(s.undo))
 	m.HandleFunc("POST /api/v1/search", s.api(s.search))

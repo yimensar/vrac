@@ -196,12 +196,19 @@ func (e *Engine) Search(ctx context.Context, q Query) (Page, error) {
 		page.Nodes = nodes[:limit]
 		page.NextCursor = encodeCursor(searchCursor{keys[limit-1], nodes[limit-1].seq})
 	}
+	return page, e.finish(ctx, &page, q.Subjects)
+}
+
+// finish adds to a page of results their references, their parents and,
+// when asked, the subjects each concerns.
+func (e *Engine) finish(ctx context.Context, page *Page, subjects bool) error {
 	if page.Nodes == nil {
 		page.Nodes = []Node{}
 	}
+	var err error
 	page.Refs, err = e.hydrate(ctx, e.db, page.Nodes)
 	if err != nil {
-		return Page{}, err
+		return err
 	}
 	// Results also carry their location, so readers know where they live.
 	ids := []string{}
@@ -212,19 +219,17 @@ func (e *Engine) Search(ctx context.Context, q Query) (Page, error) {
 	}
 	parents, err := e.refMap(ctx, e.db, ids)
 	if err != nil {
-		return Page{}, err
+		return err
 	}
 	for id, r := range parents {
 		if _, ok := page.Refs[id]; !ok {
 			page.Refs[id] = r
 		}
 	}
-	if q.Subjects {
-		if page.Subjects, err = e.subjectsOf(ctx, page.Nodes, page.Refs); err != nil {
-			return Page{}, err
-		}
+	if subjects {
+		page.Subjects, err = e.subjectsOf(ctx, page.Nodes, page.Refs)
 	}
-	return page, nil
+	return err
 }
 
 // subjectsOf lists, for each node, the typed nodes it concerns other than

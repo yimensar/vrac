@@ -1,19 +1,22 @@
 import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { api, type Node, type Page } from "@/lib/api"
+import { api, type Node, type Page, type ReviewAction } from "@/lib/api"
 import { reportError } from "@/lib/hooks"
 import { formatDay } from "@/lib/syntax"
-import { lastLook, reviewDays } from "@/lib/tasks"
+import { usePreferences } from "@/lib/preferences"
+import { lastLook } from "@/lib/tasks"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NodeList } from "@/outline/views"
 
-/** A GTD-style review: the to-dos nobody has looked at for a week, one at
- * a time, each marked done, kept, dated, deleted or skipped. The queue is
+/** A GTD-style review: the to-dos nobody has looked at for a week (a month
+ * for someday ones), one at a time, each marked done, kept, dated, made a
+ * next action, set aside for someday, deleted or skipped. The queue is
  * fixed when the review starts, so answers do not reorder it. */
 export function Review({ queue, refs, onClose }: { queue: Node[]; refs: Page["refs"]; onClose: () => void }) {
   const client = useQueryClient()
+  const prefs = usePreferences()
   const [index, setIndex] = useState(0)
   const [dating, setDating] = useState(false)
   const [phrase, setPhrase] = useState("")
@@ -25,11 +28,11 @@ export function Review({ queue, refs, onClose }: { queue: Node[]; refs: Page["re
     setIndex((i) => i + 1)
   }
   // The row may have been edited in place: act on its latest revision.
-  const act = async (fn: (n: Node) => Promise<unknown>, message?: string) => {
+  const act = async (action: ReviewAction, dateText?: string, message?: string) => {
     setBusy(true)
     try {
       const fresh = (await api.node(node.id)).node
-      await fn(fresh)
+      await api.review(fresh, action, dateText)
       if (message) toast(message)
       client.invalidateQueries()
       next()
@@ -39,15 +42,17 @@ export function Review({ queue, refs, onClose }: { queue: Node[]; refs: Page["re
       setBusy(false)
     }
   }
-  const done = () => act((n) => api.update(n, { status: "done" }))
-  const keep = () => act((n) => api.review(n))
-  const remove = () => act((n) => api.trash(n), "Deleted; restore it from Activity")
-  const date = () => phrase.trim() && act((n) => api.update(n, { date_text: phrase.trim() }))
+  const done = () => act("done")
+  const keep = () => act("keep")
+  const nextAction = () => prefs.tasks_next && act("next")
+  const someday = () => prefs.tasks_someday && act("someday")
+  const remove = () => act("trash", undefined, "Deleted; restore it from Activity")
+  const date = () => phrase.trim() && act("date", phrase.trim())
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || e.target.tagName === "INPUT")
       if (!node || busy || typing || e.metaKey || e.ctrlKey || e.altKey) return
-      const keys: Record<string, () => void> = { d: done, k: keep, l: () => setDating(true), x: remove, s: next }
+      const keys: Record<string, () => void> = { d: done, k: keep, n: nextAction, m: someday, l: () => setDating(true), x: remove, s: next }
       const run = keys[e.key]
       if (run) {
         e.preventDefault()
@@ -105,9 +110,19 @@ export function Review({ queue, refs, onClose }: { queue: Node[]; refs: Page["re
           <Button disabled={busy} variant="secondary" onClick={keep} title="K">
             Keep
           </Button>
+          {prefs.tasks_next && (
+            <Button disabled={busy} variant="secondary" onClick={nextAction} title="N">
+              Next
+            </Button>
+          )}
           <Button disabled={busy} variant="secondary" onClick={() => setDating(true)} title="L">
             Date…
           </Button>
+          {prefs.tasks_someday && (
+            <Button disabled={busy} variant="secondary" onClick={someday} title="M">
+              Someday
+            </Button>
+          )}
           <Button disabled={busy} variant="secondary" onClick={remove} title="X">
             Delete
           </Button>
@@ -117,7 +132,8 @@ export function Review({ queue, refs, onClose }: { queue: Node[]; refs: Page["re
         </div>
       )}
       <p className="mt-3 text-xs text-muted-foreground/70 pointer-coarse:hidden">
-        Keys: D done, K keep, L date, X delete, S skip. Edit the line itself in place. A to-do comes back after {reviewDays} days unseen.
+        Keys: D done, K keep, N next, L date, M someday, X delete, S skip. Edit the line itself in place. A to-do comes back after a week unseen, a
+        someday one after a month.
       </p>
     </div>
   )

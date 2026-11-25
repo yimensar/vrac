@@ -195,6 +195,13 @@ func TestAPIWritesAndUnresolvedNames(t *testing.T) {
 	if n := reviewed["nodes"].([]any)[0].(map[string]any); n["reviewed_at"] == nil || n["revision"] != task["revision"] {
 		t.Fatalf("reviewed = %v", n)
 	}
+	dated := h.call("POST", "/api/v1/nodes/"+task["id"].(string)+"/review", map[string]any{"request_id": "rv2", "expected_revision": task["revision"], "action": "date", "date_text": "2026-12-01"}, 200)
+	if n := dated["nodes"].([]any)[0].(map[string]any); n["date"] != "2026-12-01" {
+		t.Fatalf("dated = %v", n)
+	}
+	if q := h.call("GET", "/api/v1/review", nil, 200); len(q["nodes"].([]any)) != 0 {
+		t.Fatalf("fresh to-dos due: %v", q)
+	}
 }
 
 func TestCaptureWithAToken(t *testing.T) {
@@ -317,7 +324,7 @@ func TestOAuthAndMCP(t *testing.T) {
 		t.Fatal("server instructions missing")
 	}
 	tools, err := session.ListTools(ctx, nil)
-	if err != nil || len(tools.Tools) != 12 {
+	if err != nil || len(tools.Tools) != 13 {
 		t.Fatalf("tools = %d, %v", len(tools.Tools), err)
 	}
 	for _, tool := range tools.Tools {
@@ -388,6 +395,17 @@ func TestOAuthAndMCP(t *testing.T) {
 	plain := update("u2", kept["revision"].(float64), map[string]any{"input": "Send the revised estimate", "keep_types": false})
 	if plain["text"] != "Send the revised estimate" || plain["types"] != nil || plain["status"] != nil {
 		t.Fatalf("plain = %v", plain)
+	}
+	// A review applies each decision on its own and answers with the queue.
+	todo := call("vrac_write", map[string]any{"request_id": "w6", "source": "chat", "nodes": []any{map[string]any{"input": "Call the bank #task"}}}).StructuredContent.(map[string]any)["nodes"].([]any)[0].(map[string]any)
+	reviewed := call("vrac_review", map[string]any{"request_id": "r1", "source": "chat", "decisions": []any{
+		map[string]any{"id": todo["id"], "expected_revision": todo["revision"], "action": "done"},
+		map[string]any{"id": task["id"], "expected_revision": plain["revision"], "action": "keep"},
+	}})
+	out := reviewed.StructuredContent.(map[string]any)
+	results := out["results"].([]any)
+	if reviewed.IsError || out["due"] != 0.0 || results[0].(map[string]any)["node"].(map[string]any)["status"] != "done" || !strings.Contains(results[1].(map[string]any)["error"].(string), "not a to-do") {
+		t.Fatalf("review = %v", out)
 	}
 }
 

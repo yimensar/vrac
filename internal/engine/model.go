@@ -179,6 +179,12 @@ type ReviewRequest struct {
 	RequestID        string `json:"request_id"`
 	ID               string `json:"id"`
 	ExpectedRevision int64  `json:"expected_revision"`
+	// Action is the review's decision on the to-do: keep (the default)
+	// leaves it as it is, done checks it, date sets DateText as its date,
+	// trash deletes it, next and someday give it the matching tag of the
+	// preferences, taking the other one off.
+	Action   string `json:"action,omitempty"`
+	DateText string `json:"date_text,omitempty"`
 }
 
 // UndoRequest reverts the latest revision of a node.

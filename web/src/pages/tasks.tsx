@@ -4,44 +4,49 @@ import { useQuery } from "@tanstack/react-query"
 import { api, type Page } from "@/lib/api"
 import { useTypes } from "@/lib/hooks"
 import { usePreferences, useSetPreferences } from "@/lib/preferences"
-import { reviewQueue, taskSections } from "@/lib/tasks"
+import { taskSections } from "@/lib/tasks"
 import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Review } from "./review"
 import { Loading, PageTitle, Section } from "@/components/page"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { TypeName } from "@/outline/content"
 import { NodeList } from "@/outline/views"
 
-/** Every open to-do, sorted for a morning look: waiting apart, the others
- * by the node of the group tag (a project) they concern. Each is edited in
- * place. */
+/** Every open to-do, sorted for a morning look: next actions first,
+ * waiting apart, the others by the node of the group tag (a project) they
+ * concern, someday ones last. Each is edited in place. */
 export function TasksPage() {
   const prefs = usePreferences()
   const { data } = useQuery({ queryKey: ["tasks"], queryFn: openTasks })
-  const sections = useMemo(
-    () => data && taskSections(data, { group: prefs.tasks_group, waiting: prefs.tasks_waiting }),
-    [data, prefs.tasks_group, prefs.tasks_waiting],
-  )
-  const due = useMemo(() => (data ? reviewQueue(data.nodes, new Date()) : []), [data])
+  const { data: due } = useQuery({ queryKey: ["review"], queryFn: api.reviewQueue })
+  const { tasks_group: group, tasks_waiting: waiting, tasks_next: next, tasks_someday: someday } = prefs
+  const sections = useMemo(() => data && taskSections(data, { group, waiting, next, someday }), [data, group, waiting, next, someday])
   // The queue is fixed when a review starts.
-  const [review, setReview] = useState<Page["nodes"] | null>(null)
+  const [review, setReview] = useState<Page | null>(null)
   const part = (nodes: Page["nodes"]): Page => ({ nodes, refs: data!.refs })
-  if (review && data) {
+  if (review) {
     return (
       <>
         <PageTitle>Review</PageTitle>
-        <Review queue={review} refs={data.refs} onClose={() => setReview(null)} />
+        <Review queue={review.nodes} refs={review.refs} onClose={() => setReview(null)} />
       </>
     )
   }
+  const apart = (title: string, tag: string, nodes: Page["nodes"], id: string) =>
+    nodes.length > 0 && (
+      <Section title={`${title} · #${tag}`} count={nodes.length}>
+        <NodeList id={id} page={part(nodes)} />
+      </Section>
+    )
   return (
     <>
       <PageTitle
         actions={
           <>
-            {due.length > 0 && (
+            {due && due.nodes.length > 0 && (
               <Button size="sm" onClick={() => setReview(due)}>
-                Review {due.length}
+                Review {due.nodes.length}
               </Button>
             )}
             <TagChoices />
@@ -52,11 +57,8 @@ export function TasksPage() {
       </PageTitle>
       {!sections && <Loading />}
       {sections && data!.nodes.length === 0 && <p className="text-muted-foreground">Nothing open.</p>}
-      {sections && sections.waiting.length > 0 && (
-        <Section title={`Waiting · #${prefs.tasks_waiting}`} count={sections.waiting.length}>
-          <NodeList id="tasks-waiting" page={part(sections.waiting)} />
-        </Section>
-      )}
+      {sections && apart("Next", prefs.tasks_next, sections.next, "tasks-next")}
+      {sections && apart("Waiting", prefs.tasks_waiting, sections.waiting, "tasks-waiting")}
       {sections?.groups.map((g) => (
         <section key={g.subject?.id ?? ""} className="mb-8">
           <h2 className="mb-1.5 flex items-center gap-2 text-sm font-semibold">
@@ -72,6 +74,7 @@ export function TasksPage() {
           <NodeList id={`tasks-${g.subject?.id ?? "other"}`} page={part(g.nodes)} />
         </section>
       ))}
+      {sections && apart("Someday", prefs.tasks_someday, sections.someday, "tasks-someday")}
     </>
   )
 }
@@ -92,32 +95,43 @@ async function openTasks(): Promise<Page> {
 
 const none = "none"
 
-/** The two tags the view uses, the owner's own, kept in the preferences. */
+/** The tags the view uses, the owner's own, kept in the preferences. */
 function TagChoices() {
   const prefs = usePreferences()
   const set = useSetPreferences()
-  const tags = [...useTypes().values()].filter((t) => !t.todo || t.name === prefs.tasks_waiting)
+  const tags = [...useTypes().values()].filter((t) => !t.todo)
   const choice = (label: string, value: string, onChange: (v: string) => void) => (
-    <Select value={value || none} onValueChange={(v) => onChange(v === none ? "" : v)}>
-      <SelectTrigger size="sm" aria-label={label} className="text-muted-foreground">
-        <span className="text-xs">{label}</span>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent align="end">
-        <SelectItem value={none}>none</SelectItem>
-        {value && !tags.some((t) => t.name === value) && <SelectItem value={value}>#{value}</SelectItem>}
-        {tags.map((t) => (
-          <SelectItem key={t.name} value={t.name}>
-            <TypeName name={t.name} />
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <label className="flex items-center justify-between gap-3 text-sm">
+      {label}
+      <Select value={value || none} onValueChange={(v) => onChange(v === none ? "" : v)}>
+        <SelectTrigger size="sm" aria-label={label}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="end">
+          <SelectItem value={none}>none</SelectItem>
+          {value && !tags.some((t) => t.name === value) && <SelectItem value={value}>#{value}</SelectItem>}
+          {tags.map((t) => (
+            <SelectItem key={t.name} value={t.name}>
+              <TypeName name={t.name} />
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </label>
   )
   return (
-    <>
-      {choice("Group by", prefs.tasks_group, (v) => set({ tasks_group: v }))}
-      {choice("Waiting", prefs.tasks_waiting, (v) => set({ tasks_waiting: v }))}
-    </>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="ghost" className="text-muted-foreground">
+          View
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="flex w-64 flex-col gap-2">
+        {choice("Group by", prefs.tasks_group, (v) => set({ tasks_group: v }))}
+        {choice("Next", prefs.tasks_next, (v) => set({ tasks_next: v }))}
+        {choice("Waiting", prefs.tasks_waiting, (v) => set({ tasks_waiting: v }))}
+        {choice("Someday", prefs.tasks_someday, (v) => set({ tasks_someday: v }))}
+      </PopoverContent>
+    </Popover>
   )
 }

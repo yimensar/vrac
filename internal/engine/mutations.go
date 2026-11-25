@@ -311,10 +311,13 @@ func (e *Engine) Trash(ctx context.Context, actor Actor, req TrashRequest) (Resu
 	})
 }
 
-// Review records that a to-do was looked at and kept as it is, so a
-// periodic review can show the ones nobody has looked at for a while. It
-// changes neither the content nor the revision.
+// Review applies a review's decision on a to-do. Keeping it records that
+// it was looked at, so a periodic review can show the ones nobody has
+// looked at for a while, and changes neither the content nor the revision.
 func (e *Engine) Review(ctx context.Context, actor Actor, req ReviewRequest) (Result, error) {
+	if req.Action != "" && req.Action != ReviewKeep {
+		return e.decide(ctx, actor, req)
+	}
 	return e.mutate(ctx, actor, req.RequestID, req, func(s *txState) ([]int64, error) {
 		n, err := s.editable(req.ID, req.ExpectedRevision)
 		if err != nil {

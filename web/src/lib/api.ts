@@ -50,11 +50,21 @@ export type Connection = { id: string; kind: "token" | "client"; name: string; c
 export type Result = { nodes: Node[]; refs: Refs; created?: Brief[] }
 export type Fold = "default" | "expanded" | "collapsed"
 export type Scale = "small" | "default" | "large" | "larger"
-/** tasks_group and tasks_waiting are tags of the tasks view; empty for none. */
-export type Preferences = { fold: Fold; theme: "system" | "light" | "dark"; scale: Scale; tasks_group: string; tasks_waiting: string }
+/** The tasks_ fields are tags of the tasks view; empty for none. */
+export type ReviewAction = "keep" | "done" | "date" | "trash" | "next" | "someday"
+
+export type Preferences = {
+  fold: Fold
+  theme: "system" | "light" | "dark"
+  scale: Scale
+  tasks_group: string
+  tasks_waiting: string
+  tasks_next: string
+  tasks_someday: string
+}
 
 /** The preferences in effect, kept current by the app (see preferences.ts). */
-export const current: Preferences = { fold: "default", theme: "system", scale: "default", tasks_group: "project", tasks_waiting: "waiting" }
+export const current: Preferences = { fold: "default", theme: "system", scale: "default", tasks_group: "project", tasks_waiting: "waiting", tasks_next: "next", tasks_someday: "someday" }
 
 export type Query = {
   text?: string
@@ -152,8 +162,11 @@ export const api = {
   move: (node: Node, placement: Placement) =>
     request<Result>("POST", `/api/v1/nodes/${node.id}/move`, { request_id: requestId(), expected_revision: node.revision, placement }),
   trash: (node: Node) => request<Result>("POST", `/api/v1/nodes/${node.id}/trash`, { request_id: requestId(), expected_revision: node.revision }),
-  /** Marks a to-do as reviewed and kept as it is. */
-  review: (node: Node) => request<Result>("POST", `/api/v1/nodes/${node.id}/review`, { request_id: requestId(), expected_revision: node.revision }),
+  /** The open to-dos due for review, the longest unseen first. */
+  reviewQueue: () => request<Page>("GET", "/api/v1/review"),
+  /** Applies a review decision to a to-do; keep marks it looked at. */
+  review: (node: Node, action: ReviewAction = "keep", date_text?: string) =>
+    request<Result>("POST", `/api/v1/nodes/${node.id}/review`, { request_id: requestId(), expected_revision: node.revision, action, date_text }),
   undo: (id: string, revision: number) => request<Result>("POST", `/api/v1/nodes/${id}/undo`, { request_id: requestId(), expected_revision: revision }),
 
   preferences: () => request<Preferences>("GET", "/api/v1/preferences"),
