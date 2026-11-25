@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 )
 
 // Preferences shape the interface. They live on the server so they follow
@@ -18,10 +19,17 @@ type Preferences struct {
 	// Scale is the size of the interface: "small", "default", "large" or
 	// "larger", so the browser's own zoom is never needed.
 	Scale string `json:"scale"`
+	// TasksGroup is the tag that groups open to-dos on the tasks view: each
+	// one under the most specific node with that tag it concerns. Empty
+	// lists them without groups.
+	TasksGroup string `json:"tasks_group"`
+	// TasksWaiting is the tag of to-dos waiting on someone else, shown
+	// apart on the tasks view. Empty shows none apart.
+	TasksWaiting string `json:"tasks_waiting"`
 }
 
 // DefaultPreferences apply until the owner changes them.
-var DefaultPreferences = Preferences{Fold: "default", Theme: "system", Scale: "default"}
+var DefaultPreferences = Preferences{Fold: "default", Theme: "system", Scale: "default", TasksGroup: "project", TasksWaiting: "waiting"}
 
 // Preferences returns the stored preferences over the defaults.
 func (e *Engine) Preferences(ctx context.Context) (Preferences, error) {
@@ -57,6 +65,14 @@ func (e *Engine) SetPreferences(ctx context.Context, p Preferences) (Preferences
 	case "small", "default", "large", "larger":
 	default:
 		return p, invalid("scale is small, default, large or larger")
+	}
+	for _, tag := range []*string{&p.TasksGroup, &p.TasksWaiting} {
+		*tag = strings.ToLower(strings.TrimSpace(*tag))
+		if *tag != "" {
+			if err := validTypeName(*tag); err != nil {
+				return p, err
+			}
+		}
 	}
 	b, _ := json.Marshal(p)
 	return p, e.write(ctx, func(tx *sql.Tx) error {

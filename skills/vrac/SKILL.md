@@ -41,7 +41,11 @@ initiative: the user should never have to say "take a note" or "check Vrac".
 Write when a conversation or an action produced at least one of:
 
 - something the user must do → a node with the user's to-do tag, with a
-  `date` when a deadline is known;
+  `date` when a deadline is known. Keep it one short action that references
+  the project it serves (`[[Northwind|…]]`) or sits under a node that does:
+  the Tasks view groups open to-dos by that project. Something the user
+  waits for from someone else also takes the waiting tag (`#waiting`) when
+  the user has one;
 - something decided, an exchange with people, something happening at a date
   → a node with the tag the user uses for it, if one exists; otherwise a
   plain line;

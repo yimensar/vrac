@@ -291,9 +291,10 @@ there. The journal view shows today at the top, then the previous days as
 you scroll, today still written in place. To-dos are not gathered on the
 page: they are written in today's journal whatever their horizon (a date
 on one is a real deadline) and found again by search, on the `#task` tag
-page, or on the page of what they concern. A free outline cannot tell
-which of a to-do's contexts is its subject (a meeting, the project the
-meeting is about, a person it mentions), so no view guesses one. There is
+page, on the page of what they concern, or on the Tasks view. A free
+outline cannot tell which of a to-do's contexts is its subject (a meeting,
+the project the meeting is about, a person it mentions), so no view guesses
+one: the Tasks view groups by a tag the owner chose. There is
 no permanent navigation: two quiet
 icons float at the top right, the search (⌘K) and a menu to the other
 views, and the writing line itself holds every power through completion
@@ -345,6 +346,13 @@ non-goal; it would require synchronization and a different model.
   history are reached from the palette and Activity.
 - **Tag pages**: every node carrying the tag, most recent first; a to-do
   tag shows open ones then done ones; the to-do trait is toggled there.
+- **Tasks**: every open to-do, a menu away, for a morning look. To-dos
+  carrying the waiting tag stand apart; the others go under the most
+  specific node carrying the group tag they concern (the biggest groups
+  first, the ungrouped last); the undated ones written over 14 days ago
+  fold away. The owner picks both tags (by default `#project` and
+  `#waiting`), kept in the preferences: the view never guesses a subject,
+  it follows the tag the owner chose.
 - **Agenda**: everything dated, day by day.
 - **Search**: query chips (tag, context, status, date).
 - **Command palette** (⌘K), the power box: one field that searches

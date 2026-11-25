@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query"
-import { BrowserRouter, Navigate, Route, Routes } from "react-router"
+import { BrowserRouter, Route, Routes } from "react-router"
 import { api } from "@/lib/api"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -13,6 +13,7 @@ import { SearchPage } from "@/pages/search"
 import { SettingsPage } from "@/pages/settings"
 import { SharePage } from "@/pages/share"
 import { TagPage } from "@/pages/tag"
+import { TasksPage } from "@/pages/tasks"
 
 export function makeClient() {
   return new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: true, retry: 1, staleTime: 2_000 } } })
@@ -30,7 +31,7 @@ function Gate() {
         <Route path="journal" element={<JournalPage />} />
         <Route path="day/:day" element={<DayPage />} />
         <Route path="node/:id" element={<NodePage />} />
-        <Route path="tasks" element={<Navigate to="/" replace />} />
+        <Route path="tasks" element={<TasksPage />} />
         <Route path="agenda" element={<AgendaPage />} />
         <Route path="tag/:name" element={<TagPage />} />
         <Route path="search" element={<SearchPage />} />
