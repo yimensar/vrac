@@ -191,6 +191,10 @@ func TestAPIWritesAndUnresolvedNames(t *testing.T) {
 	if p := h.call("PATCH", "/api/v1/types/project", map[string]any{"todo": true}, 200); p["todo"] != true {
 		t.Fatalf("trait = %v", p)
 	}
+	reviewed := h.call("POST", "/api/v1/nodes/"+task["id"].(string)+"/review", map[string]any{"request_id": "rv", "expected_revision": task["revision"]}, 200)
+	if n := reviewed["nodes"].([]any)[0].(map[string]any); n["reviewed_at"] == nil || n["revision"] != task["revision"] {
+		t.Fatalf("reviewed = %v", n)
+	}
 }
 
 func TestCaptureWithAToken(t *testing.T) {

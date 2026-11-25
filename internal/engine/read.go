@@ -14,7 +14,7 @@ type queryer interface {
 
 const nodeColumns = `n.seq, n.id, n.kind, coalesce(p.id, ''), coalesce(n.parent_seq, 0), n.text,
 	coalesce(n.status, ''), coalesce(n.start_at, ''), coalesce(n.end_at, ''),
-	n.day, n.revision, n.created_at, n.updated_at, n.created_by, n.updated_by, n.updated_source,
+	n.day, n.revision, n.created_at, n.updated_at, coalesce(n.reviewed_at, ''), n.created_by, n.updated_by, n.updated_source,
 	n.trashed_at IS NOT NULL,
 	(SELECT count(*) FROM nodes c WHERE c.parent_seq = n.seq AND c.trashed_at IS NULL), n.position`
 
@@ -26,7 +26,7 @@ func scanNodes(rows *sql.Rows) ([]Node, error) {
 	for rows.Next() {
 		var n Node
 		if err := rows.Scan(&n.seq, &n.ID, &n.Kind, &n.ParentID, &n.parentSeq, &n.Text, &n.Status, &n.Date, &n.End,
-			&n.Day, &n.Revision, &n.CreatedAt, &n.UpdatedAt, &n.CreatedBy, &n.UpdatedBy, &n.Source, &n.Trashed, &n.ChildCount, &n.position); err != nil {
+			&n.Day, &n.Revision, &n.CreatedAt, &n.UpdatedAt, &n.ReviewedAt, &n.CreatedBy, &n.UpdatedBy, &n.Source, &n.Trashed, &n.ChildCount, &n.position); err != nil {
 			return nil, err
 		}
 		out = append(out, n)

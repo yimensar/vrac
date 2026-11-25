@@ -180,7 +180,7 @@ func (e *Engine) Search(ctx context.Context, q Query) (Page, error) {
 		var n Node
 		var k string
 		if err := rows.Scan(&n.seq, &n.ID, &n.Kind, &n.ParentID, &n.parentSeq, &n.Text, &n.Status, &n.Date, &n.End,
-			&n.Day, &n.Revision, &n.CreatedAt, &n.UpdatedAt, &n.CreatedBy, &n.UpdatedBy, &n.Source, &n.Trashed, &n.ChildCount, &n.position, &k); err != nil {
+			&n.Day, &n.Revision, &n.CreatedAt, &n.UpdatedAt, &n.ReviewedAt, &n.CreatedBy, &n.UpdatedBy, &n.Source, &n.Trashed, &n.ChildCount, &n.position, &k); err != nil {
 			rows.Close()
 			return Page{}, err
 		}

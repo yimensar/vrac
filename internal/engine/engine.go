@@ -40,6 +40,9 @@ var schemaV7 string
 //go:embed schema_v8.sql
 var schemaV8 string
 
+//go:embed schema_v9.sql
+var schemaV9 string
+
 // applicationID marks a SQLite file as a Vrac database ("VRAC").
 const applicationID = 0x56524143
 
@@ -71,6 +74,16 @@ var migrations = []func(*Engine, *sql.Tx) error{
 	migrateTags,
 	func(e *Engine, tx *sql.Tx) error {
 		_, err := tx.Exec(schemaV8)
+		return err
+	},
+	// Migration 9 adds reviewed_at; like 6 it may meet the column already,
+	// when a database is replayed from an older version.
+	func(e *Engine, tx *sql.Tx) error {
+		columns, err := tableColumns(tx, "nodes")
+		if err != nil || columns["reviewed_at"] {
+			return err
+		}
+		_, err = tx.Exec(schemaV9)
 		return err
 	},
 }

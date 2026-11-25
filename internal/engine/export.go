@@ -57,6 +57,7 @@ type ExportNode struct {
 	Revision      int64    `json:"revision"`
 	CreatedAt     string   `json:"created_at"`
 	UpdatedAt     string   `json:"updated_at"`
+	ReviewedAt    string   `json:"reviewed_at,omitempty"`
 	CreatedBy     string   `json:"created_by"`
 	CreatedSource string   `json:"created_source"`
 	UpdatedBy     string   `json:"updated_by"`
@@ -102,7 +103,7 @@ func (e *Engine) Export(ctx context.Context, w io.Writer) error {
 			SELECT seq, printf('%020d', seq) FROM nodes WHERE parent_seq IS NULL
 			UNION ALL SELECT n.seq, tree.path || '/' || printf('%020d', n.seq) FROM nodes n JOIN tree ON n.parent_seq = tree.seq)
 		SELECT n.id, n.kind, coalesce(p.id, ''), n.position, n.text, coalesce(n.status, ''), coalesce(n.start_at, ''), coalesce(n.end_at, ''),
-			n.day, n.revision, n.created_at, n.updated_at, n.created_by, n.created_source, n.updated_by, n.updated_source,
+			n.day, n.revision, n.created_at, n.updated_at, coalesce(n.reviewed_at, ''), n.created_by, n.created_source, n.updated_by, n.updated_source,
 			coalesce(n.trashed_at, ''), coalesce(r.id, ''),
 			coalesce((SELECT group_concat(t.name, ' ') FROM node_types nt JOIN types t ON t.id = nt.type_id WHERE nt.node_seq = n.seq), ''),
 			coalesce((SELECT json_group_array(alias) FROM aliases WHERE node_seq = n.seq), '[]')
@@ -115,7 +116,7 @@ func (e *Engine) Export(ctx context.Context, w io.Writer) error {
 		var n ExportNode
 		var types, aliases string
 		if err := rows.Scan(&n.ID, &n.Kind, &n.ParentID, &n.Position, &n.Text, &n.Status, &n.Date, &n.End, &n.Day, &n.Revision,
-			&n.CreatedAt, &n.UpdatedAt, &n.CreatedBy, &n.CreatedSource, &n.UpdatedBy, &n.UpdatedSource, &n.TrashedAt, &n.TrashRoot, &types, &aliases); err != nil {
+			&n.CreatedAt, &n.UpdatedAt, &n.ReviewedAt, &n.CreatedBy, &n.CreatedSource, &n.UpdatedBy, &n.UpdatedSource, &n.TrashedAt, &n.TrashRoot, &types, &aliases); err != nil {
 			rows.Close()
 			return err
 		}
@@ -236,10 +237,10 @@ func (e *Engine) Import(ctx context.Context, r io.Reader) error {
 				return invalid("node %s has unknown kind %q", n.ID, n.Kind)
 			}
 			r, err := tx.ExecContext(ctx, `INSERT INTO nodes(id, kind, parent_seq, position, text, name_key, status, start_at, end_at, day, revision,
-				created_at, updated_at, created_by, created_source, updated_by, updated_source, trashed_at)
-				VALUES (?, ?, ?, ?, ?, ?, nullif(?, ''), nullif(?, ''), nullif(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, nullif(?, ''))`,
+				created_at, updated_at, reviewed_at, created_by, created_source, updated_by, updated_source, trashed_at)
+				VALUES (?, ?, ?, ?, ?, ?, nullif(?, ''), nullif(?, ''), nullif(?, ''), ?, ?, ?, ?, nullif(?, ''), ?, ?, ?, ?, nullif(?, ''))`,
 				n.ID, n.Kind, parent, n.Position, n.Text, nameKeyOfKind(n.Kind, n.Text), n.Status, n.Date, n.End, n.Day, n.Revision,
-				n.CreatedAt, n.UpdatedAt, n.CreatedBy, n.CreatedSource, n.UpdatedBy, n.UpdatedSource, n.TrashedAt)
+				n.CreatedAt, n.UpdatedAt, n.ReviewedAt, n.CreatedBy, n.CreatedSource, n.UpdatedBy, n.UpdatedSource, n.TrashedAt)
 			if err != nil {
 				return invalid("node %s: %v", n.ID, err)
 			}

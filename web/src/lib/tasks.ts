@@ -25,3 +25,18 @@ export function taskSections(page: Page, opts: { group: string; waiting: string 
   )
   return { waiting, groups: sorted }
 }
+
+/** A to-do is due for review when nobody has changed it or kept it in a
+ * review for this many days. */
+export const reviewDays = 7
+
+/** When a to-do was last looked at: its last change or review. */
+export function lastLook(n: Node): string {
+  return n.reviewed_at && n.reviewed_at > n.updated_at ? n.reviewed_at : n.updated_at
+}
+
+/** The open to-dos due for review, the longest unseen first. */
+export function reviewQueue(nodes: Node[], now: Date): Node[] {
+  const before = new Date(now.getTime() - reviewDays * 86_400_000).toISOString()
+  return nodes.filter((n) => lastLook(n) < before).sort((a, b) => lastLook(a).localeCompare(lastLook(b)))
+}

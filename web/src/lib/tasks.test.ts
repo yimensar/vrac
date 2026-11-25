@@ -1,5 +1,5 @@
 import type { Node, Page } from "./api"
-import { taskSections } from "./tasks"
+import { reviewQueue, taskSections } from "./tasks"
 
 const node = (id: string, extra: Partial<Node> = {}): Node => ({
   id, kind: "node", text: id, types: ["task"], status: "open", aliases: [], day: "2026-11-20", revision: 1,
@@ -40,4 +40,14 @@ test("without tags, everything is one list", () => {
   const s = taskSections(page, { group: "", waiting: "" })
   expect(s.waiting).toEqual([])
   expect(s.groups).toEqual([{ subject: undefined, nodes: [page.nodes[0]] }])
+})
+
+test("the review queue holds to-dos unseen for a week, the longest unseen first", () => {
+  const nodes = [
+    node("fresh", { updated_at: "2026-11-24T10:00:00Z" }),
+    node("kept", { updated_at: "2026-10-01T10:00:00Z", reviewed_at: "2026-11-23T10:00:00Z" }),
+    node("old", { updated_at: "2026-11-10T10:00:00Z" }),
+    node("older", { updated_at: "2026-10-01T10:00:00Z", reviewed_at: "2026-11-02T10:00:00Z" }),
+  ]
+  expect(reviewQueue(nodes, new Date("2026-11-25T10:00:00Z")).map((n) => n.id)).toEqual(["older", "old"])
 })

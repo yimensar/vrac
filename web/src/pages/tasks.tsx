@@ -1,10 +1,12 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { Link } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { api, type Page } from "@/lib/api"
 import { useTypes } from "@/lib/hooks"
 import { usePreferences, useSetPreferences } from "@/lib/preferences"
-import { taskSections } from "@/lib/tasks"
+import { reviewQueue, taskSections } from "@/lib/tasks"
+import { Button } from "@/components/ui/button"
+import { Review } from "./review"
 import { Loading, PageTitle, Section } from "@/components/page"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { TypeName } from "@/outline/content"
@@ -20,10 +22,34 @@ export function TasksPage() {
     () => data && taskSections(data, { group: prefs.tasks_group, waiting: prefs.tasks_waiting }),
     [data, prefs.tasks_group, prefs.tasks_waiting],
   )
+  const due = useMemo(() => (data ? reviewQueue(data.nodes, new Date()) : []), [data])
+  // The queue is fixed when a review starts.
+  const [review, setReview] = useState<Page["nodes"] | null>(null)
   const part = (nodes: Page["nodes"]): Page => ({ nodes, refs: data!.refs })
+  if (review && data) {
+    return (
+      <>
+        <PageTitle>Review</PageTitle>
+        <Review queue={review} refs={data.refs} onClose={() => setReview(null)} />
+      </>
+    )
+  }
   return (
     <>
-      <PageTitle actions={<TagChoices />}>Tasks</PageTitle>
+      <PageTitle
+        actions={
+          <>
+            {due.length > 0 && (
+              <Button size="sm" onClick={() => setReview(due)}>
+                Review {due.length}
+              </Button>
+            )}
+            <TagChoices />
+          </>
+        }
+      >
+        Tasks
+      </PageTitle>
       {!sections && <Loading />}
       {sections && data!.nodes.length === 0 && <p className="text-muted-foreground">Nothing open.</p>}
       {sections && sections.waiting.length > 0 && (

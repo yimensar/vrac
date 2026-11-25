@@ -311,6 +311,23 @@ func (e *Engine) Trash(ctx context.Context, actor Actor, req TrashRequest) (Resu
 	})
 }
 
+// Review records that a to-do was looked at and kept as it is, so a
+// periodic review can show the ones nobody has looked at for a while. It
+// changes neither the content nor the revision.
+func (e *Engine) Review(ctx context.Context, actor Actor, req ReviewRequest) (Result, error) {
+	return e.mutate(ctx, actor, req.RequestID, req, func(s *txState) ([]int64, error) {
+		n, err := s.editable(req.ID, req.ExpectedRevision)
+		if err != nil {
+			return nil, err
+		}
+		if n.Status == "" || n.Trashed {
+			return nil, invalid("node %s is not a to-do", req.ID)
+		}
+		_, err = s.tx.ExecContext(s.ctx, `UPDATE nodes SET reviewed_at = ? WHERE seq = ?`, s.now, n.seq)
+		return []int64{n.seq}, err
+	})
+}
+
 func (s *txState) trash(seq int64) error {
 	if _, err := s.tx.ExecContext(s.ctx, `WITH RECURSIVE down(seq) AS (SELECT ? UNION ALL SELECT n.seq FROM nodes n JOIN down ON n.parent_seq = down.seq WHERE n.trashed_at IS NULL)
 		UPDATE nodes SET trashed_at = ?, trash_root = ? WHERE seq IN (SELECT seq FROM down)`, seq, s.now, seq); err != nil {

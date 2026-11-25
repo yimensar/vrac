@@ -46,13 +46,15 @@ type Node struct {
 	Status string `json:"status,omitempty"`
 	// Date is a day or a day and time (YYYY-MM-DD or YYYY-MM-DDTHH:MM); End
 	// closes a range. Any node may carry them.
-	Date       string   `json:"date,omitempty"`
-	End        string   `json:"end,omitempty"`
-	Aliases    []string `json:"aliases"`
-	Day        string   `json:"day"`
-	Revision   int64    `json:"revision"`
-	CreatedAt  string   `json:"created_at"`
-	UpdatedAt  string   `json:"updated_at"`
+	Date      string   `json:"date,omitempty"`
+	End       string   `json:"end,omitempty"`
+	Aliases   []string `json:"aliases"`
+	Day       string   `json:"day"`
+	Revision  int64    `json:"revision"`
+	CreatedAt string   `json:"created_at"`
+	UpdatedAt string   `json:"updated_at"`
+	// ReviewedAt is when a review last kept the node unchanged.
+	ReviewedAt string   `json:"reviewed_at,omitempty"`
 	CreatedBy  string   `json:"created_by"`
 	UpdatedBy  string   `json:"updated_by"`
 	Source     string   `json:"source"`
@@ -167,6 +169,13 @@ type MoveRequest struct {
 
 // TrashRequest moves a node and its subtree to the trash, or restores it.
 type TrashRequest struct {
+	RequestID        string `json:"request_id"`
+	ID               string `json:"id"`
+	ExpectedRevision int64  `json:"expected_revision"`
+}
+
+// ReviewRequest marks a to-do as reviewed and kept as it is.
+type ReviewRequest struct {
 	RequestID        string `json:"request_id"`
 	ID               string `json:"id"`
 	ExpectedRevision int64  `json:"expected_revision"`

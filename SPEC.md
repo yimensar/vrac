@@ -353,6 +353,11 @@ non-goal; it would require synchronization and a different model.
   to-do must not slip out of sight. The owner picks both tags (by default `#project` and
   `#waiting`), kept in the preferences: the view never guesses a subject,
   it follows the tag the owner chose.
+- **Review** (from Tasks, GTD style): the open to-dos nobody has changed
+  or kept for 7 days, the longest unseen first, one at a time: done, keep
+  (records `reviewed_at` without a new revision), date (a phrase), delete
+  (to the trash) or skip, the line itself editable in place. The queue is
+  fixed when the review starts.
 - **Agenda**: everything dated, day by day.
 - **Search**: query chips (tag, context, status, date).
 - **Command palette** (⌘K), the power box: one field that searches
@@ -498,7 +503,7 @@ the user's current Memos skill.
   Migration 7 turned the built-in types into the user's tags (removing the
   unused ones), gave `task` the to-do trait and moved due dates and starts
   into one date field; migration 8 dropped the checkboxes of nodes without
-  a to-do tag.
+  a to-do tag; migration 9 added `reviewed_at`, kept by export and import.
 - Backups use SQLite's backup facilities, never a raw file copy.
 - Versioned JSON export and import (into an empty instance), preserving IDs,
   structure, types, references and history. It is also the path between

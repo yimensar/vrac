@@ -168,6 +168,15 @@ func (s *Server) trash(w http.ResponseWriter, r *http.Request, p principal) {
 	respond(w, v, err)
 }
 
+func (s *Server) review(w http.ResponseWriter, r *http.Request, p principal) {
+	var b revisionBody
+	if !decode(w, r, &b) {
+		return
+	}
+	v, err := s.engine.Review(r.Context(), p.actor(b.Source), engine.ReviewRequest{RequestID: b.RequestID, ID: r.PathValue("id"), ExpectedRevision: b.ExpectedRevision})
+	respond(w, v, err)
+}
+
 func (s *Server) restore(w http.ResponseWriter, r *http.Request, p principal) {
 	var b revisionBody
 	if !decode(w, r, &b) {

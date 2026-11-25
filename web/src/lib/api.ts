@@ -17,6 +17,8 @@ export type Node = {
   revision: number
   created_at: string
   updated_at: string
+  /** When a review last kept it unchanged. */
+  reviewed_at?: string
   created_by: string
   updated_by: string
   source: string
@@ -150,6 +152,8 @@ export const api = {
   move: (node: Node, placement: Placement) =>
     request<Result>("POST", `/api/v1/nodes/${node.id}/move`, { request_id: requestId(), expected_revision: node.revision, placement }),
   trash: (node: Node) => request<Result>("POST", `/api/v1/nodes/${node.id}/trash`, { request_id: requestId(), expected_revision: node.revision }),
+  /** Marks a to-do as reviewed and kept as it is. */
+  review: (node: Node) => request<Result>("POST", `/api/v1/nodes/${node.id}/review`, { request_id: requestId(), expected_revision: node.revision }),
   undo: (id: string, revision: number) => request<Result>("POST", `/api/v1/nodes/${id}/undo`, { request_id: requestId(), expected_revision: revision }),
 
   preferences: () => request<Preferences>("GET", "/api/v1/preferences"),
