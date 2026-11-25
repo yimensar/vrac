@@ -28,10 +28,26 @@ test("open to-dos are sorted into waiting and groups, old ones included", () => 
   const s = taskSections(page, { group: "project", waiting: "waiting" })
   expect(s.waiting.map((n) => n.id)).toEqual(["b"])
   expect(s.groups.map((g) => [g.subject?.name, g.nodes.map((n) => n.id)])).toEqual([
-    ["Northwind", ["a", "d"]],
+    ["Northwind", ["a", "c", "d"]],
     ["Globex", ["f"]],
     ["Lot 2", ["c"]],
     [undefined, ["e", "g"]],
+  ])
+})
+
+test("a to-do about two people is under each", () => {
+  const page: Page = {
+    nodes: [node("call")],
+    refs: {
+      sixtine: { id: "sixtine", name: "Sixtine", label: "Sixtine", types: ["person"] },
+      leandre: { id: "leandre", name: "Léandre", label: "Léandre", types: ["person"] },
+    },
+    subjects: { call: ["sixtine", "leandre"] },
+  }
+  const s = taskSections(page, { group: "person", waiting: "" })
+  expect(s.groups.map((g) => [g.subject?.name, g.nodes.map((n) => n.id)])).toEqual([
+    ["Léandre", ["call"]],
+    ["Sixtine", ["call"]],
   ])
 })
 
