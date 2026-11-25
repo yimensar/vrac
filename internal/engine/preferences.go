@@ -1,0 +1,82 @@
+package engine
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"strings"
+)
+
+// Preferences shape the interface. They live on the server so they follow
+// the owner across devices.
+type Preferences struct {
+	// Fold is how outlines open: "default" collapses projects and people,
+	// "expanded" opens everything, "collapsed" closes everything.
+	Fold string `json:"fold"`
+	// Theme is "system", "light" or "dark".
+	Theme string `json:"theme"`
+	// Scale is the size of the interface: "small", "default", "large" or
+	// "larger", so the browser's own zoom is never needed.
+	Scale string `json:"scale"`
+	// TasksGroup is the tag that groups open to-dos on the tasks view: each
+	// one under the most specific node with that tag it concerns. Empty
+	// lists them without groups.
+	TasksGroup string `json:"tasks_group"`
+	// TasksWaiting is the tag of to-dos waiting on someone else, shown
+	// apart on the tasks view. Empty shows none apart.
+	TasksWaiting string `json:"tasks_waiting"`
+}
+
+// DefaultPreferences apply until the owner changes them.
+var DefaultPreferences = Preferences{Fold: "default", Theme: "system", Scale: "default", TasksGroup: "project", TasksWaiting: "waiting"}
+
+// Preferences returns the stored preferences over the defaults.
+func (e *Engine) Preferences(ctx context.Context) (Preferences, error) {
+	p := DefaultPreferences
+	var raw string
+	err := e.db.QueryRowContext(ctx, `SELECT value FROM preferences WHERE key = 'interface'`).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return p, nil
+	}
+	if err != nil {
+		return p, err
+	}
+	// Unknown or missing fields keep their defaults.
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		return DefaultPreferences, nil
+	}
+	return p, nil
+}
+
+// SetPreferences validates and stores preferences.
+func (e *Engine) SetPreferences(ctx context.Context, p Preferences) (Preferences, error) {
+	switch p.Fold {
+	case "default", "expanded", "collapsed":
+	default:
+		return p, invalid("fold is default, expanded or collapsed")
+	}
+	switch p.Theme {
+	case "system", "light", "dark":
+	default:
+		return p, invalid("theme is system, light or dark")
+	}
+	switch p.Scale {
+	case "small", "default", "large", "larger":
+	default:
+		return p, invalid("scale is small, default, large or larger")
+	}
+	for _, tag := range []*string{&p.TasksGroup, &p.TasksWaiting} {
+		*tag = strings.ToLower(strings.TrimSpace(*tag))
+		if *tag != "" {
+			if err := validTypeName(*tag); err != nil {
+				return p, err
+			}
+		}
+	}
+	b, _ := json.Marshal(p)
+	return p, e.write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO preferences(key, value) VALUES ('interface', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, string(b))
+		return err
+	})
+}
