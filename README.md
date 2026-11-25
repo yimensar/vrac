@@ -1,251 +1,151 @@
 # Vrac
 
-> Capture first. Structure later—or never.
+Vrac (`vrac.` on screen) is a self-hosted outliner for notes, to-dos,
+meetings, decisions, people, projects, whatever you tag, shared by you and
+your AI. You write in a daily journal, one page and nothing else, with your
+own `#tags`, `[[references]]` or `@`, and `/` commands; Vrac gathers
+everything where it matters. Any AI client connects through MCP and keeps
+it up to date. See [SPEC.md](SPEC.md).
 
-Vrac is the local-first TUI outliner your terminal has been missing. It opens
-on today, stays out of the way, and remains stupidly fast—even across millions
-of notes.
+## Run it locally
 
-Your thoughts do not wait for the right folder. Vrac does not ask for one.
-Write everything in the Journal, let structure emerge through bullets, add
-`[[references]]` and `#tags` when they are useful, and find the important stuff
-later without spending your life maintaining a second brain.
+With Nix:
 
-Vrac is early software and is already used for daily note-taking. Its workspace
-format starts cleanly at V1.
-
-## Not another productivity system
-
-- Open it and type. You are already in today's Journal.
-- Structure naturally with real, inline-editable bullets.
-- Keep tasks, decisions, meetings, and ideas where they actually happened.
-- Connect concepts with stable `[[references]]` and contextual backlinks.
-- Add indexed `#tags` without turning every sentence into metadata soup.
-- Work locally or through SSH with no graphical dependency.
-- Synchronize through an ordinary iCloud, Syncthing, Dropbox, or OneDrive
-  folder while the active SQLite database stays on local storage.
-
-No account. No server. No telemetry. No cloud database. No loading spinner
-contemplating its own existence.
-
-Just one fast terminal outliner, an ordinary SQLite database, and your thoughts.
-
-## Install
-
-On macOS or x86_64 Linux, install the latest release without Rust or `sudo`:
-
-```sh
-curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/yan-imensar/vrac/releases/latest/download/vrac-installer.sh | sh
+```bash
+nix run . -- serve -timezone Europe/Paris
 ```
 
-The installer verifies the release SHA-256 checksum and writes `vrac` to
-`~/.local/bin`. Set `VRAC_INSTALL_DIR` to choose another directory, or
-`VRAC_VERSION=v0.1.0` to install a specific release. It never edits shell
-configuration; if necessary, it prints the directory to add to `PATH`.
+Open http://localhost:8080, choose the instance password, and start writing.
+Data lives in `./data/vrac.sqlite` (change it with `-data DIR`).
 
-For a manual installation, download the archive for your platform from the
-[latest GitHub release](https://github.com/yan-imensar/vrac/releases/latest):
+## Develop
 
-| Platform | Archive |
-| --- | --- |
-| macOS Apple Silicon | `aarch64-apple-darwin.tar.gz` |
-| macOS Intel | `x86_64-apple-darwin.tar.gz` |
-| Linux x86_64 | `x86_64-unknown-linux-musl.tar.gz` |
-| Windows x86_64 | `x86_64-pc-windows-msvc.zip` |
-
-Each archive has a matching SHA-256 checksum. Extract it, place `vrac` (or
-`vrac.exe`) somewhere on your `PATH`, and run:
-
-```sh
-vrac
+```bash
+nix develop
 ```
 
-Developers with Rust 1.95 or newer can install the current main branch
-directly:
+Then, in two terminals:
 
-```sh
-cargo install --locked --git https://github.com/yan-imensar/vrac vrac
+```bash
+go run ./cmd/vrac serve -timezone Europe/Paris
 ```
 
-From a source checkout:
-
-```sh
-cargo install --locked --path crates/vrac
-vrac
+```bash
+cd web && npm install && npm run dev
 ```
 
-The first launch opens a terminal-native folder browser. Choose or create a
-folder for the workspace; the same flow works over SSH. Later launches reuse
-that selection. If the selected workspace can no longer be opened, Vrac shows
-the browser again and leaves its existing local and shared files untouched.
-Use `vrac --workspace <provider-folder>` to open an explicit provider folder,
-or `vrac workspace select` to reopen the browser.
+The Vite server (http://localhost:5173) proxies the API to the Go server.
+To serve the built interface from the Go binary instead:
 
-To build without installing:
-
-```sh
-cargo run --release -p vrac
+```bash
+(cd web && npm run build) && go build -o bin/vrac ./cmd/vrac && ./bin/vrac
 ```
 
-## Terminal workflow
+Checks:
 
-Vrac opens today's Journal and persists non-empty edits automatically. There is
-no save command.
-
-### Navigation
-
-| Key | Action |
-| --- | --- |
-| `j` / `k`, arrows | Move between bullets |
-| `h` / `l` | Parent or first child inside the current zoom |
-| `H` | Return to the parent zoom |
-| `Enter` | Focus the selected bullet |
-| `Space` | Expand or collapse |
-| `gg` / `G` | First or last visible bullet |
-| `/` | Search nodes |
-| `:` | Open commands |
-| `b` | Open contextual backlinks |
-| `#` | Toggle tags in normal mode |
-| `?` | Open keyboard help |
-
-### Editing
-
-| Key | Action |
-| --- | --- |
-| `i` / `a` | Edit at the start or end |
-| `o` / `O` | Create a sibling after or before |
-| `c` | Create a child |
-| `Enter` | Persist and continue with a sibling |
-| `Tab` / `Shift-Tab` | Indent or outdent |
-| `Esc` | Persist non-empty work and return to normal mode |
-| `[[` | Complete a stable reference inline |
-| `#` | Complete a tag inline |
-| `Ctrl-Enter` | Persist and focus the edited bullet |
-
-Up and down move through wrapped visual lines before crossing into adjacent
-bullets. Home and End stay on the current visual line. Alt-arrow moves by word,
-and Alt-Backspace removes a word.
-
-### Structure and history
-
-| Key | Action |
-| --- | --- |
-| `yy` | Copy a subtree as portable indented text |
-| `dd` | Copy, then delete a subtree |
-| `p` | Paste an indented outline |
-| `u` / `Ctrl-R` | Undo or redo |
-
-Clipboard text remains useful outside Vrac. Paste accepts ordinary lines or
-indented `- ` bullets and creates the complete hierarchy atomically.
-
-## Local means local
-
-The selected folder contains only portable synchronization material:
-
-```text
-workspace-id
-checkpoint.vrac
-changes/*.vrac-sync
+```bash
+gofmt -l . && go vet ./... && go test -race ./...
 ```
 
-The open SQLite database and its WAL remain in the platform's local application
-data. Vrac never opens a live database directly from a synchronized or network
-folder.
-
-Synchronization runs at startup and after idle periods outside inline editing.
-Use `:sync` for an immediate round and `:workspace` to choose another folder.
-
-Terminal presentation preferences live in
-`$XDG_CONFIG_HOME/vrac/config.toml`, or `~/.config/vrac/config.toml` when
-`XDG_CONFIG_HOME` is unset. Windows uses `%APPDATA%\vrac\config.toml`.
-Vrac creates this file only after a setting changes. `:lines on` and
-`:lines off` show or hide hierarchy guides immediately and remember the choice:
-
-```toml
-lines = true
+```bash
+cd web && npm run typecheck && npm test && npm run build
 ```
 
-Independent changes merge; real conflicts stop atomically instead of silently
-using last-writer-wins.
+`nix develop` sets `CGO_ENABLED=1` and `GOFLAGS=-tags=sqlite_fts5`; outside it,
+pass `-tags sqlite_fts5` yourself.
 
-## Command line
+## Deploy on NixOS
 
-The product is terminal-first. It opens the remembered workspace by default,
-can open an explicit provider folder, or can ask for another one:
+The flake provides `nixosModules.default`:
 
-```text
-vrac
-vrac --workspace <provider-folder>
-vrac workspace select
+```nix
+services.vrac = {
+  enable = true;
+  publicURL = "https://vrac.example.com"; # HTTPS, terminated by your proxy
+  listenAddress = "127.0.0.1:8080";
+  # Optional: sign in through an identity provider such as Pocket ID.
+  oidc = {
+    enable = true;
+    issuer = "https://id.example.com";
+    clientID = "…"; # redirect URI: https://vrac.example.com/auth/oidc/callback
+    name = "Pocket ID";
+    allow = [ "you@example.com" ];
+  };
+};
 ```
 
-Bounded commands that operate directly on one local SQLite file are available
-under the explicit `db` namespace:
+Without OIDC, open `/` once deployed and create the owner account (username,
+password, passkey). Recovery runs on the server as the service user:
+`sudo -u vrac vrac password -data /var/lib/vrac` and
+`sudo -u vrac vrac passkeys reset -data /var/lib/vrac`.
 
-```text
-vrac db init <file>
-vrac db add <file> [--parent <id>] [--first|--last|--before <id>|--after <id>] <text>
-vrac db node <file> <id>
-vrac db children <file> [--parent <id>] [--limit <n>|--all]
-vrac db set-text <file> <id> <text>
-vrac db move <file> <id> [--parent <id>] [--first|--last|--before <id>|--after <id>]
-vrac db check <file>
+## Connect an AI
+
+Vrac exposes MCP over Streamable HTTP at `<url>/mcp` with a built-in OAuth
+server (dynamic registration, PKCE). In Claude or ChatGPT, add a custom
+connector with that URL and approve it in Vrac. Those services must reach the
+instance over HTTPS, so a local instance needs a tunnel or a deployment with a
+public URL (`-url https://vrac.example.com`).
+
+Local clients such as Claude Code can use a personal token created in
+Settings:
+
+```bash
+claude mcp add --transport http vrac http://localhost:8080/mcp --header "Authorization: Bearer vrac_…"
 ```
 
-These are database maintenance and scripting commands, not the primary
-workspace interface. Run `vrac db --help` for the same command summary.
+The [`vrac` skill](skills/vrac/SKILL.md) tells the AI when and how to write.
 
-## Repository layout
+## Quick capture
 
-```text
-crates/vrac-engine      model, business rules, SQLite, and sync protocol
-crates/vrac-workspace   local DB lifecycle, provider layout, and sync rounds
-crates/vrac-tui         library terminal frontend, transient state, and rendering
-crates/vrac             public `vrac` binary and scriptable command routing
+`POST /api/v1/capture` appends one line to today's journal with a personal
+token. It never refuses a name: an unknown or ambiguous `#tag` or `[[name]]`
+is kept as plain words and listed in `unresolved`, so a line typed in a hurry
+is never lost and nothing is created behind your back.
+
+```bash
+curl -H "Authorization: Bearer vrac_…" -H "Content-Type: application/json" \
+  -d '{"request_id":"2026-11-25T10:42:07","text":"Call the plumber #task"}' \
+  https://vrac.example.com/api/v1/capture
 ```
 
-The engine is synchronous and independent from every interface. Workspace
-orchestration is reusable by terminal and future frontends. The CLI and TUI
-contain no SQL, provider-format knowledge, or duplicated business rules. The
-`vrac` package provides the only product executable and supplies launch context
-to the terminal frontend.
+`request_id` makes a retry safe: the same ID writes once.
 
-The current workspace format is documented in [FORMAT.md](FORMAT.md). See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the branch, pull-request, and release
-workflow.
+**Apple Shortcut** (Mac with a keyboard shortcut, iPhone with the Action
+button or a widget):
 
-## Development
+1. *Ask for Input* (text), prompt "Vrac".
+2. *Current Date*, then *Format Date* as ISO 8601 with the time.
+3. *Get Contents of URL*: `https://vrac.example.com/api/v1/capture`, method
+   POST, header `Authorization` = `Bearer vrac_…`, request body JSON with
+   `request_id` = the formatted date and `text` = the provided input.
+4. *Show Notification* "Saved in Vrac" (optional).
 
-```sh
-cargo fmt --all -- --check
-cargo check --workspace --all-targets
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-```
+On the Mac, open the shortcut's details and set *Use as Quick Action* with a
+keyboard shortcut; on the iPhone, assign it to the Action button.
 
-"Fast" is not decorative copy. The engine and TUI have reproducible
-five-million-node release scenarios, intentionally separate from ordinary
-correctness tests. The engine scenario creates its own performance database;
-data generation is deliberately not part of the installed command surface:
+**Raycast**: [`scripts/raycast/vrac-capture.sh`](scripts/raycast/vrac-capture.sh)
+is a script command that reads the URL and token from the keychain.
 
-```sh
-cargo run --release -p vrac --example performance -- \
-  /local/path/vrac-5m-wide.vrac --shape wide
+## Configuration
 
-cargo run --release -p vrac-tui --example tui_performance -- \
-  /local/path/to/workspace-or-checkpoint
-```
+| Flag | Environment | Default |
+|---|---|---|
+| `-data` | `VRAC_DATA` | `data` |
+| `-listen` | `VRAC_LISTEN` | `127.0.0.1:8080` |
+| `-url` | `VRAC_PUBLIC_URL` | `http://localhost:<port>` |
+| `-timezone` | `VRAC_TIMEZONE` | system time zone |
 
-The engine budget is 2 ms at p95 for interactive operations. The terminal
-scenario requires first-view model creation below 1.5 seconds, interactive work
-including frame serialization below 16.667 ms at p95, and total peak RSS below
-64 MiB on the reference machine.
+Development tools: `go run ./scripts/seed` fills an empty database with a
+few weeks of sample work, `go run ./scripts/load plan.json` fills one from
+a prepared JSON plan (for migrations from other tools), and
+`go run ./scripts/bench` measures the engine (see
+[docs/performance.md](docs/performance.md)).
+
+Maintenance: `vrac backup PATH`, `vrac export [PATH]`, `vrac import PATH`
+(into an empty instance), `vrac check`, `vrac password` (set the owner
+password if it is lost; it signs out every browser).
 
 ## License
 
-Vrac is free software licensed under the
-[GNU Affero General Public License v3.0](LICENSE). You may use, modify, share,
-and sell it. If you distribute a modified version or make one available over
-a network, its users must be offered the corresponding source code under the
-same license.
+AGPL-3.0-only.
