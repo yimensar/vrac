@@ -351,12 +351,13 @@ non-goal; it would require synchronization and a different model.
   under the nodes with that tag it names itself (a call to Sixtine about
   Léandre is under both), or else under the most specific one it concerns
   through its place (a to-do in Lot 2 is under Lot 2, not also under
-  Northwind); the biggest groups first, the ungrouped last; in each group
-  next actions first, then the others, then waiting and someday ones, so a
-  status never takes a to-do out of its group. Without a group tag, by
-  status: Next, Waiting, Open, Someday (a to-do with several of these tags
-  goes to someday, else next, else waiting). None is hidden, however old:
-  a postponed to-do must not slip out of sight. The owner picks the group
+  Northwind); the biggest groups first, the ungrouped last; each group
+  sorted by status, so a status never takes a to-do out of its group.
+  Without a group tag, by status. Statuses, in order: next, waiting,
+  someday (their tags; a to-do with several takes the first) and open
+  (none of them). Each status can be hidden (`tasks_hide`); nothing else
+  is hidden, however old: a postponed to-do must not slip out of sight
+  unless the owner asks. The owner picks the group
   tag (or status) and the three status tags (by default `#project`,
   `#next`, `#waiting` and `#someday`), kept in the preferences: the view
   never guesses a subject, it follows the tag the owner chose.

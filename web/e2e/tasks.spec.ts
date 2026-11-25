@@ -30,7 +30,8 @@ test("the tasks view groups open to-dos by project or by status", async ({ page 
   for (const text of ["Fix the gate", "Call the bank", "Learn to sail"]) await expect(section(/^Other/).getByText(text)).toBeVisible()
 
   // Checking a to-do takes it off the view.
-  await globex.getByRole("checkbox", { name: "Done" }).first().click()
+  // Waiting ones come before open ones in a group.
+  await globex.getByRole("checkbox", { name: "Done" }).last().click()
   await expect(page.getByText("Send the estimate")).toBeHidden()
 
   // Without a group tag, by status.
@@ -41,4 +42,10 @@ test("the tasks view groups open to-dos by project or by status", async ({ page 
   await expect(section(/^Waiting/).getByText("Answer from")).toBeVisible()
   await expect(section(/^Open/).getByText("Fix the gate")).toBeVisible()
   await expect(section(/^Someday/).getByText("Learn to sail")).toBeVisible()
+
+  // A status can be left off the view.
+  expect((await page.request.put("/api/v1/preferences", { headers, data: { ...prefs, tasks_group: "", tasks_hide: { someday: true } } })).ok()).toBeTruthy()
+  await page.reload()
+  await expect(section(/^Next/).getByText("Call the bank")).toBeVisible()
+  await expect(page.getByText("Learn to sail")).toBeHidden()
 })

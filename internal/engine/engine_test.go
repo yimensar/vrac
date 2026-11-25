@@ -790,7 +790,7 @@ func TestPreferences(t *testing.T) {
 	if p, err := e.SetPreferences(ctx, Preferences{Fold: "default", Theme: "dark", Scale: "default", TasksGroup: " Client "}); err != nil || p.TasksGroup != "client" || p.TasksWaiting != "" {
 		t.Fatalf("tags = %+v, %v", p, err)
 	}
-	want := Preferences{Fold: "collapsed", Theme: "dark", Scale: "large", TasksGroup: "client", TasksWaiting: "attente"}
+	want := Preferences{Fold: "collapsed", Theme: "dark", Scale: "large", TasksGroup: "client", TasksWaiting: "attente", TasksHide: TaskStatuses{Someday: true}}
 	if _, err := e.SetPreferences(ctx, want); err != nil {
 		t.Fatal(err)
 	}

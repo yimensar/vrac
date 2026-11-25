@@ -31,7 +31,7 @@ test("open to-dos stay in their groups, waiting ones last, old ones included", (
     ["Northwind", ["a", "d"]],
     ["Globex", ["f"]],
     ["Lot 2", ["c"]],
-    [undefined, ["e", "g", "b"]],
+    [undefined, ["b", "e", "g"]],
   ])
 })
 
@@ -63,11 +63,13 @@ test("without a group tag, to-dos are sorted by status", () => {
     subjects: {},
   }
   const s = taskSections(page, { group: "", waiting: "waiting", next: "next", someday: "someday" })
-  expect([s.next, s.waiting, s.someday].map((l) => l.map((n) => n.id))).toEqual([["now"], ["wait"], ["later"]])
+  expect([s.next, s.waiting, s.someday].map((l) => l.map((n) => n.id))).toEqual([["now", "later"], ["wait"], []])
   expect(s.groups).toEqual([{ nodes: [page.nodes[3]] }])
+  const hidden = taskSections(page, { group: "", waiting: "waiting", next: "next", someday: "someday", hide: { next: true, open: true } })
+  expect([hidden.next, hidden.waiting, hidden.groups]).toEqual([[], [page.nodes[2]], []])
 })
 
-test("with a group tag, next actions lead each group and someday ones close it", () => {
+test("with a group tag, each group is sorted next, waiting, someday, open", () => {
   const page: Page = {
     nodes: [
       node("plain"),
@@ -80,5 +82,5 @@ test("with a group tag, next actions lead each group and someday ones close it",
   }
   const s = taskSections(page, { group: "project", waiting: "waiting", next: "next", someday: "someday" })
   expect([s.next, s.waiting, s.someday]).toEqual([[], [], []])
-  expect(s.groups.map((g) => [g.subject?.name, g.nodes.map((n) => n.id)])).toEqual([["Northwind", ["now", "plain", "wait", "later"]]])
+  expect(s.groups.map((g) => [g.subject?.name, g.nodes.map((n) => n.id)])).toEqual([["Northwind", ["later", "now", "wait", "plain"]]])
 })

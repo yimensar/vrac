@@ -33,6 +33,18 @@ type Preferences struct {
 	// the tasks view and reviewed monthly instead of weekly. Empty shows
 	// none apart.
 	TasksSomeday string `json:"tasks_someday"`
+	// TasksHide leaves the to-dos of the chosen statuses off the tasks
+	// view. Nothing is hidden until the owner asks.
+	TasksHide TaskStatuses `json:"tasks_hide"`
+}
+
+// TaskStatuses names the statuses of the tasks view: next, waiting,
+// someday (their tags) and open (none of them).
+type TaskStatuses struct {
+	Next    bool `json:"next"`
+	Waiting bool `json:"waiting"`
+	Open    bool `json:"open"`
+	Someday bool `json:"someday"`
 }
 
 // DefaultPreferences apply until the owner changes them.

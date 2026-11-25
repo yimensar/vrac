@@ -4,8 +4,9 @@ import { useQuery } from "@tanstack/react-query"
 import { api, type Page } from "@/lib/api"
 import { useTypes } from "@/lib/hooks"
 import { usePreferences, useSetPreferences } from "@/lib/preferences"
-import { taskSections } from "@/lib/tasks"
+import { statusOrder, taskSections } from "@/lib/tasks"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Review } from "./review"
 import { Loading, PageTitle, Section } from "@/components/page"
@@ -15,13 +16,13 @@ import { NodeList } from "@/outline/views"
 
 /** Every open to-do, sorted for a morning look: by the node of the group
  * tag (a project, a person) they concern, or by status (next, waiting,
- * open, someday). Each is edited in place. */
+ * someday, open), each status shown or hidden at will. Each is edited in place. */
 export function TasksPage() {
   const prefs = usePreferences()
   const { data } = useQuery({ queryKey: ["tasks"], queryFn: openTasks })
   const { data: due } = useQuery({ queryKey: ["review"], queryFn: api.reviewQueue })
-  const { tasks_group: group, tasks_waiting: waiting, tasks_next: next, tasks_someday: someday } = prefs
-  const sections = useMemo(() => data && taskSections(data, { group, waiting, next, someday }), [data, group, waiting, next, someday])
+  const { tasks_group: group, tasks_waiting: waiting, tasks_next: next, tasks_someday: someday, tasks_hide: hide } = prefs
+  const sections = useMemo(() => data && taskSections(data, { group, waiting, next, someday, hide }), [data, group, waiting, next, someday, hide])
   // The queue is fixed when a review starts.
   const [review, setReview] = useState<Page | null>(null)
   const part = (nodes: Page["nodes"]): Page => ({ nodes, refs: data!.refs })
@@ -59,6 +60,7 @@ export function TasksPage() {
       {sections && data!.nodes.length === 0 && <p className="text-muted-foreground">Nothing open.</p>}
       {sections && apart("Next", prefs.tasks_next, sections.next, "tasks-next")}
       {sections && apart("Waiting", prefs.tasks_waiting, sections.waiting, "tasks-waiting")}
+      {sections && apart("Someday", prefs.tasks_someday, sections.someday, "tasks-someday")}
       {sections?.groups.map((g) => (
         <section key={g.subject?.id ?? ""} className="mb-8">
           <h2 className="mb-1.5 flex items-center gap-2 text-sm font-semibold">
@@ -74,7 +76,6 @@ export function TasksPage() {
           <NodeList id={`tasks-${g.subject?.id ?? "other"}`} page={part(g.nodes)} />
         </section>
       ))}
-      {sections && apart("Someday", prefs.tasks_someday, sections.someday, "tasks-someday")}
     </>
   )
 }
@@ -131,6 +132,17 @@ function TagChoices() {
         {choice("Next", prefs.tasks_next, (v) => set({ tasks_next: v }))}
         {choice("Waiting", prefs.tasks_waiting, (v) => set({ tasks_waiting: v }))}
         {choice("Someday", prefs.tasks_someday, (v) => set({ tasks_someday: v }))}
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 border-t pt-3 text-sm">
+          {statusOrder.map((st) => (
+            <label key={st} className="flex items-center gap-1.5">
+              <Checkbox
+                checked={!prefs.tasks_hide[st]}
+                onCheckedChange={(on) => set({ tasks_hide: { ...prefs.tasks_hide, [st]: on !== true } })}
+              />
+              {st[0].toUpperCase() + st.slice(1)}
+            </label>
+          ))}
+        </div>
       </PopoverContent>
     </Popover>
   )

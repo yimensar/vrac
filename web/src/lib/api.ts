@@ -61,10 +61,13 @@ export type Preferences = {
   tasks_waiting: string
   tasks_next: string
   tasks_someday: string
+  /** Statuses left off the tasks view. */
+  tasks_hide: { next: boolean; waiting: boolean; open: boolean; someday: boolean }
 }
 
 /** The preferences in effect, kept current by the app (see preferences.ts). */
-export const current: Preferences = { fold: "default", theme: "system", scale: "default", tasks_group: "project", tasks_waiting: "waiting", tasks_next: "next", tasks_someday: "someday" }
+export const current: Preferences = { fold: "default", theme: "system", scale: "default", tasks_group: "project", tasks_waiting: "waiting", tasks_next: "next", tasks_someday: "someday",
+  tasks_hide: { next: false, waiting: false, open: false, someday: false } }
 
 export type Query = {
   text?: string
