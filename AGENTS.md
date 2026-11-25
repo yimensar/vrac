@@ -34,7 +34,8 @@ atomic failure, ordering, pagination, cycles, references across renames,
 history, reopening and export/import. Add a regression test for each bug.
 
 Run in `nix develop`: `gofmt -l .`, `go vet ./...`, `go test -race ./...`,
-and in `web`: `npm run typecheck`, `npm test`, `npm run build`. Build
+and in `web`: `npm run typecheck`, `npm test`, `npm run build`, and
+`npm run e2e` when the editor or the web flows change. Build
 `nix build .#default` after dependency changes (update the hashes in
 flake.nix). Do not perform visual UI inspection unless asked.
 

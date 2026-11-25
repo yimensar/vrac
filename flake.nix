@@ -34,7 +34,7 @@
           pname = "vrac-web";
           inherit version;
           src = clean ./web;
-          npmDepsHash = "sha256-0UmHgthS5hGXfKg+0sQ9JD5seCLcnFio/jhmKxiiHC0=";
+          npmDepsHash = "sha256-JEZCG6qFxzNtaIOFGxDa0XmXmHSUjn4qDoxd0MwO78s=";
           installPhase = ''
             runHook preInstall
             cp -r dist $out
@@ -105,6 +105,12 @@
             ];
             CGO_ENABLED = "1";
             GOFLAGS = "-tags=sqlite_fts5";
+            # Browsers matching @playwright/test in web/package.json, for npm run e2e.
+            PLAYWRIGHT_BROWSERS_PATH = pkgs.playwright-driver.browsers.override {
+              withFirefox = false;
+              withWebkit = false;
+            };
+            PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
             shellHook = ''
               export GOTOOLCHAIN=local
             '';

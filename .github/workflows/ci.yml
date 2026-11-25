@@ -30,5 +30,6 @@ jobs:
           nix develop -c npm run typecheck
           nix develop -c npm test
           nix develop -c npm run build
+          nix develop -c npx playwright test
       - name: Nix package and module
         run: nix flake check -L && nix build -L .#default
