@@ -6,7 +6,7 @@ const node = (id: string, extra: Partial<Node> = {}): Node => ({
   created_at: "", updated_at: "", created_by: "", updated_by: "", source: "", child_count: 0, ref_ids: [], ...extra,
 })
 
-test("open to-dos are sorted into waiting, groups and stale", () => {
+test("open to-dos are sorted into waiting and groups, old ones included", () => {
   const page: Page = {
     nodes: [
       node("a"),
@@ -25,20 +25,19 @@ test("open to-dos are sorted into waiting, groups and stale", () => {
     },
     subjects: { a: ["marc", "north"], c: ["lot", "north"], d: ["north"], f: ["globex"], g: ["marc"] },
   }
-  const s = taskSections(page, { group: "project", waiting: "waiting", today: "2026-11-25" })
+  const s = taskSections(page, { group: "project", waiting: "waiting" })
   expect(s.waiting.map((n) => n.id)).toEqual(["b"])
-  expect(s.stale.map((n) => n.id)).toEqual(["e"])
   expect(s.groups.map((g) => [g.subject?.name, g.nodes.map((n) => n.id)])).toEqual([
     ["Northwind", ["a", "d"]],
     ["Globex", ["f"]],
     ["Lot 2", ["c"]],
-    [undefined, ["g"]],
+    [undefined, ["e", "g"]],
   ])
 })
 
 test("without tags, everything is one list", () => {
   const page: Page = { nodes: [node("a", { types: ["task", "waiting"] })], refs: {}, subjects: {} }
-  const s = taskSections(page, { group: "", waiting: "", today: "2026-11-25" })
+  const s = taskSections(page, { group: "", waiting: "" })
   expect(s.waiting).toEqual([])
   expect(s.groups).toEqual([{ subject: undefined, nodes: [page.nodes[0]] }])
 })

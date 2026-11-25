@@ -4,23 +4,21 @@ import { useQuery } from "@tanstack/react-query"
 import { api, type Page } from "@/lib/api"
 import { useTypes } from "@/lib/hooks"
 import { usePreferences, useSetPreferences } from "@/lib/preferences"
-import { localDate } from "@/lib/syntax"
-import { staleDays, taskSections } from "@/lib/tasks"
+import { taskSections } from "@/lib/tasks"
 import { Loading, PageTitle, Section } from "@/components/page"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { TypeName } from "@/outline/content"
 import { NodeList } from "@/outline/views"
 
 /** Every open to-do, sorted for a morning look: waiting apart, the others
- * by the node of the group tag (a project) they concern, the undated old
- * ones folded away. Each is edited in place. */
+ * by the node of the group tag (a project) they concern. Each is edited in
+ * place. */
 export function TasksPage() {
   const prefs = usePreferences()
   const { data } = useQuery({ queryKey: ["tasks"], queryFn: openTasks })
-  const today = localDate()
   const sections = useMemo(
-    () => data && taskSections(data, { group: prefs.tasks_group, waiting: prefs.tasks_waiting, today }),
-    [data, prefs.tasks_group, prefs.tasks_waiting, today],
+    () => data && taskSections(data, { group: prefs.tasks_group, waiting: prefs.tasks_waiting }),
+    [data, prefs.tasks_group, prefs.tasks_waiting],
   )
   const part = (nodes: Page["nodes"]): Page => ({ nodes, refs: data!.refs })
   return (
@@ -48,14 +46,6 @@ export function TasksPage() {
           <NodeList id={`tasks-${g.subject?.id ?? "other"}`} page={part(g.nodes)} />
         </section>
       ))}
-      {sections && sections.stale.length > 0 && (
-        <details className="group mb-8">
-          <summary className="mb-1.5 cursor-pointer text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
-            Written over {staleDays} days ago, undated <span className="tabular-nums">{sections.stale.length}</span>
-          </summary>
-          <NodeList id="tasks-stale" page={part(sections.stale)} />
-        </details>
-      )}
     </>
   )
 }

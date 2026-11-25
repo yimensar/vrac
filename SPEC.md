@@ -349,8 +349,8 @@ non-goal; it would require synchronization and a different model.
 - **Tasks**: every open to-do, a menu away, for a morning look. To-dos
   carrying the waiting tag stand apart; the others go under the most
   specific node carrying the group tag they concern (the biggest groups
-  first, the ungrouped last); the undated ones written over 14 days ago
-  fold away. The owner picks both tags (by default `#project` and
+  first, the ungrouped last). None is hidden, however old: a postponed
+  to-do must not slip out of sight. The owner picks both tags (by default `#project` and
   `#waiting`), kept in the preferences: the view never guesses a subject,
   it follows the tag the owner chose.
 - **Agenda**: everything dated, day by day.
