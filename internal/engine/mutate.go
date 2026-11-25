@@ -31,6 +31,8 @@ type txState struct {
 	briefs     []Brief
 	unresolved []Unresolved
 	reported   map[string]bool
+	// plain lists the names a capture kept as plain words.
+	plain []Unresolved
 }
 
 func (e *Engine) mutate(ctx context.Context, actor Actor, requestID string, payload any, fn func(*txState) ([]int64, error)) (Result, error) {
@@ -91,7 +93,7 @@ func (e *Engine) mutate(ctx context.Context, actor Actor, requestID string, payl
 		if s.briefs == nil {
 			s.briefs = []Brief{}
 		}
-		res = Result{Nodes: nodes, Refs: refs, Created: s.briefs}
+		res = Result{Nodes: nodes, Refs: refs, Created: s.briefs, Unresolved: s.plain}
 		body, err := json.Marshal(res)
 		if err != nil {
 			return err

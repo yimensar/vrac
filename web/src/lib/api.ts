@@ -48,10 +48,11 @@ export type Connection = { id: string; kind: "token" | "client"; name: string; c
 export type Result = { nodes: Node[]; refs: Refs; created?: Brief[] }
 export type Fold = "default" | "expanded" | "collapsed"
 export type Scale = "small" | "default" | "large" | "larger"
-export type Preferences = { fold: Fold; theme: "system" | "light" | "dark"; scale: Scale }
+/** tasks_group and tasks_waiting are tags of the tasks view; empty for none. */
+export type Preferences = { fold: Fold; theme: "system" | "light" | "dark"; scale: Scale; tasks_group: string; tasks_waiting: string }
 
 /** The preferences in effect, kept current by the app (see preferences.ts). */
-export const current: Preferences = { fold: "default", theme: "system", scale: "default" }
+export const current: Preferences = { fold: "default", theme: "system", scale: "default", tasks_group: "project", tasks_waiting: "waiting" }
 
 export type Query = {
   text?: string

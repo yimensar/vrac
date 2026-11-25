@@ -784,7 +784,13 @@ func TestPreferences(t *testing.T) {
 	if _, err := e.SetPreferences(ctx, Preferences{Fold: "sideways", Theme: "dark"}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("invalid fold accepted: %v", err)
 	}
-	want := Preferences{Fold: "collapsed", Theme: "dark", Scale: "large"}
+	if _, err := e.SetPreferences(ctx, Preferences{Fold: "default", Theme: "dark", Scale: "default", TasksGroup: "two words"}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("invalid group tag accepted: %v", err)
+	}
+	if p, err := e.SetPreferences(ctx, Preferences{Fold: "default", Theme: "dark", Scale: "default", TasksGroup: " Client "}); err != nil || p.TasksGroup != "client" || p.TasksWaiting != "" {
+		t.Fatalf("tags = %+v, %v", p, err)
+	}
+	want := Preferences{Fold: "collapsed", Theme: "dark", Scale: "large", TasksGroup: "client", TasksWaiting: "attente"}
 	if _, err := e.SetPreferences(ctx, want); err != nil {
 		t.Fatal(err)
 	}

@@ -47,6 +47,7 @@ import { usePreferences, useSetPreferences } from "@/lib/preferences"
 // search too.
 export const views = [
   { to: "/", label: "Today", icon: NotebookPenIcon },
+  { to: "/tasks", label: "Tasks", icon: SquareCheckIcon },
   { to: "/journal", label: "Journal", icon: BookOpenIcon },
   { to: "/agenda", label: "Agenda", icon: CalendarDaysIcon },
   { to: "/search", label: "Search", icon: SearchIcon },

@@ -96,6 +96,37 @@ claude mcp add --transport http vrac http://localhost:8080/mcp --header "Authori
 
 The [`vrac` skill](skills/vrac/SKILL.md) tells the AI when and how to write.
 
+## Quick capture
+
+`POST /api/v1/capture` appends one line to today's journal with a personal
+token. It never refuses a name: an unknown or ambiguous `#tag` or `[[name]]`
+is kept as plain words and listed in `unresolved`, so a line typed in a hurry
+is never lost and nothing is created behind your back.
+
+```bash
+curl -H "Authorization: Bearer vrac_…" -H "Content-Type: application/json" \
+  -d '{"request_id":"2026-11-25T10:42:07","text":"Call the plumber #task"}' \
+  https://vrac.example.com/api/v1/capture
+```
+
+`request_id` makes a retry safe: the same ID writes once.
+
+**Apple Shortcut** (Mac with a keyboard shortcut, iPhone with the Action
+button or a widget):
+
+1. *Ask for Input* (text), prompt "Vrac".
+2. *Current Date*, then *Format Date* as ISO 8601 with the time.
+3. *Get Contents of URL*: `https://vrac.example.com/api/v1/capture`, method
+   POST, header `Authorization` = `Bearer vrac_…`, request body JSON with
+   `request_id` = the formatted date and `text` = the provided input.
+4. *Show Notification* "Saved in Vrac" (optional).
+
+On the Mac, open the shortcut's details and set *Use as Quick Action* with a
+keyboard shortcut; on the iPhone, assign it to the Action button.
+
+**Raycast**: [`scripts/raycast/vrac-capture.sh`](scripts/raycast/vrac-capture.sh)
+is a script command that reads the URL and token from the keychain.
+
 ## Configuration
 
 | Flag | Environment | Default |

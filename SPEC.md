@@ -185,6 +185,11 @@ existing Northwind is referenced as is. The stored model stays clean.
 - **AI.** A write that names an unknown tag or node is rejected. The error
   returns close candidates, aliases included. The AI either reuses one or
   creates explicitly, after confirming with the user as its skill instructs.
+- **Quick capture.** `POST /api/v1/capture` writes one line, typed without
+  completion (a shortcut, a script), to the end of today's journal with the
+  source `capture`. It never refuses a name: an unknown or ambiguous tag or
+  reference is kept as plain words (`#tsak` becomes `tsak`) and listed in the
+  answer. Nothing is created; the line is fixed later in the journal.
 
 ### 2.8 Dates in text
 
@@ -286,9 +291,10 @@ there. The journal view shows today at the top, then the previous days as
 you scroll, today still written in place. To-dos are not gathered on the
 page: they are written in today's journal whatever their horizon (a date
 on one is a real deadline) and found again by search, on the `#task` tag
-page, or on the page of what they concern. A free outline cannot tell
-which of a to-do's contexts is its subject (a meeting, the project the
-meeting is about, a person it mentions), so no view guesses one. There is
+page, on the page of what they concern, or on the Tasks view. A free
+outline cannot tell which of a to-do's contexts is its subject (a meeting,
+the project the meeting is about, a person it mentions), so no view guesses
+one: the Tasks view groups by a tag the owner chose. There is
 no permanent navigation: two quiet
 icons float at the top right, the search (⌘K) and a menu to the other
 views, and the writing line itself holds every power through completion
@@ -340,6 +346,13 @@ non-goal; it would require synchronization and a different model.
   history are reached from the palette and Activity.
 - **Tag pages**: every node carrying the tag, most recent first; a to-do
   tag shows open ones then done ones; the to-do trait is toggled there.
+- **Tasks**: every open to-do, a menu away, for a morning look. To-dos
+  carrying the waiting tag stand apart; the others go under the most
+  specific node carrying the group tag they concern (the biggest groups
+  first, the ungrouped last); the undated ones written over 14 days ago
+  fold away. The owner picks both tags (by default `#project` and
+  `#waiting`), kept in the preferences: the view never guesses a subject,
+  it follows the tag the owner chose.
 - **Agenda**: everything dated, day by day.
 - **Search**: query chips (tag, context, status, date).
 - **Command palette** (⌘K), the power box: one field that searches
@@ -425,6 +438,13 @@ Tools (V1):
 
 Results show text with `[[Name|ID]]` references.
 
+Writes answer with `warnings` when a node is not in outline form (a line
+over 200 characters outside tables and code, several links in one node),
+naming the node and what to do; the write itself is kept. The server
+instructions ask for one short line per node, details as children, tables
+for comparisons, and, for a scheduled or repeated check, one note kept
+current rather than a line per run.
+
 `vrac_update` keeps a node's tags when its new text writes none, so a
 rewritten sentence does not lose its type, status or date by omission;
 with `keep_types: false` the node has exactly the tags its text writes,
@@ -488,7 +508,7 @@ the user's current Memos skill.
 
 V1: everything above, except the Docker image.
 
-Later: quick capture desktop app (global shortcut), audio capture and
+Later: desktop app with a global capture shortcut, audio capture and
 transcription, inbox of unfiled captures, attention queue (overdue, stale
 projects, meetings without follow-up), MCP prompts (daily briefing, weekly
 review, meeting prep), external calendars, Reminders and Todoist bridges,

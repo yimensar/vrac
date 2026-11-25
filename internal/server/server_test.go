@@ -193,6 +193,42 @@ func TestAPIWritesAndUnresolvedNames(t *testing.T) {
 	}
 }
 
+func TestCaptureWithAToken(t *testing.T) {
+	h := newHarness(t)
+	h.setup()
+	h.call("POST", "/api/v1/types", map[string]any{"request_id": "t1", "name": "task", "todo": true}, 200)
+	token, err := CreateToken(context.Background(), h.engine, "Shortcut")
+	if err != nil {
+		t.Fatal(err)
+	}
+	post := func(body string) (int, map[string]any) {
+		req, _ := http.NewRequest("POST", h.url+"/api/v1/capture", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var out map[string]any
+		json.NewDecoder(res.Body).Decode(&out)
+		return res.StatusCode, out
+	}
+	code, out := post(`{"request_id":"2026-11-25T10:00:00","text":"Call the plumber #task #urgent"}`)
+	if code != 200 {
+		t.Fatalf("capture = %d %v", code, out)
+	}
+	node := out["nodes"].([]any)[0].(map[string]any)
+	if node["text"] != "Call the plumber #task urgent" || node["status"] != "open" || node["source"] != "capture" {
+		t.Fatalf("node = %v", node)
+	}
+	if u := out["unresolved"].([]any); len(u) != 1 || u[0].(map[string]any)["name"] != "urgent" {
+		t.Fatalf("unresolved = %v", out["unresolved"])
+	}
+	if code, _ := post(`{"request_id":"x","text":""}`); code != http.StatusBadRequest {
+		t.Fatalf("empty capture = %d", code)
+	}
+}
+
 // TestOAuthAndMCP connects an MCP client the way Claude or ChatGPT does:
 // discovery, registration, owner approval, PKCE token exchange, then tools.
 func TestOAuthAndMCP(t *testing.T) {
@@ -314,6 +350,21 @@ func TestOAuthAndMCP(t *testing.T) {
 	nodes := got.StructuredContent.(map[string]any)["nodes"].([]any)
 	if len(nodes) != 1 || nodes[0].(map[string]any)["updated_by"] != "Claude" || nodes[0].(map[string]any)["source"] != "outlook" {
 		t.Fatalf("search = %v", got.StructuredContent)
+	}
+	// A paragraph in one node is kept, with a warning naming it; a short
+	// line with its details as children is not warned.
+	long := call("vrac_write", map[string]any{"request_id": "w3", "source": "chat", "nodes": []any{map[string]any{"input": strings.Repeat("A finding with many clauses, ", 10) + "https://a.example https://b.example"}}})
+	warnings, _ := long.StructuredContent.(map[string]any)["warnings"].([]any)
+	if long.IsError || len(warnings) != 1 || !strings.Contains(warnings[0].(string), "characters") {
+		t.Fatalf("long write = %v", long.StructuredContent)
+	}
+	short := call("vrac_write", map[string]any{"request_id": "w4", "source": "chat", "nodes": []any{map[string]any{"input": "TV under 1800 €", "children": []any{map[string]any{"input": "https://a.example"}, map[string]any{"input": "| a | b |\n|---|---|\n| " + strings.Repeat("x", 300) + " | y |"}}}}})
+	if _, warned := short.StructuredContent.(map[string]any)["warnings"]; warned {
+		t.Fatalf("short write warned: %v", short.StructuredContent)
+	}
+	links := call("vrac_write", map[string]any{"request_id": "w5", "source": "chat", "nodes": []any{map[string]any{"input": "Sources https://a.example https://b.example"}}})
+	if w, _ := links.StructuredContent.(map[string]any)["warnings"].([]any); len(w) != 1 || !strings.Contains(w[0].(string), "links") {
+		t.Fatalf("links write = %v", links.StructuredContent)
 	}
 	// A rewrite without a tag keeps it; keep_types false removes it.
 	task := nodes[0].(map[string]any)

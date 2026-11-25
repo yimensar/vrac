@@ -185,6 +185,8 @@ type Result struct {
 	Refs  map[string]Ref `json:"refs"`
 	// Created lists nodes created through Creation entries.
 	Created []Brief `json:"created,omitempty"`
+	// Unresolved lists the names a capture kept as plain words.
+	Unresolved []Unresolved `json:"unresolved,omitempty"`
 }
 
 // Unresolved is returned, wrapped in an UnresolvedError, when input names

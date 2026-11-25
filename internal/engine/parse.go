@@ -30,6 +30,16 @@ type parsedInput struct {
 	Text  string
 	Types []string
 	Refs  []refToken
+	// Tokens locate each #type and reference in the raw input.
+	Tokens []token
+}
+
+// token is a #type or a reference at raw[Start:End]: Refs[Ref], or the type
+// Type when Ref is -1.
+type token struct {
+	Start, End int
+	Ref        int
+	Type       string
 }
 
 // parseInput splits raw Vrac syntax. It never touches the database.
@@ -44,8 +54,9 @@ func parseInput(raw string) (parsedInput, error) {
 	raw = strings.ReplaceAll(raw, "\r\n", "\n")
 	var b strings.Builder
 	seenType := map[string]bool{}
-	addRef := func(t refToken) {
+	addRef := func(t refToken, start, end int) {
 		fmt.Fprintf(&b, "\x00%d\x00", len(p.Refs))
+		p.Tokens = append(p.Tokens, token{Start: start, End: end, Ref: len(p.Refs)})
 		p.Refs = append(p.Refs, t)
 	}
 	for i := 0; i < len(raw); {
@@ -55,12 +66,13 @@ func parseInput(raw string) (parsedInput, error) {
 				inner := strings.TrimSpace(raw[i+2 : i+2+end])
 				if inner != "" {
 					// [[Name|ID]] is the readable form of a canonical reference.
+					start, stop := i, i+end+4
 					if bar := strings.LastIndexByte(inner, '|'); bar >= 0 && isID(strings.TrimSpace(inner[bar+1:])) {
-						addRef(refToken{ID: strings.TrimSpace(inner[bar+1:])})
+						addRef(refToken{ID: strings.TrimSpace(inner[bar+1:])}, start, stop)
 					} else if isID(inner) {
-						addRef(refToken{ID: inner})
+						addRef(refToken{ID: inner}, start, stop)
 					} else {
-						addRef(refToken{Name: inner})
+						addRef(refToken{Name: inner}, start, stop)
 					}
 					i += end + 4
 					continue
@@ -76,8 +88,9 @@ func parseInput(raw string) (parsedInput, error) {
 					return p, err
 				}
 				if shortcut && name != "" {
-					addRef(refToken{Name: name, Type: typ})
+					addRef(refToken{Name: name, Type: typ}, i, i+1+n)
 				} else {
+					p.Tokens = append(p.Tokens, token{Start: i, End: i + 1 + n, Ref: -1, Type: typ})
 					// The type stays where it was written, so a sentence
 					// such as "#meeting with Alice" reads naturally.
 					b.WriteString("#" + typ)

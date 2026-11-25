@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && rm -rf dist/assets && vite build",
     "typecheck": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "npm run build && playwright test"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.106.1",
@@ -30,6 +31,7 @@
     "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@tailwindcss/vite": "^4.3.4",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

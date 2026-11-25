@@ -13,3 +13,5 @@
 *.sqlite-shm
 /web/.vite/
 /.sf/
+/web/test-results/
+/web/playwright-report/
